@@ -4,9 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-image = "0.25.5"
-nom = { version = "8.0.0", default-features = false, features = ["alloc"] }
-wgpu = "24.0.1"
+anyhow = { version = "1.0", default-features = false }
+base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
+nom = { version = "8.0", default-features = false, features = ["alloc"] }
+palette = { version = "0.7", default-features = false }
+png = "0.17"
+spin = { version = "0.9.8", default-features = false, features = ["lazy"] }
+tiny-skia = { version = "0.11", default-features = false }
 
 [features]
-std = ["nom/std"]
+default = ["std", "simd"]
+std = ["anyhow/std", "base64/std", "nom/std", "palette/std", "tiny-skia/std", "tiny-skia/png-format"]
+simd = ["tiny-skia/simd"]
+
+[target.'cfg(not(feature = "std"))'.dependencies]
+tiny-skia = { version = "0.11", default-features = false, features = ["no-std-float"] }
+palette = { version = "0.7", default-features = false, features = ["alloc", "libm"] }

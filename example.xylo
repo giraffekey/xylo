@@ -1,0 +1,18 @@
+root = START
+
+START =
+	let shape = SQUARE
+		s (pi * 25 * sin 10) 50 (add_circle shape)
+		: collect cylinders
+
+add_circle shape =
+	h 240 (sat 0.5 (l 0.5 (a 0.7 shape)))
+	: ss 1.125 (h 120 (sat 0.5 (l 0.5 (a 0.7 CIRCLE))))
+
+cylinder =
+	for i in 0..10
+		h (i * 12) (sat (i * 0.05) (l (i * 0.05) (tt (i * 0.1) CIRCLE)))
+
+cylinders =
+	for i in 0..36
+		rotate (i * 10) (t (cos i * 10) (sin i * 10) (collect cylinder))
