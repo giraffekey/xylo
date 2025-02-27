@@ -31,7 +31,10 @@ mod shape;
 
 pub fn generate_pixmap(code: &str, width: u32, height: u32) -> Result<Pixmap> {
     let (_remaining, tree) = parser::parse(code.to_owned().leak()).map_err(|e| anyhow!(e))?;
-    let shape = compiler::compile(tree)?;
+    #[cfg(feature = "std")]
+    let shape = compiler::compile(tree, None)?;
+    #[cfg(feature = "no-std")]
+    let shape = compiler::compile(tree, Some([0; 32]))?;
     Ok(renderer::render(shape, width, height)?)
 }
 

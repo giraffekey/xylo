@@ -48,6 +48,8 @@ pub static TRIANGLE: BasicShape = BasicShape::Triangle {
 
 pub static FILL: BasicShape = BasicShape::Fill { color: WHITE };
 
+pub static EMPTY: BasicShape = BasicShape::Empty;
+
 #[derive(Debug, Clone, Copy)]
 pub enum BasicShape {
     Square {
@@ -73,6 +75,7 @@ pub enum BasicShape {
     Fill {
         color: Hsla<f32>,
     },
+    Empty,
 }
 
 #[derive(Debug, Clone)]
@@ -101,7 +104,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_translate(tx, ty);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -114,7 +117,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate(r);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -127,7 +130,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate_at(r, tx, ty);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -140,7 +143,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(sx, sy);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -153,7 +156,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_concat(Transform::from_skew(kx, ky));
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -169,7 +172,7 @@ impl Shape {
                     .post_scale(-1.0, 1.0)
                     .post_rotate(-f);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -182,7 +185,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, 1.0);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -195,7 +198,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(1.0, -1.0);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -208,7 +211,7 @@ impl Shape {
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, -1.0);
             }
-            Self::Basic(BasicShape::Fill { .. }) => (),
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -222,6 +225,7 @@ impl Shape {
             | Self::Collection { color, .. } => {
                 color.hue = hue.into();
             }
+            Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -235,6 +239,7 @@ impl Shape {
             | Self::Collection { color, .. } => {
                 color.saturation = saturation;
             }
+            Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -248,6 +253,7 @@ impl Shape {
             | Self::Collection { color, .. } => {
                 color.lightness = lightness;
             }
+            Self::Basic(BasicShape::Empty) => (),
         }
     }
 
@@ -261,6 +267,7 @@ impl Shape {
             | Self::Collection { color, .. } => {
                 color.alpha = alpha;
             }
+            Self::Basic(BasicShape::Empty) => (),
         }
     }
 }

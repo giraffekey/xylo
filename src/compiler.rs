@@ -10,10 +10,11 @@ use {
 use crate::cache::Cache;
 use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS};
 use crate::parser::*;
-use crate::shape::{unwrap_shape, Shape, CIRCLE, FILL, SQUARE, TRIANGLE};
+use crate::shape::{unwrap_shape, Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
 use anyhow::{anyhow, Result};
 use hashbrown::HashMap;
+use rand::distr::{weighted::WeightedIndex, Distribution};
 use rayon::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,7 +77,8 @@ enum Block<'a> {
 #[derive(Debug, Clone)]
 struct Function<'a> {
     params: Vec<&'a str>,
-    block: Block<'a>,
+    weighted: bool,
+    blocks: Vec<(Block<'a>, f32)>,
 }
 
 fn reduce_literal(literal: &Literal) -> Result<Value> {
@@ -90,6 +92,7 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
                 ShapeKind::Circle => CIRCLE,
                 ShapeKind::Triangle => TRIANGLE,
                 ShapeKind::Fill => FILL,
+                ShapeKind::Empty => EMPTY,
             };
             Ok(Value::Shape(Arc::new(Mutex::new(Shape::Basic(shape)))))
         }
@@ -133,13 +136,13 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
         .map(|arg| reduce_expr(stack, cache, &arg))
         .collect();
     let args = args?;
-    let key = Cache::hash_call(call.name, &args);
-
-    if let Some(value) = cache.get(key) {
-        return Ok(value);
-    }
 
     if BUILTIN_FUNCTIONS.contains(&call.name) {
+        let key = Cache::hash_call(call.name, 0, &args);
+        if let Some(value) = cache.get(key) {
+            return Ok(value);
+        }
+
         let value = handle_builtin(call.name, &args)?;
         cache.insert(key, &value);
         return Ok(value);
@@ -152,8 +155,25 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
                 return Err(anyhow!("Incorrect number of arguments."));
             }
 
-            match function.block.clone() {
-                Block::Value(value) => Ok(value),
+            let (i, block) = if function.weighted {
+                let index_weights = function.blocks.iter().enumerate();
+                let dist = WeightedIndex::new(index_weights.clone().map(|(_, (_, weight))| weight))
+                    .unwrap();
+                index_weights
+                    .map(|(i, (block, _))| (i, block))
+                    .nth(dist.sample(&mut cache.rng()))
+                    .unwrap()
+            } else {
+                (0, &function.blocks[0].0)
+            };
+
+            let key = Cache::hash_call(call.name, i, &args);
+            if let Some(value) = cache.get(key) {
+                return Ok(value);
+            }
+
+            match block {
+                Block::Value(value) => Ok(value.clone()),
                 Block::Expr(expr) => {
                     let functions: Vec<(&str, Function)> = function
                         .params
@@ -165,7 +185,8 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
                                 *param,
                                 Function {
                                     params: vec![],
-                                    block: Block::Value(arg),
+                                    weighted: false,
+                                    blocks: vec![(Block::Value(arg), 0.0)],
                                 },
                             )
                         })
@@ -196,7 +217,8 @@ fn reduce_let<'a>(stack: &Stack<'a>, cache: &Cache, let_statement: &Let<'a>) -> 
                     definition.name,
                     Function {
                         params: definition.params,
-                        block: Block::Expr(definition.block),
+                        weighted: false,
+                        blocks: vec![(Block::Expr(definition.block), 0.0)],
                     },
                 )
             }),
@@ -293,7 +315,8 @@ fn reduce_for(stack: &Stack, cache: &Cache, for_statement: &For) -> Result<Value
                 for_statement.var,
                 Function {
                     params: vec![],
-                    block: Block::Value(item),
+                    weighted: false,
+                    blocks: vec![(Block::Value(item), 0.0)],
                 },
             );
             reduce_expr(&stack, cache, &for_statement.block)
@@ -339,37 +362,47 @@ fn reduce_expr(stack: &Stack, cache: &Cache, expr: &Expr) -> Result<Value> {
     }
 }
 
-pub fn compile(tree: Tree) -> Result<Shape> {
-    let functions = tree
-        .into_iter()
-        .map(|definition| {
-            (
-                definition.name,
-                Function {
-                    params: definition.params,
-                    block: Block::Expr(definition.block),
-                },
-            )
-        })
-        .collect();
+pub fn compile(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
+    let mut functions: HashMap<&str, Function> = HashMap::new();
+    for definition in tree {
+        match functions.get_mut(definition.name) {
+            Some(function) => {
+                if definition.params != function.params {
+                    return Err(anyhow!("Incorrect parameters in duplicate function."));
+                }
+
+                function.weighted = true;
+                function
+                    .blocks
+                    .push((Block::Expr(definition.block), definition.weight.unwrap()));
+            }
+            None => {
+                functions.insert(
+                    definition.name,
+                    Function {
+                        params: definition.params,
+                        weighted: false,
+                        blocks: vec![(Block::Expr(definition.block), definition.weight.unwrap())],
+                    },
+                );
+            }
+        }
+    }
+
     let stack = Stack {
         functions,
         depth: 0,
     };
-    let cache = Cache::new();
+    let cache = Cache::new(seed)?;
 
-    let shape = match stack.functions.get("root") {
-        Some(root_fn) => {
-            let value = match root_fn.block.clone() {
-                Block::Value(value) => value,
-                Block::Expr(expr) => reduce_expr(&stack, &cache, &expr)?,
-            };
-            match value {
-                Value::Shape(shape) => shape,
-                _ => return Err(anyhow!("The `root` function must return a shape.")),
-            }
-        }
-        None => return Err(anyhow!("Could not find `root` function definition.")),
+    let call = Call {
+        name: "root",
+        args: Vec::new(),
+    };
+
+    let shape = match reduce_call(&stack, &cache, &call)? {
+        Value::Shape(shape) => shape,
+        _ => return Err(anyhow!("The `root` function must return a shape.")),
     };
     Ok(unwrap_shape(shape))
 }

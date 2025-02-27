@@ -68,6 +68,7 @@ fn render_shape(
             let color = Color::from_rgba(color.red, color.green, color.blue, color.alpha).unwrap();
             pixmap.fill(color);
         }
+        Shape::Basic(BasicShape::Empty) => (),
         Shape::Composite {
             a,
             b,

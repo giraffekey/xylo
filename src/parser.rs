@@ -20,6 +20,7 @@ pub enum ShapeKind {
     Square,
     Circle,
     Fill,
+    Empty,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -154,6 +155,7 @@ pub enum Expr<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Definition<'a> {
     pub name: &'a str,
+    pub weight: Option<f32>,
     pub params: Vec<&'a str>,
     pub block: Expr<'a>,
 }
@@ -165,9 +167,13 @@ fn integer(input: &str) -> IResult<&str, Literal> {
         .map(|(input, value)| (input, Literal::Integer(value)))
 }
 
+fn float_value(input: &str) -> IResult<&str, f32> {
+    let (input, s) = recognize((opt(char('-')), (opt(digit1), char('.'), digit1))).parse(input)?;
+    Ok((input, s.parse().unwrap()))
+}
+
 fn float(input: &str) -> IResult<&str, Literal> {
-    let (input, s) = recognize((opt(char('-')), digit1, char('.'), digit1)).parse(input)?;
-    Ok((input, Literal::Float(s.parse().unwrap())))
+    float_value(input).map(|(input, value)| (input, Literal::Float(value)))
 }
 
 fn boolean(input: &str) -> IResult<&str, Literal> {
@@ -184,6 +190,7 @@ fn shape(input: &str) -> IResult<&str, Literal> {
         value(ShapeKind::Square, tag("SQUARE")),
         value(ShapeKind::Circle, tag("CIRCLE")),
         value(ShapeKind::Fill, tag("FILL")),
+        value(ShapeKind::Empty, tag("EMPTY")),
     ))
     .parse(input)?;
     Ok((input, Literal::Shape(shape)))
@@ -284,6 +291,7 @@ fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, Definition
         let (input, block) = expr(indent + 1)(input)?;
         let definition = Definition {
             name,
+            weight: None,
             params,
             block,
         };
@@ -454,11 +462,17 @@ fn expr(indent: usize) -> impl FnMut(&str) -> IResult<&str, Expr> {
 
 fn definition(input: &str) -> IResult<&str, Definition> {
     let (input, name) = identifier(input)?;
+    let (input, weight) = opt(preceded(
+        char('@'),
+        alt((float_value, map(i32, |n| n as f32))),
+    ))
+    .parse(input)?;
     let (input, params) = many0(preceded(multispace1, identifier)).parse(input)?;
     let (input, _) = preceded(multispace0, char('=')).parse(input)?;
     let (input, block) = block(input, 1)?;
     let definition = Definition {
         name,
+        weight: Some(weight.unwrap_or(1.0)),
         params,
         block,
     };
@@ -487,7 +501,11 @@ mod tests {
             "
 root =
     add_circle SQUARE
+
 add_circle shape = shape : CIRCLE
+
+weighted@2 = 3
+weighted@3 = 2
 
 MATH =
     3 + 4.0 * 5.0 + 6..(1 + 2) * 3
@@ -527,6 +545,7 @@ LOOP =
             vec![
                 Definition {
                     name: "root",
+                    weight: Some(1.0),
                     params: vec![],
                     block: Expr::Call(Call {
                         name: "add_circle",
@@ -535,6 +554,7 @@ LOOP =
                 },
                 Definition {
                     name: "add_circle",
+                    weight: Some(1.0),
                     params: vec!["shape"],
                     block: Expr::BinaryOperation(BinaryOperation {
                         op: BinaryOperator::Composition,
@@ -546,7 +566,20 @@ LOOP =
                     }),
                 },
                 Definition {
+                    name: "weighted",
+                    weight: Some(2.0),
+                    params: vec![],
+                    block: Expr::Literal(Literal::Integer(3)),
+                },
+                Definition {
+                    name: "weighted",
+                    weight: Some(3.0),
+                    params: vec![],
+                    block: Expr::Literal(Literal::Integer(2)),
+                },
+                Definition {
                     name: "MATH",
+                    weight: Some(1.0),
                     params: vec![],
                     block: Expr::BinaryOperation(BinaryOperation {
                         op: BinaryOperator::RangeExclusive,
@@ -576,16 +609,19 @@ LOOP =
                 },
                 Definition {
                     name: "LET",
+                    weight: Some(1.0),
                     params: vec![],
                     block: Expr::Let(Let {
                         definitions: vec![
                             Definition {
                                 name: "x",
+                                weight: None,
                                 params: vec![],
                                 block: Expr::Literal(Literal::Float(3.0)),
                             },
                             Definition {
                                 name: "y",
+                                weight: None,
                                 params: vec![],
                                 block: Expr::Literal(Literal::Float(2.0)),
                             },
@@ -609,6 +645,7 @@ LOOP =
                 },
                 Definition {
                     name: "IF",
+                    weight: Some(1.0),
                     params: vec!["n"],
                     block: Expr::If(If {
                         condition: Box::new(Expr::BinaryOperation(BinaryOperation {
@@ -636,6 +673,7 @@ LOOP =
                 },
                 Definition {
                     name: "MATCH",
+                    weight: Some(1.0),
                     params: vec!["n"],
                     block: Expr::Match(Match {
                         condition: Box::new(Expr::Call(Call {
@@ -664,6 +702,7 @@ LOOP =
                 },
                 Definition {
                     name: "FOR",
+                    weight: Some(1.0),
                     params: vec![],
                     block: Expr::For(For {
                         var: "i",
@@ -687,6 +726,7 @@ LOOP =
                 },
                 Definition {
                     name: "LOOP",
+                    weight: Some(1.0),
                     params: vec![],
                     block: Expr::Loop(Loop {
                         count: Box::new(Expr::Literal(Literal::Integer(3))),

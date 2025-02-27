@@ -1,18 +1,25 @@
 #[cfg(feature = "std")]
-use std::sync::{Arc, Mutex};
+use {
+    rand::rng,
+    std::sync::{Arc, Mutex, MutexGuard},
+};
 
 #[cfg(feature = "no-std")]
 use {
     alloc::{boxed::Box, sync::Arc, vec::Vec},
-    spin::Mutex,
+    anyhow::anyhow,
+    spin::{Mutex, MutexGuard},
 };
 
 use crate::compiler::Value;
 use crate::shape::{lock_shape, BasicShape, Shape};
 
 use ahash::AHasher;
+use anyhow::Result;
 use core::hash::Hasher;
 use dashmap::DashMap;
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
 use serde::Serialize;
 use tiny_skia::Transform;
 
@@ -41,6 +48,7 @@ pub enum CacheBasicShape {
     Fill {
         color: [f32; 4],
     },
+    Empty,
 }
 
 impl From<&BasicShape> for CacheBasicShape {
@@ -86,6 +94,7 @@ impl From<&BasicShape> for CacheBasicShape {
             BasicShape::Fill { color } => CacheBasicShape::Fill {
                 color: (*color).into(),
             },
+            BasicShape::Empty => CacheBasicShape::Empty,
         }
     }
 }
@@ -133,6 +142,7 @@ impl Into<BasicShape> for CacheBasicShape {
             CacheBasicShape::Fill { color } => BasicShape::Fill {
                 color: color.into(),
             },
+            CacheBasicShape::Empty => BasicShape::Empty,
         }
     }
 }
@@ -279,21 +289,42 @@ impl Into<Value> for CacheValue {
 
 #[derive(Debug)]
 pub struct Cache {
+    rng: Arc<Mutex<ChaCha8Rng>>,
     call_results: DashMap<u64, CacheValue>,
 }
 
 impl Cache {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(seed: Option<[u8; 32]>) -> Result<Self> {
+        let seed = match seed {
+            Some(seed) => seed,
+            None => {
+                #[cfg(feature = "std")]
+                {
+                    gen_seed()
+                }
+                #[cfg(feature = "no-std")]
+                return Err(anyhow!("Seed required for rng."));
+            }
+        };
+        Ok(Self {
+            rng: Arc::new(Mutex::new(ChaCha8Rng::from_seed(seed))),
             call_results: DashMap::new(),
-        }
+        })
     }
 
-    pub fn hash_call(name: &str, args: &[Value]) -> u64 {
+    pub fn rng(&self) -> MutexGuard<'_, ChaCha8Rng> {
+        #[cfg(feature = "std")]
+        return self.rng.lock().unwrap();
+        #[cfg(feature = "no-std")]
+        return self.rng.lock();
+    }
+
+    pub fn hash_call(name: &str, index: usize, args: &[Value]) -> u64 {
         let args: Vec<CacheValue> = args.iter().map(CacheValue::from).collect();
 
         let mut buf = Vec::new();
         buf.extend(name.as_bytes());
+        buf.extend(index.to_be_bytes());
         buf.extend(bincode::serialize(&args).unwrap());
 
         let mut hasher = AHasher::default();
@@ -310,4 +341,12 @@ impl Cache {
     pub fn insert(&self, key: u64, value: &Value) {
         self.call_results.insert(key, value.into());
     }
+}
+
+#[cfg(feature = "std")]
+fn gen_seed() -> [u8; 32] {
+    let mut rng = rng();
+    let mut seed = [0u8; 32];
+    rng.fill(&mut seed);
+    seed
 }

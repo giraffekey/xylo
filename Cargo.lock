@@ -639,6 +639,7 @@ dependencies = [
  "palette",
  "png",
  "rand",
+ "rand_chacha",
  "rayon",
  "serde",
  "spin",
