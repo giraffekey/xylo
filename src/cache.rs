@@ -12,7 +12,7 @@ use {
 };
 
 use crate::compiler::Value;
-use crate::shape::{lock_shape, BasicShape, Shape};
+use crate::shape::{lock_shape, BasicShape, PathSegment, Shape};
 
 use ahash::AHasher;
 use anyhow::Result;
@@ -150,6 +150,11 @@ impl Into<BasicShape> for CacheBasicShape {
 #[derive(Debug, Clone, Serialize)]
 pub enum CacheShape {
     Basic(CacheBasicShape),
+    Path {
+        segments: Vec<PathSegment>,
+        transform: [f32; 6],
+        color: [f32; 4],
+    },
     Composite {
         a: Box<CacheShape>,
         b: Box<CacheShape>,
@@ -167,6 +172,15 @@ impl From<&Shape> for CacheShape {
     fn from(shape: &Shape) -> CacheShape {
         match shape {
             Shape::Basic(s) => CacheShape::Basic(s.into()),
+            Shape::Path {
+                segments,
+                transform,
+                color,
+            } => CacheShape::Path {
+                segments: segments.to_vec(),
+                transform: transform_to_data(*transform),
+                color: (*color).into(),
+            },
             Shape::Composite {
                 a,
                 b,
@@ -198,6 +212,15 @@ impl Into<Shape> for CacheShape {
     fn into(self) -> Shape {
         match self {
             CacheShape::Basic(s) => Shape::Basic(s.into()),
+            CacheShape::Path {
+                segments,
+                transform,
+                color,
+            } => Shape::Path {
+                segments: segments.to_vec(),
+                transform: transform_from_data(transform),
+                color: color.into(),
+            },
             CacheShape::Composite {
                 a,
                 b,

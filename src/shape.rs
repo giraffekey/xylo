@@ -8,6 +8,7 @@ use {
 };
 
 use palette::{Hsla, RgbHue};
+use serde::Serialize;
 use tiny_skia::Transform;
 
 pub static IDENTITY: Transform = Transform {
@@ -50,6 +51,15 @@ pub static FILL: BasicShape = BasicShape::Fill { color: WHITE };
 
 pub static EMPTY: BasicShape = BasicShape::Empty;
 
+#[derive(Debug, Clone, Copy, Serialize)]
+pub enum PathSegment {
+    MoveTo(f32, f32),
+    LineTo(f32, f32),
+    QuadTo(f32, f32, f32, f32),
+    CubicTo(f32, f32, f32, f32, f32, f32),
+    Close,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum BasicShape {
     Square {
@@ -81,6 +91,11 @@ pub enum BasicShape {
 #[derive(Debug, Clone)]
 pub enum Shape {
     Basic(BasicShape),
+    Path {
+        segments: Vec<PathSegment>,
+        transform: Transform,
+        color: Hsla<f32>,
+    },
     Composite {
         a: Arc<Mutex<Shape>>,
         b: Arc<Mutex<Shape>>,
@@ -100,6 +115,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_translate(tx, ty);
@@ -113,6 +129,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate(r);
@@ -126,6 +143,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate_at(r, tx, ty);
@@ -139,6 +157,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(sx, sy);
@@ -152,6 +171,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_concat(Transform::from_skew(kx, ky));
@@ -165,6 +185,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform
@@ -181,6 +202,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, 1.0);
@@ -194,6 +216,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(1.0, -1.0);
@@ -207,6 +230,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, -1.0);
@@ -221,6 +245,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
                 color.hue = hue.into();
@@ -235,6 +260,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
                 color.saturation = saturation;
@@ -249,6 +275,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
                 color.lightness = lightness;
@@ -263,6 +290,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
                 color.alpha = alpha;

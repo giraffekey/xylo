@@ -3,12 +3,12 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "no-std")]
 use {
-    alloc::{sync::Arc, vec::Vec},
+    alloc::{sync::Arc, vec, vec::Vec},
     spin::Mutex,
 };
 
 use crate::compiler::Value;
-use crate::shape::{lock_shape, Shape, IDENTITY, TRANSPARENT};
+use crate::shape::{lock_shape, PathSegment, Shape, IDENTITY, TRANSPARENT, WHITE};
 
 use anyhow::{anyhow, Result};
 use core::f32::consts::PI;
@@ -88,6 +88,9 @@ pub const BUILTIN_FUNCTIONS: &[&str] = &[
     "flipv",
     "fd",
     "flipd",
+    "hsl",
+    "hsla",
+    "hex",
     "h",
     "hue",
     "sat",
@@ -97,6 +100,11 @@ pub const BUILTIN_FUNCTIONS: &[&str] = &[
     "a",
     "alpha",
     "blend",
+    "move_to",
+    "line_to",
+    "quad_to",
+    "cubic_to",
+    "close",
 ];
 
 fn pi(args: &[Value]) -> Result<Value> {
@@ -335,11 +343,34 @@ pub fn compose(args: &[Value]) -> Result<Value> {
 
     match (&args[0], &args[1]) {
         (Value::Shape(a), Value::Shape(b)) => {
-            let shape = Shape::Composite {
-                a: a.clone(),
-                b: b.clone(),
-                transform: IDENTITY,
-                color: TRANSPARENT,
+            let shape = match (&*lock_shape(a), &*lock_shape(b)) {
+                (
+                    Shape::Path {
+                        segments: a,
+                        transform: a_transform,
+                        color,
+                    },
+                    Shape::Path {
+                        segments: b,
+                        transform: b_transform,
+                        ..
+                    },
+                ) => {
+                    let mut segments = Vec::with_capacity(a.len() + b.len());
+                    segments.extend(a);
+                    segments.extend(b);
+                    Shape::Path {
+                        segments,
+                        transform: a_transform.post_concat(*b_transform),
+                        color: *color,
+                    }
+                }
+                _ => Shape::Composite {
+                    a: a.clone(),
+                    b: b.clone(),
+                    transform: IDENTITY,
+                    color: TRANSPARENT,
+                },
             };
             Ok(Value::Shape(Arc::new(Mutex::new(shape))))
         }
@@ -363,10 +394,46 @@ pub fn collect(args: &[Value]) -> Result<Value> {
                     _ => Err(anyhow!("Invalid type passed to `collect` function.")),
                 })
                 .collect();
-            let shape = Shape::Collection {
-                shapes: shapes?,
-                transform: IDENTITY,
-                color: TRANSPARENT,
+            let shapes = shapes?;
+
+            if shapes.len() < 1 {
+                return Err(anyhow!("Cannot collect zero shapes."));
+            }
+
+            let is_path = shapes.iter().all(|shape| match *lock_shape(shape) {
+                Shape::Path { .. } => true,
+                _ => false,
+            });
+            let shape = if is_path {
+                let mut segments = Vec::with_capacity(shapes.len());
+                let mut transform = IDENTITY;
+                let color = WHITE;
+
+                for path in shapes {
+                    match &*lock_shape(&path) {
+                        Shape::Path {
+                            segments: other_segments,
+                            transform: other_transform,
+                            ..
+                        } => {
+                            segments.extend(other_segments);
+                            transform = transform.post_concat(*other_transform);
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+
+                Shape::Path {
+                    segments,
+                    transform,
+                    color,
+                }
+            } else {
+                Shape::Collection {
+                    shapes,
+                    transform: IDENTITY,
+                    color: TRANSPARENT,
+                }
             };
             Ok(Value::Shape(Arc::new(Mutex::new(shape))))
         }
@@ -916,6 +983,167 @@ pub fn blend(args: &[Value]) -> Result<Value> {
     todo!()
 }
 
+pub fn move_to(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `move_to` function."
+        ));
+    }
+
+    let x = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `move_to` function.")),
+    };
+
+    let y = match args[1] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `move_to` function.")),
+    };
+
+    let segments = vec![PathSegment::MoveTo(x, y)];
+    let shape = Shape::Path {
+        segments,
+        transform: IDENTITY,
+        color: WHITE,
+    };
+    Ok(Value::Shape(Arc::new(Mutex::new(shape))))
+}
+
+pub fn line_to(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `line_to` function."
+        ));
+    }
+
+    let x = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `line_to` function.")),
+    };
+
+    let y = match args[1] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `line_to` function.")),
+    };
+
+    let segments = vec![PathSegment::LineTo(x, y)];
+    let shape = Shape::Path {
+        segments,
+        transform: IDENTITY,
+        color: WHITE,
+    };
+    Ok(Value::Shape(Arc::new(Mutex::new(shape))))
+}
+
+pub fn quad_to(args: &[Value]) -> Result<Value> {
+    if args.len() != 4 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `quad_to` function."
+        ));
+    }
+
+    let x1 = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `quad_to` function.")),
+    };
+
+    let y1 = match args[1] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `quad_to` function.")),
+    };
+
+    let x = match args[2] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `quad_to` function.")),
+    };
+
+    let y = match args[3] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `quad_to` function.")),
+    };
+
+    let segments = vec![PathSegment::QuadTo(x1, y1, x, y)];
+    let shape = Shape::Path {
+        segments,
+        transform: IDENTITY,
+        color: WHITE,
+    };
+    Ok(Value::Shape(Arc::new(Mutex::new(shape))))
+}
+
+pub fn cubic_to(args: &[Value]) -> Result<Value> {
+    if args.len() != 6 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `cubic_to` function."
+        ));
+    }
+
+    let x1 = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `cubic_to` function.")),
+    };
+
+    let y1 = match args[1] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `cubic_to` function.")),
+    };
+
+    let x2 = match args[2] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `cubic_to` function.")),
+    };
+
+    let y2 = match args[3] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `cubic_to` function.")),
+    };
+
+    let x = match args[4] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `cubic_to` function.")),
+    };
+
+    let y = match args[5] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `cubic_to` function.")),
+    };
+
+    let segments = vec![PathSegment::CubicTo(x1, y1, x2, y2, x, y)];
+    let shape = Shape::Path {
+        segments,
+        transform: IDENTITY,
+        color: WHITE,
+    };
+    Ok(Value::Shape(Arc::new(Mutex::new(shape))))
+}
+
+pub fn close(args: &[Value]) -> Result<Value> {
+    if args.len() != 0 {
+        return Err(anyhow!("Invalid number of arguments to `close` function."));
+    }
+
+    let shape = Shape::Path {
+        segments: vec![PathSegment::Close],
+        transform: IDENTITY,
+        color: WHITE,
+    };
+    Ok(Value::Shape(Arc::new(Mutex::new(shape))))
+}
+
 pub fn handle_builtin(name: &str, args: &[Value]) -> Result<Value> {
     match name {
         "pi" | "π" => pi(args),
@@ -960,11 +1188,17 @@ pub fn handle_builtin(name: &str, args: &[Value]) -> Result<Value> {
         "fd" | "flipd" => flipd(args),
         // "hsl" => hsl(args),
         // "hsla" => hsla(args),
+        // "hex" => hex(args),
         "h" | "hue" => hue(args),
         "sat" | "saturation" => saturation(args),
         "l" | "lightness" => lightness(args),
         "a" | "alpha" => alpha(args),
         "blend" => blend(args),
+        "move_to" => move_to(args),
+        "line_to" => line_to(args),
+        "quad_to" => quad_to(args),
+        "cubic_to" => cubic_to(args),
+        "close" => close(args),
         _ => unreachable!(),
     }
 }

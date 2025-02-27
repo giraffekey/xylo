@@ -1,4 +1,4 @@
-use crate::shape::{unwrap_shape, BasicShape, Shape};
+use crate::shape::{unwrap_shape, BasicShape, PathSegment, Shape};
 
 use anyhow::Result;
 use palette::{blend::Blend, rgb::Rgba, FromColor};
@@ -69,6 +69,31 @@ fn render_shape(
             pixmap.fill(color);
         }
         Shape::Basic(BasicShape::Empty) => (),
+        Shape::Path {
+            segments,
+            transform,
+            color,
+        } => {
+            let transform = transform.post_concat(parent_transform);
+            let color = Rgba::from_color(color).overlay(parent_color);
+            let paint = solid_color_paint(color);
+
+            let mut pb = PathBuilder::new();
+            for segment in segments {
+                match segment {
+                    PathSegment::MoveTo(x, y) => pb.move_to(x, y),
+                    PathSegment::LineTo(x, y) => pb.line_to(x, y),
+                    PathSegment::QuadTo(x1, y1, x, y) => pb.quad_to(x1, y1, x, y),
+                    PathSegment::CubicTo(x1, y1, x2, y2, x, y) => pb.cubic_to(x1, y1, x2, y2, x, y),
+                    PathSegment::Close => pb.close(),
+                }
+            }
+            let path = pb.finish();
+
+            if let Some(path) = path {
+                pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
+            }
+        }
         Shape::Composite {
             a,
             b,
