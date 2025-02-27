@@ -82,6 +82,12 @@ pub const BUILTIN_FUNCTIONS: &[&str] = &[
     "skewb",
     "f",
     "flip",
+    "fh",
+    "fliph",
+    "fv",
+    "flipv",
+    "fd",
+    "flipd",
     "h",
     "hue",
     "sat",
@@ -764,6 +770,48 @@ pub fn flip(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
+pub fn fliph(args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `fliph` function."));
+    }
+
+    let shape = match &args[0] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `fliph` function.")),
+    };
+
+    lock_shape(&shape).fliph();
+    Ok(Value::Shape(shape))
+}
+
+pub fn flipv(args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `flipv` function."));
+    }
+
+    let shape = match &args[0] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `flipv` function.")),
+    };
+
+    lock_shape(&shape).flipv();
+    Ok(Value::Shape(shape))
+}
+
+pub fn flipd(args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `flipd` function."));
+    }
+
+    let shape = match &args[0] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `flipd` function.")),
+    };
+
+    lock_shape(&shape).flipd();
+    Ok(Value::Shape(shape))
+}
+
 pub fn hue(args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hue` function."));
@@ -907,6 +955,9 @@ pub fn handle_builtin(name: &str, args: &[Value]) -> Result<Value> {
         "ky" | "skewy" => skewy(args),
         "kk" | "skewb" => skewb(args),
         "f" | "flip" => flip(args),
+        "fh" | "fliph" => fliph(args),
+        "fv" | "flipv" => flipv(args),
+        "fd" | "flipd" => flipd(args),
         // "hsl" => hsl(args),
         // "hsla" => hsla(args),
         "h" | "hue" => hue(args),

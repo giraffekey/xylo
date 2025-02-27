@@ -6,12 +6,12 @@ grids =
 		grid (i * 15)
 
 grid angle =
-	r (angle) (tt (i) (collect cols))
+	r (angle) (collect cols)
 
 cols =
-	for i in 0..10
+	for i in 0..5
 		collect (rows i)
 
 rows i =
 	for j in 0..10
-		t (i * 40 - 200) (j * 40 - 200) (ss 4 (h (120 + i * 10) (sat 1 (l 0.5 SQUARE))))
+		t (i * 40 - 200) (j * 40 - 200) (ss 4 (h (200 - i * 10) (sat 1 (l 0.5 SQUARE))))

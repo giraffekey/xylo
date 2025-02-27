@@ -157,8 +157,56 @@ impl Shape {
         }
     }
 
-    pub fn flip(&mut self, _f: f32) {
-        todo!()
+    pub fn flip(&mut self, f: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { transform, .. })
+            | Self::Basic(BasicShape::Circle { transform, .. })
+            | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Composite { transform, .. }
+            | Self::Collection { transform, .. } => {
+                *transform = transform.post_rotate(f).post_scale(-1.0, 1.0).post_rotate(-f);
+            }
+            Self::Basic(BasicShape::Fill { .. }) => (),
+        }
+    }
+
+    pub fn fliph(&mut self) {
+        match self {
+            Self::Basic(BasicShape::Square { transform, .. })
+            | Self::Basic(BasicShape::Circle { transform, .. })
+            | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Composite { transform, .. }
+            | Self::Collection { transform, .. } => {
+                *transform = transform.post_scale(-1.0, 1.0);
+            }
+            Self::Basic(BasicShape::Fill { .. }) => (),
+        }
+    }
+
+    pub fn flipv(&mut self) {
+        match self {
+            Self::Basic(BasicShape::Square { transform, .. })
+            | Self::Basic(BasicShape::Circle { transform, .. })
+            | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Composite { transform, .. }
+            | Self::Collection { transform, .. } => {
+                *transform = transform.post_scale(1.0, -1.0);
+            }
+            Self::Basic(BasicShape::Fill { .. }) => (),
+        }
+    }
+
+    pub fn flipd(&mut self) {
+        match self {
+            Self::Basic(BasicShape::Square { transform, .. })
+            | Self::Basic(BasicShape::Circle { transform, .. })
+            | Self::Basic(BasicShape::Triangle { transform, .. })
+            | Self::Composite { transform, .. }
+            | Self::Collection { transform, .. } => {
+                *transform = transform.post_scale(-1.0, -1.0);
+            }
+            Self::Basic(BasicShape::Fill { .. }) => (),
+        }
     }
 
     pub fn set_hue(&mut self, hue: f32) {
