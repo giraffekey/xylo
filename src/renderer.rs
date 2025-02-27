@@ -1,4 +1,4 @@
-use crate::shape::{unwrap_shape, Shape};
+use crate::shape::{unwrap_shape, BasicShape, Shape};
 
 use anyhow::Result;
 use palette::{blend::Blend, rgb::Rgba, FromColor};
@@ -19,38 +19,38 @@ fn render_shape(
     parent_color: Rgba<f32>,
 ) -> Result<()> {
     match shape {
-        Shape::Square {
+        Shape::Basic(BasicShape::Square {
             x,
             y,
             width,
             height,
             transform,
             color,
-        } => {
+        }) => {
             let path = PathBuilder::from_rect(Rect::from_xywh(x, y, width, height).unwrap());
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             let paint = solid_color_paint(color);
             pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
         }
-        Shape::Circle {
+        Shape::Basic(BasicShape::Circle {
             x,
             y,
             radius,
             transform,
             color,
-        } => {
+        }) => {
             let path = PathBuilder::from_circle(x, y, radius).unwrap();
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             let paint = solid_color_paint(color);
             pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
         }
-        Shape::Triangle {
+        Shape::Basic(BasicShape::Triangle {
             points,
             transform,
             color,
-        } => {
+        }) => {
             let mut pb = PathBuilder::new();
             pb.move_to(points[0], points[1]);
             pb.line_to(points[2], points[3]);
@@ -63,7 +63,7 @@ fn render_shape(
             let paint = solid_color_paint(color);
             pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
         }
-        Shape::Fill { color } => {
+        Shape::Basic(BasicShape::Fill { color }) => {
             let color = Rgba::from_color(*color).overlay(parent_color);
             let color = Color::from_rgba(color.red, color.green, color.blue, color.alpha).unwrap();
             pixmap.fill(color);

@@ -12,25 +12,10 @@ use {
 
 use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS};
 use crate::parser::*;
-use crate::shape::{unwrap_shape, Shape};
+use crate::shape::{unwrap_shape, Shape, CIRCLE, FILL, SQUARE, TRIANGLE};
 
 use anyhow::{anyhow, Result};
-use palette::{Hsla, RgbHue};
 use rayon::prelude::*;
-use tiny_skia::Transform;
-
-pub static IDENTITY: Transform = Transform {
-    sx: 1.0,
-    kx: 0.0,
-    ky: 0.0,
-    sy: 1.0,
-    tx: 0.0,
-    ty: 0.0,
-};
-
-pub static WHITE: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 0.0, 1.0, 1.0);
-
-pub static TRANSPARENT: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 0.0, 1.0, 0.0);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueKind {
@@ -95,52 +80,49 @@ struct Function<'a> {
     block: Block<'a>,
 }
 
-fn reduce_literal(literal: Literal) -> Result<Value> {
+fn reduce_literal(literal: &Literal) -> Result<Value> {
     match literal {
-        Literal::Integer(n) => Ok(Value::Integer(n)),
-        Literal::Float(n) => Ok(Value::Float(n)),
-        Literal::Boolean(b) => Ok(Value::Boolean(b)),
+        Literal::Integer(n) => Ok(Value::Integer(*n)),
+        Literal::Float(n) => Ok(Value::Float(*n)),
+        Literal::Boolean(b) => Ok(Value::Boolean(*b)),
         Literal::Shape(kind) => {
             let shape = match kind {
-                ShapeKind::Square => Shape::Square {
-                    x: -1.0,
-                    y: -1.0,
-                    width: 2.0,
-                    height: 2.0,
-                    transform: IDENTITY,
-                    color: WHITE,
-                },
-                ShapeKind::Circle => Shape::Circle {
-                    x: 0.0,
-                    y: 0.0,
-                    radius: 1.0,
-                    transform: IDENTITY,
-                    color: WHITE,
-                },
-                ShapeKind::Triangle => Shape::Triangle {
-                    points: [-1.0, 0.577350269, 1.0, 0.577350269, 0.0, -1.154700538],
-                    transform: IDENTITY,
-                    color: WHITE,
-                },
-                ShapeKind::Fill => Shape::Fill { color: WHITE },
+                ShapeKind::Square => SQUARE,
+                ShapeKind::Circle => CIRCLE,
+                ShapeKind::Triangle => TRIANGLE,
+                ShapeKind::Fill => FILL,
             };
-            Ok(Value::Shape(Arc::new(Mutex::new(shape))))
+            Ok(Value::Shape(Arc::new(Mutex::new(Shape::Basic(shape)))))
         }
     }
 }
 
-fn reduce_binary_operation(stack: Stack, operation: BinaryOperation) -> Result<Value> {
-    let a = reduce_expr(stack.clone(), *operation.a)?;
-    let b = reduce_expr(stack, *operation.b)?;
-    handle_builtin(operation.op.as_str(), &[a, b])
+fn reduce_binary_operation(stack: &Stack, operation: &BinaryOperation) -> Result<Value> {
+    match (&*operation.a, &*operation.b) {
+        (Expr::Literal(_), Expr::Literal(_)) | (Expr::Literal(_), _) | (_, Expr::Literal(_)) => {
+            // Calculate synchronously if non-recursive
+            let a = reduce_expr(stack, &operation.a)?;
+            let b = reduce_expr(stack, &operation.b)?;
+            handle_builtin(operation.op.as_str(), &[a, b])
+        }
+        _ => {
+            // Calculate in parallel if recursion is possible
+            let args: Result<Vec<Value>> = [operation.a.clone(), operation.b.clone()]
+                .into_par_iter()
+                .map(|arg| reduce_expr(stack, &arg))
+                .collect();
+            handle_builtin(operation.op.as_str(), &args?)
+        }
+    }
 }
 
-fn reduce_call(mut stack: Stack, call: Call) -> Result<Value> {
+fn reduce_call(stack: &Stack, call: &Call) -> Result<Value> {
     if BUILTIN_FUNCTIONS.contains(&call.name) {
         let args: Result<Vec<Value>> = call
             .args
-            .iter()
-            .map(|arg| reduce_expr(stack.clone(), arg.clone()))
+            .clone()
+            .into_par_iter()
+            .map(|arg| reduce_expr(stack, &arg))
             .collect();
         return handle_builtin(call.name, &args?);
     }
@@ -155,19 +137,27 @@ fn reduce_call(mut stack: Stack, call: Call) -> Result<Value> {
             match function.block.clone() {
                 Block::Value(value) => Ok(value),
                 Block::Expr(expr) => {
-                    stack.depth += 1;
-                    for (param, arg) in function.params.clone().iter().zip(call.args) {
-                        let arg = reduce_expr(stack.clone(), arg)?;
-                        stack.functions.insert(
-                            param,
-                            Function {
-                                params: vec![],
-                                block: Block::Value(arg),
-                            },
-                        );
-                    }
+                    let functions: Result<Vec<(&str, Function)>> = function
+                        .params
+                        .clone()
+                        .par_iter()
+                        .zip(call.args.clone())
+                        .map(|(param, arg)| {
+                            let arg = reduce_expr(stack, &arg)?;
+                            Ok((
+                                *param,
+                                Function {
+                                    params: vec![],
+                                    block: Block::Value(arg),
+                                },
+                            ))
+                        })
+                        .collect();
 
-                    reduce_expr(stack, expr)
+                    let mut stack = stack.clone();
+                    stack.depth += 1;
+                    stack.functions.extend(functions?);
+                    reduce_expr(&stack, &expr)
                 }
             }
         }
@@ -175,115 +165,80 @@ fn reduce_call(mut stack: Stack, call: Call) -> Result<Value> {
     }
 }
 
-fn reduce_let<'a>(mut stack: Stack<'a>, let_statement: Let<'a>) -> Result<Value> {
-    for definition in let_statement.definitions {
-        stack.functions.insert(
-            definition.name,
-            Function {
-                params: definition.params,
-                block: Block::Expr(definition.block),
-            },
-        );
-    }
+fn reduce_let<'a>(stack: &Stack<'a>, let_statement: &Let<'a>) -> Result<Value> {
+    let mut stack = stack.clone();
+    stack.functions.extend(
+        let_statement
+            .definitions
+            .clone()
+            .into_iter()
+            .map(|definition| {
+                (
+                    definition.name,
+                    Function {
+                        params: definition.params,
+                        block: Block::Expr(definition.block),
+                    },
+                )
+            }),
+    );
 
-    reduce_expr(stack, *let_statement.block)
+    reduce_expr(&stack, &let_statement.block)
 }
 
-fn reduce_if(stack: Stack, if_statement: If) -> Result<Value> {
-    let condition = reduce_expr(stack.clone(), *if_statement.condition)?;
+fn reduce_if(stack: &Stack, if_statement: &If) -> Result<Value> {
+    let condition = reduce_expr(stack, &if_statement.condition)?;
     let is_true = match condition {
         Value::Boolean(b) => b,
         _ => return Err(anyhow!("If condition must reduce to a boolean.")),
     };
     if is_true {
-        reduce_expr(stack, *if_statement.if_block)
+        reduce_expr(stack, &if_statement.if_block)
     } else {
-        reduce_expr(stack, *if_statement.else_block)
+        reduce_expr(stack, &if_statement.else_block)
     }
 }
 
-fn reduce_match(stack: Stack, match_statement: Match) -> Result<Value> {
-    let a = reduce_expr(stack.clone(), *match_statement.condition)?;
-    for (pattern, block) in match_statement.patterns {
+fn reduce_match(stack: &Stack, match_statement: &Match) -> Result<Value> {
+    let a = reduce_expr(stack, &match_statement.condition)?;
+    for (pattern, block) in &match_statement.patterns {
         match pattern {
             Pattern::Matches(matches) => {
                 for b in matches {
-                    let b = reduce_expr(stack.clone(), b)?;
+                    let b = reduce_expr(stack, &b)?;
                     let matching = match (&a, &b) {
                         (Value::Integer(a), Value::Integer(b)) => a == b,
                         (Value::Float(a), Value::Float(b)) => a == b,
                         (Value::Integer(a), Value::Float(b))
                         | (Value::Float(b), Value::Integer(a)) => *a as f32 == *b,
                         (Value::Boolean(a), Value::Boolean(b)) => a == b,
-                        // (Value::Shape(a), Value::Shape(b)) => a == b,
-                        (Value::Integer(a), Value::List(list)) => {
-                            let list: Result<Vec<i32>> = list
-                                .iter()
-                                .map(|value| match value {
-                                    Value::Integer(n) => Ok(*n),
-                                    _ => Err(anyhow!(
-                                        "Incorrect type comparison in match statement."
-                                    )),
-                                })
-                                .collect();
-                            if list?.contains(&a) {
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                        (Value::Float(a), Value::List(list)) => {
-                            let list: Result<Vec<f32>> = list
-                                .iter()
-                                .map(|value| match value {
-                                    Value::Float(n) => Ok(*n),
-                                    _ => Err(anyhow!(
-                                        "Incorrect type comparison in match statement."
-                                    )),
-                                })
-                                .collect();
-                            if list?.contains(&a) {
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                        (Value::Boolean(a), Value::List(list)) => {
-                            let list: Result<Vec<bool>> = list
-                                .iter()
-                                .map(|value| match value {
-                                    Value::Boolean(b) => Ok(*b),
-                                    _ => Err(anyhow!(
-                                        "Incorrect type comparison in match statement."
-                                    )),
-                                })
-                                .collect();
-                            if list?.contains(&a) {
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                        // (Value::Shape(a), Value::List(list)) => {
-                        //     let list: Result<Vec<&Shape>> = list
-                        //         .iter()
-                        //         .map(|value| match value {
-                        //             Value::Shape(s) => Ok(s),
-                        //             _ => Err(anyhow!(
-                        //                 "Incorrect type comparison in match statement."
-                        //             )),
-                        //         })
-                        //         .collect();
-                        //     if list?.contains(&&a) {
-                        //         true
-                        //     } else {
-                        //         false
-                        //     }
-                        // }
+                        (Value::Shape(_a), Value::Shape(_b)) => todo!(),
+                        (Value::Integer(a), Value::List(list)) => list
+                            .iter()
+                            .map(|value| match value {
+                                Value::Integer(b) => Ok(*a == *b),
+                                _ => Err(anyhow!("Incorrect type comparison in match statement.")),
+                            })
+                            .try_fold(false, |acc, res| res.map(|x| acc || x))?,
+                        (Value::Float(a), Value::List(list)) => list
+                            .iter()
+                            .map(|value| match value {
+                                Value::Float(b) => Ok(*a == *b),
+                                _ => Err(anyhow!("Incorrect type comparison in match statement.")),
+                            })
+                            .try_fold(false, |acc, res| res.map(|x| acc || x))?,
+                        (Value::Boolean(a), Value::List(list)) => list
+                            .iter()
+                            .map(|value| match value {
+                                Value::Boolean(b) => Ok(*a == *b),
+                                _ => Err(anyhow!("Incorrect type comparison in match statement.")),
+                            })
+                            .try_fold(false, |acc, res| res.map(|x| acc || x))?,
+                        (Value::Shape(_a), Value::List(_list)) => todo!(),
                         _ => return Err(anyhow!("Incorrect type comparison in match statement.")),
                     };
                     if matching {
-                        return reduce_expr(stack, block);
+                        return reduce_expr(stack, &block);
                     }
                 }
             }
@@ -292,8 +247,8 @@ fn reduce_match(stack: Stack, match_statement: Match) -> Result<Value> {
     return Err(anyhow!("Not all possibilities covered in match statement"));
 }
 
-fn reduce_for(stack: Stack, for_statement: For) -> Result<Value> {
-    let iter = reduce_expr(stack.clone(), *for_statement.iter)?;
+fn reduce_for(stack: &Stack, for_statement: &For) -> Result<Value> {
+    let iter = reduce_expr(stack, &for_statement.iter)?;
     let items = match iter {
         Value::List(list) => list,
         Value::Integer(n) => {
@@ -312,17 +267,17 @@ fn reduce_for(stack: Stack, for_statement: For) -> Result<Value> {
     };
 
     let res: Result<Vec<Value>> = items
-        .par_iter()
+        .into_par_iter()
         .map(|item| {
             let mut stack = stack.clone();
             stack.functions.insert(
                 for_statement.var,
                 Function {
                     params: vec![],
-                    block: Block::Value(item.clone()),
+                    block: Block::Value(item),
                 },
             );
-            reduce_expr(stack, *for_statement.block.clone())
+            reduce_expr(&stack, &for_statement.block)
         })
         .collect();
 
@@ -331,8 +286,8 @@ fn reduce_for(stack: Stack, for_statement: For) -> Result<Value> {
     Ok(list)
 }
 
-fn reduce_loop(stack: Stack, loop_statement: Loop) -> Result<Value> {
-    let count = reduce_expr(stack.clone(), *loop_statement.count)?;
+fn reduce_loop(stack: &Stack, loop_statement: &Loop) -> Result<Value> {
+    let count = reduce_expr(stack, &loop_statement.count)?;
     let count = match count {
         Value::Integer(n) => n,
         Value::Float(n) => n as i32,
@@ -342,10 +297,9 @@ fn reduce_loop(stack: Stack, loop_statement: Loop) -> Result<Value> {
         return Err(anyhow!("Cannot iterate over negative number."));
     }
 
-    let range: Vec<_> = (0..count).collect();
-    let res: Result<Vec<Value>> = range
-        .par_iter()
-        .map(|_| reduce_expr(stack.clone(), *loop_statement.block.clone()))
+    let res: Result<Vec<Value>> = (0..count)
+        .into_par_iter()
+        .map(|_| reduce_expr(stack, &loop_statement.block))
         .collect();
 
     let list = Value::List(res?);
@@ -353,12 +307,12 @@ fn reduce_loop(stack: Stack, loop_statement: Loop) -> Result<Value> {
     Ok(list)
 }
 
-fn reduce_expr(stack: Stack, expr: Expr) -> Result<Value> {
+fn reduce_expr(stack: &Stack, expr: &Expr) -> Result<Value> {
     match expr {
         Expr::Literal(literal) => reduce_literal(literal),
         Expr::BinaryOperation(operation) => reduce_binary_operation(stack, operation),
         Expr::Call(call) => reduce_call(stack, call),
-        Expr::Let(let_statement) => reduce_let(stack, let_statement),
+        Expr::Let(let_statement) => reduce_let(&stack, let_statement),
         Expr::If(if_statement) => reduce_if(stack, if_statement),
         Expr::Match(match_statement) => reduce_match(stack, match_statement),
         Expr::For(for_statement) => reduce_for(stack, for_statement),
@@ -367,24 +321,27 @@ fn reduce_expr(stack: Stack, expr: Expr) -> Result<Value> {
 }
 
 pub fn compile(tree: Tree) -> Result<Shape> {
-    let mut stack = Stack {
-        functions: BTreeMap::new(),
+    let functions = tree
+        .into_iter()
+        .map(|definition| {
+            (
+                definition.name,
+                Function {
+                    params: definition.params,
+                    block: Block::Expr(definition.block),
+                },
+            )
+        })
+        .collect();
+    let stack = Stack {
+        functions,
         depth: 0,
     };
-    for definition in tree {
-        stack.functions.insert(
-            definition.name,
-            Function {
-                params: definition.params,
-                block: Block::Expr(definition.block),
-            },
-        );
-    }
     let shape = match stack.functions.get("root") {
         Some(root_fn) => {
             let value = match root_fn.block.clone() {
                 Block::Value(value) => value,
-                Block::Expr(expr) => reduce_expr(stack, expr)?,
+                Block::Expr(expr) => reduce_expr(&stack, &expr)?,
             };
             match value {
                 Value::Shape(shape) => shape,

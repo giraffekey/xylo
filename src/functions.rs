@@ -7,8 +7,8 @@ use {
     spin::Mutex,
 };
 
-use crate::compiler::{Value, IDENTITY, TRANSPARENT};
-use crate::shape::{lock_shape, Shape};
+use crate::compiler::Value;
+use crate::shape::{lock_shape, Shape, IDENTITY, TRANSPARENT};
 
 use anyhow::{anyhow, Result};
 use core::f32::consts::PI;
