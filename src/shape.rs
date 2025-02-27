@@ -7,7 +7,6 @@ use {
     spin::{Mutex, MutexGuard},
 };
 
-use anyhow::Result;
 use palette::{Hsla, RgbHue};
 use tiny_skia::Transform;
 
@@ -215,11 +214,11 @@ impl Shape {
     }
 }
 
-pub fn unwrap_shape(shape: Arc<Mutex<Shape>>) -> Result<Shape> {
+pub fn unwrap_shape(shape: Arc<Mutex<Shape>>) -> Shape {
     #[cfg(feature = "std")]
-    return Ok(Arc::try_unwrap(shape).unwrap().into_inner()?);
+    return Arc::try_unwrap(shape).unwrap().into_inner().unwrap();
     #[cfg(feature = "no-std")]
-    return Ok(Arc::try_unwrap(shape).unwrap().into_inner());
+    return Arc::try_unwrap(shape).unwrap().into_inner();
 }
 
 pub fn lock_shape<'a>(shape: &'a Arc<Mutex<Shape>>) -> MutexGuard<'a, Shape> {

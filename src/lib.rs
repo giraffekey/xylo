@@ -20,6 +20,7 @@ use base64::prelude::*;
 use png::{ColorType, Encoder};
 use tiny_skia::Pixmap;
 
+mod cache;
 mod compiler;
 mod format;
 mod functions;

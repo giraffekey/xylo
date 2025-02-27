@@ -76,9 +76,9 @@ fn render_shape(
         } => {
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
-            let a = unwrap_shape(a)?;
+            let a = unwrap_shape(a);
             render_shape(pixmap, a, transform, color)?;
-            let b = unwrap_shape(b)?;
+            let b = unwrap_shape(b);
             render_shape(pixmap, b, transform, color)?;
         }
         Shape::Collection {
@@ -89,7 +89,7 @@ fn render_shape(
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             for shape in shapes {
-                let shape = unwrap_shape(shape)?;
+                let shape = unwrap_shape(shape);
                 render_shape(pixmap, shape, transform, color)?;
             }
         }
