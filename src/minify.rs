@@ -1,6 +1,4 @@
-#[cfg(not(feature = "std"))]
-use alloc::string::String;
-
-pub fn minify(input: &str) -> String {
+#[cfg(feature = "std")]
+pub fn _minify(_input: &str) -> String {
     todo!()
 }

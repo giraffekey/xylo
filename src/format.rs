@@ -1,6 +1,4 @@
-#[cfg(not(feature = "std"))]
-use alloc::string::String;
-
-pub fn format(input: &str) -> String {
+#[cfg(feature = "std")]
+pub fn _format(_input: &str) -> String {
     todo!()
 }

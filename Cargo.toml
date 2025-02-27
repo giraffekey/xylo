@@ -3,20 +3,36 @@ name = "xylo-lang"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = true
+panic = "abort"
+strip = true
+
 [dependencies]
 anyhow = { version = "1.0", default-features = false }
-base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
-nom = { version = "8.0", default-features = false, features = ["alloc"] }
+base64 = { version = "0.22.1", default-features = false }
+nom = { version = "8.0", default-features = false }
 palette = { version = "0.7", default-features = false }
 png = "0.17"
-spin = { version = "0.9.8", default-features = false, features = ["lazy"] }
+rayon = "1.10.0"
 tiny-skia = { version = "0.11", default-features = false }
+spin = { version = "0.9.8", default-features = false, optional = true }
+rand = { version = "0.9.0", default-features = false }
 
 [features]
 default = ["std", "simd"]
-std = ["anyhow/std", "base64/std", "nom/std", "palette/std", "tiny-skia/std", "tiny-skia/png-format"]
+std = [
+	"anyhow/std",
+	"base64/std",
+	"nom/std",
+	"palette/std",
+	"rand/std",
+	"rand/thread_rng",
+	"tiny-skia/std",
+	"tiny-skia/png-format",
+]
+no-std = ["base64/alloc", "nom/alloc", "palette/alloc", "palette/libm", "rand/alloc", "spin/mutex", "spin/spin_mutex", "tiny-skia/no-std-float"]
 simd = ["tiny-skia/simd"]
-
-[target.'cfg(not(feature = "std"))'.dependencies]
-tiny-skia = { version = "0.11", default-features = false, features = ["no-std-float"] }
-palette = { version = "0.7", default-features = false, features = ["alloc", "libm"] }

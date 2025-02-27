@@ -1,4 +1,4 @@
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "no-std")]
 use alloc::{boxed::Box, vec::Vec};
 
 use nom::branch::alt;
@@ -116,7 +116,7 @@ pub struct If<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern<'a> {
-    Exprs(Vec<Expr<'a>>),
+    Matches(Vec<Expr<'a>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -200,7 +200,7 @@ fn block(input: &str, indent: usize) -> IResult<&str, Expr> {
     terminated(expr(indent), end).parse(input)
 }
 
-fn binary_operator_tag(input: &str) -> IResult<&str, &str> {
+fn _binary_operator_tag(input: &str) -> IResult<&str, &str> {
     alt((
         tag("+"),
         recognize((tag("-"), peek(not(tag(">"))))),
@@ -326,7 +326,7 @@ fn if_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, If> {
 }
 
 fn pattern(indent: usize) -> impl FnMut(&str) -> IResult<&str, Pattern> {
-    move |input| map(separated_list1(tag(","), expr(indent)), Pattern::Exprs).parse(input)
+    move |input| map(separated_list1(tag(","), expr(indent)), Pattern::Matches).parse(input)
 }
 
 fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, (Pattern, Expr)> {
@@ -455,18 +455,19 @@ fn definition(input: &str) -> IResult<&str, Definition> {
 }
 
 pub fn parse(input: &str) -> IResult<&str, Tree> {
-    terminated(
+    let tree = terminated(
         many0(preceded(many0((space0, line_ending)), definition)),
-        multispace0,
+        (multispace0, eof),
     )
-    .parse(input)
+    .parse(input);
+    tree
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[cfg(not(feature = "std"))]
+    #[cfg(feature = "no-std")]
     use alloc::vec;
 
     #[test]
@@ -632,7 +633,7 @@ LOOP =
                         })),
                         patterns: vec![
                             (
-                                Pattern::Exprs(vec![
+                                Pattern::Matches(vec![
                                     Expr::Literal(Literal::Integer(0)),
                                     Expr::Literal(Literal::Integer(1)),
                                     Expr::Literal(Literal::Integer(2)),
@@ -640,7 +641,7 @@ LOOP =
                                 Expr::Literal(Literal::Boolean(true))
                             ),
                             (
-                                Pattern::Exprs(vec![Expr::BinaryOperation(BinaryOperation {
+                                Pattern::Matches(vec![Expr::BinaryOperation(BinaryOperation {
                                     op: BinaryOperator::RangeExclusive,
                                     a: Box::new(Expr::Literal(Literal::Integer(3))),
                                     b: Box::new(Expr::Literal(Literal::Integer(6))),

@@ -1,18 +1,17 @@
-root = START
+root =
+	(l 0 FILL) : (collect grids)
 
-START =
-	let shape = SQUARE
-		s (pi * 25 * sin 10) 50 (add_circle shape)
-		: collect cylinders
+grids =
+	for i in 0..100
+		grid (i * 5)
 
-add_circle shape =
-	h 240 (sat 0.5 (l 0.5 (a 0.7 shape)))
-	: ss 1.125 (h 120 (sat 0.5 (l 0.5 (a 0.7 CIRCLE))))
+grid angle =
+	r (angle) (tt (i) (collect cols))
 
-cylinder =
+cols =
 	for i in 0..10
-		h (i * 12) (sat (i * 0.05) (l (i * 0.05) (tt (i * 0.1) CIRCLE)))
+		collect (rows i)
 
-cylinders =
-	for i in 0..36
-		rotate (i * 10) (t (cos i * 10) (sin i * 10) (collect cylinder))
+rows i =
+	for j in 0..10
+		t (i * 40) (j * 40) (ss 4 (h (120 + i * 10) (sat 1 (l 0.5 SQUARE))))

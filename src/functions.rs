@@ -1,4 +1,14 @@
-use crate::compiler::{Shape, Value, IDENTITY, TRANSPARENT};
+#[cfg(feature = "std")]
+use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "no-std")]
+use {
+    alloc::{sync::Arc, vec::Vec},
+    spin::Mutex,
+};
+
+use crate::compiler::{Value, IDENTITY, TRANSPARENT};
+use crate::shape::{lock_shape, Shape};
 
 use anyhow::{anyhow, Result};
 use core::f32::consts::PI;
@@ -211,7 +221,7 @@ pub fn eq(args: &[Value]) -> Result<Value> {
             Ok(Value::Boolean(*a as f32 == *b))
         }
         (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
-        (Value::Shape(a), Value::Shape(b)) => Ok(Value::Boolean(a == b)),
+        (Value::Shape(_a), Value::Shape(_b)) => todo!(),
         _ => Err(anyhow!("Invalid type passed to `eq` function.")),
     }
 }
@@ -227,7 +237,7 @@ pub fn neq(args: &[Value]) -> Result<Value> {
         (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
             Ok(Value::Boolean(*a as f32 != *b))
         }
-        (Value::Shape(a), Value::Shape(b)) => Ok(Value::Boolean(a != b)),
+        (Value::Shape(_a), Value::Shape(_b)) => todo!(),
         _ => Err(anyhow!("Invalid type passed to `neq` function.")),
     }
 }
@@ -320,11 +330,12 @@ pub fn compose(args: &[Value]) -> Result<Value> {
     match (&args[0], &args[1]) {
         (Value::Shape(a), Value::Shape(b)) => {
             let shape = Shape::Composite {
-                shapes: vec![*a, *b].leak(),
+                a: a.clone(),
+                b: b.clone(),
                 transform: IDENTITY,
                 color: TRANSPARENT,
             };
-            Ok(Value::Shape(shape))
+            Ok(Value::Shape(Arc::new(Mutex::new(shape))))
         }
         _ => Err(anyhow!("Invalid type passed to `compose` function.")),
     }
@@ -339,19 +350,19 @@ pub fn collect(args: &[Value]) -> Result<Value> {
 
     match &args[0] {
         Value::List(list) => {
-            let mut shapes = Vec::new();
-            for item in list {
-                match item {
-                    Value::Shape(shape) => shapes.push(*shape),
-                    _ => return Err(anyhow!("Invalid type passed to `collect` function.")),
-                }
-            }
-            let shape = Shape::Composite {
-                shapes: shapes.leak(),
+            let shapes: Result<Vec<Arc<Mutex<Shape>>>> = list
+                .iter()
+                .map(|item| match item {
+                    Value::Shape(shape) => Ok(shape.clone()),
+                    _ => Err(anyhow!("Invalid type passed to `collect` function.")),
+                })
+                .collect();
+            let shape = Shape::Collection {
+                shapes: shapes?,
                 transform: IDENTITY,
                 color: TRANSPARENT,
             };
-            Ok(Value::Shape(shape))
+            Ok(Value::Shape(Arc::new(Mutex::new(shape))))
         }
         _ => Err(anyhow!("Invalid type passed to `collect` function.")),
     }
@@ -412,12 +423,14 @@ pub fn translate(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `translate` function.")),
     };
 
-    let shape = match args[2] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[2] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `translate` function.")),
     };
 
-    Ok(Value::Shape(shape.translate(tx, ty)))
+    lock_shape(&shape).translate(tx, ty);
+
+    Ok(Value::Shape(shape))
 }
 
 pub fn translatex(args: &[Value]) -> Result<Value> {
@@ -433,12 +446,13 @@ pub fn translatex(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `translatex` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `translatex` function.")),
     };
 
-    Ok(Value::Shape(shape.translate(tx, 0.0)))
+    lock_shape(&shape).translate(tx, 0.0);
+    Ok(Value::Shape(shape))
 }
 
 pub fn translatey(args: &[Value]) -> Result<Value> {
@@ -454,12 +468,13 @@ pub fn translatey(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `translatey` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `translatey` function.")),
     };
 
-    Ok(Value::Shape(shape.translate(0.0, ty)))
+    lock_shape(&shape).translate(0.0, ty);
+    Ok(Value::Shape(shape))
 }
 
 pub fn translateb(args: &[Value]) -> Result<Value> {
@@ -475,12 +490,13 @@ pub fn translateb(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `translateb` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `translateb` function.")),
     };
 
-    Ok(Value::Shape(shape.translate(t, t)))
+    lock_shape(&shape).translate(t, t);
+    Ok(Value::Shape(shape))
 }
 
 pub fn zindex(args: &[Value]) -> Result<Value> {
@@ -488,18 +504,17 @@ pub fn zindex(args: &[Value]) -> Result<Value> {
         return Err(anyhow!("Invalid number of arguments to `zindex` function."));
     }
 
-    let z = match args[0] {
+    let _z = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
         _ => return Err(anyhow!("Invalid type passed to `zindex` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let _shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `zindex` function.")),
     };
 
-    // Ok(Value::Shape(shape.zindex(z)))
     todo!()
 }
 
@@ -514,12 +529,13 @@ pub fn rotate(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `rotate` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `rotate` function.")),
     };
 
-    Ok(Value::Shape(shape.rotate(r)))
+    lock_shape(&shape).rotate(r);
+    Ok(Value::Shape(shape))
 }
 
 pub fn rotate_at(args: &[Value]) -> Result<Value> {
@@ -547,12 +563,13 @@ pub fn rotate_at(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `rotate_at` function.")),
     };
 
-    let shape = match args[3] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[3] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `rotate_at` function.")),
     };
 
-    Ok(Value::Shape(shape.rotate_at(r, tx, ty)))
+    lock_shape(&shape).rotate_at(r, tx, ty);
+    Ok(Value::Shape(shape))
 }
 
 pub fn scale(args: &[Value]) -> Result<Value> {
@@ -572,12 +589,13 @@ pub fn scale(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `scale` function.")),
     };
 
-    let shape = match args[2] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[2] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `scale` function.")),
     };
 
-    Ok(Value::Shape(shape.scale(sx, sy)))
+    lock_shape(&shape).scale(sx, sy);
+    Ok(Value::Shape(shape))
 }
 
 pub fn scalex(args: &[Value]) -> Result<Value> {
@@ -591,12 +609,13 @@ pub fn scalex(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `scalex` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `scalex` function.")),
     };
 
-    Ok(Value::Shape(shape.scale(sx, 1.0)))
+    lock_shape(&shape).scale(sx, 1.0);
+    Ok(Value::Shape(shape))
 }
 
 pub fn scaley(args: &[Value]) -> Result<Value> {
@@ -610,12 +629,13 @@ pub fn scaley(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `scaley` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `scaley` function.")),
     };
 
-    Ok(Value::Shape(shape.scale(1.0, sy)))
+    lock_shape(&shape).scale(1.0, sy);
+    Ok(Value::Shape(shape))
 }
 
 pub fn scaleb(args: &[Value]) -> Result<Value> {
@@ -629,12 +649,13 @@ pub fn scaleb(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `scaleb` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `scaleb` function.")),
     };
 
-    Ok(Value::Shape(shape.scale(s, s)))
+    lock_shape(&shape).scale(s, s);
+    Ok(Value::Shape(shape))
 }
 
 pub fn skew(args: &[Value]) -> Result<Value> {
@@ -654,12 +675,13 @@ pub fn skew(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `skew` function.")),
     };
 
-    let shape = match args[2] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[2] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `skew` function.")),
     };
 
-    Ok(Value::Shape(shape.skew(kx, ky)))
+    lock_shape(&shape).skew(kx, ky);
+    Ok(Value::Shape(shape))
 }
 
 pub fn skewx(args: &[Value]) -> Result<Value> {
@@ -673,12 +695,13 @@ pub fn skewx(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `skewx` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `skewx` function.")),
     };
 
-    Ok(Value::Shape(shape.scale(kx, 0.0)))
+    lock_shape(&shape).skew(kx, 0.0);
+    Ok(Value::Shape(shape))
 }
 
 pub fn skewy(args: &[Value]) -> Result<Value> {
@@ -692,12 +715,13 @@ pub fn skewy(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `skewy` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `skewy` function.")),
     };
 
-    Ok(Value::Shape(shape.scale(0.0, ky)))
+    lock_shape(&shape).skew(0.0, ky);
+    Ok(Value::Shape(shape))
 }
 
 pub fn skewb(args: &[Value]) -> Result<Value> {
@@ -711,12 +735,13 @@ pub fn skewb(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `skewb` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `skewb` function.")),
     };
 
-    Ok(Value::Shape(shape.skew(k, k)))
+    lock_shape(&shape).skew(k, k);
+    Ok(Value::Shape(shape))
 }
 
 pub fn flip(args: &[Value]) -> Result<Value> {
@@ -730,12 +755,13 @@ pub fn flip(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `flip` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `flip` function.")),
     };
 
-    Ok(Value::Shape(shape.flip(f)))
+    lock_shape(&shape).flip(f);
+    Ok(Value::Shape(shape))
 }
 
 pub fn hue(args: &[Value]) -> Result<Value> {
@@ -749,12 +775,13 @@ pub fn hue(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `hue` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `hue` function.")),
     };
 
-    Ok(Value::Shape(shape.hue(h)))
+    lock_shape(&shape).set_hue(h);
+    Ok(Value::Shape(shape))
 }
 
 pub fn saturation(args: &[Value]) -> Result<Value> {
@@ -770,12 +797,13 @@ pub fn saturation(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `saturation` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `saturation` function.")),
     };
 
-    Ok(Value::Shape(shape.saturation(s)))
+    lock_shape(&shape).set_saturation(s);
+    Ok(Value::Shape(shape))
 }
 
 pub fn lightness(args: &[Value]) -> Result<Value> {
@@ -791,12 +819,13 @@ pub fn lightness(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `lightness` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `lightness` function.")),
     };
 
-    Ok(Value::Shape(shape.lightness(l)))
+    lock_shape(&shape).set_lightness(l);
+    Ok(Value::Shape(shape))
 }
 
 pub fn alpha(args: &[Value]) -> Result<Value> {
@@ -810,12 +839,13 @@ pub fn alpha(args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `alpha` function.")),
     };
 
-    let shape = match args[1] {
-        Value::Shape(shape) => shape,
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `alpha` function.")),
     };
 
-    Ok(Value::Shape(shape.alpha(a)))
+    lock_shape(&shape).set_alpha(a);
+    Ok(Value::Shape(shape))
 }
 
 pub fn blend(args: &[Value]) -> Result<Value> {
@@ -833,7 +863,7 @@ pub fn blend(args: &[Value]) -> Result<Value> {
     //     _ => return Err(anyhow!("Invalid type passed to `blend` function.")),
     // };
 
-    // Ok(Value::Shape(shape.blend(blend)))
+    // lock_shape(&shape).set_blend(blend);
 
     todo!()
 }
