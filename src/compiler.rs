@@ -93,6 +93,12 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
             };
             Ok(Value::Shape(Arc::new(Mutex::new(Shape::Basic(shape)))))
         }
+        Literal::List(list) => {
+            let list: Result<Vec<Value>> = list.iter().map(reduce_literal).collect();
+            let list = Value::List(list?);
+            list.kind()?;
+            Ok(list)
+        }
     }
 }
 

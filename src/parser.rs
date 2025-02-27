@@ -22,12 +22,13 @@ pub enum ShapeKind {
     Fill,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Integer(i32),
     Float(f32),
     Boolean(bool),
     Shape(ShapeKind),
+    List(Vec<Literal>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,8 +189,18 @@ fn shape(input: &str) -> IResult<&str, Literal> {
     Ok((input, Literal::Shape(shape)))
 }
 
+fn list(input: &str) -> IResult<&str, Literal> {
+    let (input, list) = delimited(
+        (char('['), multispace0),
+        separated_list1((multispace0, char(','), multispace0), literal),
+        (multispace0, char(']')),
+    )
+    .parse(input)?;
+    Ok((input, Literal::List(*Box::new(list))))
+}
+
 fn literal(input: &str) -> IResult<&str, Literal> {
-    alt((float, integer, boolean, shape)).parse(input)
+    alt((float, integer, boolean, shape, list)).parse(input)
 }
 
 fn end(input: &str) -> IResult<&str, &str> {

@@ -164,7 +164,10 @@ impl Shape {
             | Self::Basic(BasicShape::Triangle { transform, .. })
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
-                *transform = transform.post_rotate(f).post_scale(-1.0, 1.0).post_rotate(-f);
+                *transform = transform
+                    .post_rotate(f)
+                    .post_scale(-1.0, 1.0)
+                    .post_rotate(-f);
             }
             Self::Basic(BasicShape::Fill { .. }) => (),
         }
