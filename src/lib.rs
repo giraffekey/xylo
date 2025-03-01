@@ -34,7 +34,7 @@ pub fn generate_pixmap(code: &str, width: u32, height: u32) -> Result<Pixmap> {
     #[cfg(feature = "std")]
     let shape = interpreter::reduce(tree, None)?;
     #[cfg(feature = "no-std")]
-    let shape = compiler::compile(tree, Some([0; 32]))?;
+    let shape = interpreter::reduce(tree, Some([0; 32]))?;
     Ok(renderer::render(shape, width, height)?)
 }
 
@@ -88,14 +88,14 @@ mod tests {
         let uri = generate_data_uri(
             "
 root =
-    (l 0 FILL) : (collect grids)
+    l 0 FILL : collect grids
 
 grids =
     for i in 0..100
-        grid (i * 5)
+        grid i (i * 5)
 
-grid angle =
-    r (angle) (tt (i) (collect cols))
+grid i angle =
+    r angle (tt i (collect cols))
 
 cols =
     for i in 0..10
