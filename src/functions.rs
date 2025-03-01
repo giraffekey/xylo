@@ -7,7 +7,7 @@ use {
     spin::Mutex,
 };
 
-use crate::compiler::Value;
+use crate::interpreter::Value;
 use crate::shape::{lock_shape, PathSegment, Shape, IDENTITY, TRANSPARENT, WHITE};
 
 use anyhow::{anyhow, Result};
@@ -127,7 +127,7 @@ define_builtins! {
     "lightness" => lightness,
     "a" => alpha,
     "alpha" => alpha,
-    "blend" => blend,
+    // "blend" => blend,
     "move_to" => move_to,
     "line_to" => line_to,
     "quad_to" => quad_to,
@@ -996,26 +996,6 @@ pub fn alpha(args: &[Value]) -> Result<Value> {
 
     lock_shape(&shape).set_alpha(a);
     Ok(Value::Shape(shape))
-}
-
-pub fn blend(args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `blend` function."));
-    }
-
-    // let blend = match args[0] {
-    // 	Value::Blend(blend) => blend,
-    //     _ => return Err(anyhow!("Invalid type passed to `blend` function.")),
-    // };
-
-    // let shape = match args[1] {
-    //     Value::Shape(shape) => shape,
-    //     _ => return Err(anyhow!("Invalid type passed to `blend` function.")),
-    // };
-
-    // lock_shape(&shape).set_blend(blend);
-
-    todo!()
 }
 
 pub fn move_to(args: &[Value]) -> Result<Value> {

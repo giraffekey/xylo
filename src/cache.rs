@@ -11,7 +11,7 @@ use {
     spin::{Mutex, MutexGuard},
 };
 
-use crate::compiler::Value;
+use crate::interpreter::Value;
 use crate::shape::{lock_shape, BasicShape, PathSegment, Shape};
 
 use ahash::AHasher;
@@ -342,13 +342,19 @@ impl Cache {
         return self.rng.lock();
     }
 
-    pub fn hash_call(name: &str, index: usize, args: &[Value]) -> u64 {
+    pub fn hash_call(
+        name: &str,
+        index: usize,
+        args: &[Value],
+        scope: Option<(&str, usize)>,
+    ) -> u64 {
         let args: Vec<CacheValue> = args.iter().map(CacheValue::from).collect();
 
         let mut buf = Vec::new();
         buf.extend(name.as_bytes());
         buf.extend(index.to_be_bytes());
         buf.extend(bincode::serialize(&args).unwrap());
+        buf.extend(bincode::serialize(&scope).unwrap());
 
         let mut hasher = AHasher::default();
         hasher.write(&buf);

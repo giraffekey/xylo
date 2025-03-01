@@ -65,6 +65,7 @@ impl Value {
 #[derive(Debug, Clone)]
 struct Stack<'a> {
     functions: HashMap<&'a str, Function<'a>>,
+    scope: Option<(&'a str, usize)>,
     depth: usize,
 }
 
@@ -79,6 +80,7 @@ struct Function<'a> {
     params: Vec<&'a str>,
     weighted: bool,
     blocks: Vec<(Block<'a>, f32)>,
+    scope: Option<(&'a str, usize)>,
 }
 
 fn reduce_literal(literal: &Literal) -> Result<Value> {
@@ -138,7 +140,7 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
     let args = args?;
 
     if BUILTIN_FUNCTIONS.contains(&call.name) {
-        let key = Cache::hash_call(call.name, 0, &args);
+        let key = Cache::hash_call(call.name, 0, &args, stack.scope);
         if let Some(value) = cache.get(key) {
             return Ok(value);
         }
@@ -170,10 +172,15 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
                 (0, &function.blocks[0].0)
             };
 
-            let key = Cache::hash_call(call.name, i, &args);
-            if let Some(value) = cache.get(key) {
-                return Ok(value);
-            }
+            let key = if function.scope.is_none() {
+                let key = Cache::hash_call(call.name, i, &args, stack.scope);
+                if let Some(value) = cache.get(key) {
+                    return Ok(value);
+                }
+                Some(key)
+            } else {
+                None
+            };
 
             match block {
                 Block::Value(value) => Ok(value.clone()),
@@ -190,6 +197,7 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
                                     params: vec![],
                                     weighted: false,
                                     blocks: vec![(Block::Value(arg), 0.0)],
+                                    scope: Some((call.name, i)),
                                 },
                             )
                         })
@@ -197,9 +205,29 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
 
                     let mut stack = stack.clone();
                     stack.depth += 1;
+                    stack.scope = Some((call.name, i));
+
+                    if function.scope.is_none() {
+                        stack.functions = stack
+                            .functions
+                            .iter()
+                            .filter_map(|(name, f)| {
+                                if f.scope.is_none() {
+                                    Some((*name, f.clone()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                    }
                     stack.functions.extend(functions);
+
                     let value = reduce_expr(&stack, cache, &expr)?;
-                    cache.insert(key, &value);
+
+                    if let Some(key) = key {
+                        cache.insert(key, &value);
+                    }
+
                     Ok(value)
                 }
             }
@@ -222,6 +250,7 @@ fn reduce_let<'a>(stack: &Stack<'a>, cache: &Cache, let_statement: &Let<'a>) -> 
                         params: definition.params,
                         weighted: false,
                         blocks: vec![(Block::Expr(definition.block), 0.0)],
+                        scope: stack.scope,
                     },
                 )
             }),
@@ -320,6 +349,7 @@ fn reduce_for(stack: &Stack, cache: &Cache, for_statement: &For) -> Result<Value
                     params: vec![],
                     weighted: false,
                     blocks: vec![(Block::Value(item), 0.0)],
+                    scope: stack.scope,
                 },
             );
             reduce_expr(&stack, cache, &for_statement.block)
@@ -365,7 +395,7 @@ fn reduce_expr(stack: &Stack, cache: &Cache, expr: &Expr) -> Result<Value> {
     }
 }
 
-pub fn compile(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
+pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
     let mut functions: HashMap<&str, Function> = HashMap::new();
     for definition in tree {
         match functions.get_mut(definition.name) {
@@ -386,6 +416,7 @@ pub fn compile(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                         params: definition.params,
                         weighted: false,
                         blocks: vec![(Block::Expr(definition.block), definition.weight.unwrap())],
+                        scope: None,
                     },
                 );
             }
@@ -394,6 +425,7 @@ pub fn compile(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
 
     let stack = Stack {
         functions,
+        scope: None,
         depth: 0,
     };
     let cache = Cache::new(seed)?;

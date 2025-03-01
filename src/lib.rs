@@ -21,9 +21,9 @@ use png::{ColorType, Encoder};
 use tiny_skia::Pixmap;
 
 mod cache;
-mod compiler;
 mod format;
 mod functions;
+mod interpreter;
 mod minify;
 mod parser;
 mod renderer;
@@ -32,7 +32,7 @@ mod shape;
 pub fn generate_pixmap(code: &str, width: u32, height: u32) -> Result<Pixmap> {
     let (_remaining, tree) = parser::parse(code.to_owned().leak()).map_err(|e| anyhow!(e))?;
     #[cfg(feature = "std")]
-    let shape = compiler::compile(tree, None)?;
+    let shape = interpreter::reduce(tree, None)?;
     #[cfg(feature = "no-std")]
     let shape = compiler::compile(tree, Some([0; 32]))?;
     Ok(renderer::render(shape, width, height)?)
