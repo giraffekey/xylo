@@ -27,6 +27,10 @@ pub const BUILTIN_FUNCTIONS: &[&str] = &[
     "mul",
     "/",
     "div",
+    "%",
+    "mod",
+    "^",
+    "pow",
     "==",
     "eq",
     "!=",
@@ -186,9 +190,8 @@ pub fn sub(args: &[Value]) -> Result<Value> {
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a - b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
-        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
-            Ok(Value::Float(*a as f32 - b))
-        }
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f32 - b)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a - *b as f32)),
         _ => Err(anyhow!("Invalid type passed to `sub` function.")),
     }
 }
@@ -216,10 +219,37 @@ pub fn div(args: &[Value]) -> Result<Value> {
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a / b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
-        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
-            Ok(Value::Float(*a as f32 / b))
-        }
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f32 / b)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a / *b as f32)),
         _ => Err(anyhow!("Invalid type passed to `div` function.")),
+    }
+}
+
+pub fn modulo(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `mod` function."));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a % b)),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a % b)),
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float(*a as f32 % b)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a % *b as f32)),
+        _ => Err(anyhow!("Invalid type passed to `mod` function.")),
+    }
+}
+
+pub fn pow(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `pow` function."));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Float((*a as f32).powf(*b as f32))),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.powf(*b))),
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Float((*a as f32).powf(*b))),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a.powf(*b as f32))),
+        _ => Err(anyhow!("Invalid type passed to `pow` function.")),
     }
 }
 
@@ -1155,6 +1185,8 @@ pub fn handle_builtin(name: &str, args: &[Value]) -> Result<Value> {
         "-" | "sub" => sub(args),
         "*" | "mul" => mul(args),
         "/" | "div" => div(args),
+        "%" | "mod" => modulo(args),
+        "^" | "pow" => pow(args),
         "==" | "eq" => eq(args),
         "!=" | "neq" => neq(args),
         "<" | "lt" => lt(args),

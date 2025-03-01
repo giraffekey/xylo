@@ -152,7 +152,10 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
         Some(function) => {
             // Temporary. Will implement currying later.
             if call.args.len() != function.params.len() {
-                return Err(anyhow!("Incorrect number of arguments."));
+                return Err(anyhow!(format!(
+                    "Incorrect number of arguments passed to `{}` function.",
+                    call.name
+                )));
             }
 
             let (i, block) = if function.weighted {

@@ -38,6 +38,8 @@ pub enum BinaryOperator {
     Subtraction,
     Multiplication,
     Division,
+    Modulo,
+    Exponentiation,
     EqualTo,
     NotEqualTo,
     LessThan,
@@ -55,7 +57,8 @@ impl BinaryOperator {
     pub fn precedence(&self) -> u8 {
         match self {
             Self::Addition | Self::Subtraction => 4,
-            Self::Multiplication | Self::Division => 5,
+            Self::Multiplication | Self::Division | Self::Modulo => 5,
+            Self::Exponentiation => 6,
             Self::Composition
             | Self::EqualTo
             | Self::NotEqualTo
@@ -75,6 +78,8 @@ impl BinaryOperator {
             Self::Subtraction => "-",
             Self::Multiplication => "*",
             Self::Division => "/",
+            Self::Modulo => "%",
+            Self::Exponentiation => "^",
             Self::EqualTo => "==",
             Self::NotEqualTo => "!=",
             Self::LessThan => "<",
@@ -224,6 +229,8 @@ fn _binary_operator_tag(input: &str) -> IResult<&str, &str> {
         recognize((tag("-"), peek(not(tag(">"))))),
         tag("*"),
         tag("/"),
+        tag("%"),
+        tag("^"),
         tag(":"),
         tag("=="),
         tag("!="),
@@ -245,6 +252,8 @@ fn binary_operator(input: &str) -> IResult<&str, BinaryOperator> {
         value(BinaryOperator::Subtraction, (tag("-"), peek(not(tag(">"))))),
         value(BinaryOperator::Multiplication, tag("*")),
         value(BinaryOperator::Division, tag("/")),
+        value(BinaryOperator::Modulo, tag("%")),
+        value(BinaryOperator::Exponentiation, tag("^")),
         value(BinaryOperator::Composition, tag(":")),
         value(BinaryOperator::EqualTo, tag("==")),
         value(BinaryOperator::NotEqualTo, tag("!=")),
@@ -274,12 +283,22 @@ fn identifier(input: &str) -> IResult<&str, &str> {
     .parse(input)
 }
 
-fn call(indent: usize) -> impl FnMut(&str) -> IResult<&str, Call> {
+fn call(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Call> {
     move |input| {
-        let (input, name) = identifier(input)?;
-        let (input, args) = many0(preceded(space1, expr(indent + 1))).parse(input)?;
-        let call = Call { name, args };
-        Ok((input, call))
+        if precedence < u8::MAX {
+            let (input, name) = identifier(input)?;
+            let (input, args) =
+                many0(preceded(space1, expr_with_precedence(indent + 1, u8::MAX))).parse(input)?;
+            let call = Call { name, args };
+            Ok((input, call))
+        } else {
+            let (input, name) = identifier(input)?;
+            let call = Call {
+                name,
+                args: Vec::new(),
+            };
+            Ok((input, call))
+        }
     }
 }
 
@@ -431,7 +450,7 @@ fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, E
         map(match_statement(indent), Expr::Match),
         map(for_statement(indent), Expr::For),
         map(loop_statement(indent), Expr::Loop),
-        map(call(indent), Expr::Call),
+        map(call(indent, precedence), Expr::Call),
         delimited(
             (char('('), multispace0),
             |input| expr_recursive(input, 0, 0),
@@ -458,6 +477,10 @@ fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, E
 
 fn expr(indent: usize) -> impl FnMut(&str) -> IResult<&str, Expr> {
     move |input| expr_recursive(input, indent, 0)
+}
+
+fn expr_with_precedence(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Expr> {
+    move |input| expr_recursive(input, indent, precedence)
 }
 
 fn definition(input: &str) -> IResult<&str, Definition> {
