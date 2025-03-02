@@ -7,11 +7,13 @@ use {
     spin::Mutex,
 };
 
+use crate::cache::Cache;
 use crate::interpreter::Value;
 use crate::shape::{lock_shape, PathSegment, Shape, IDENTITY, TRANSPARENT, WHITE};
 
 use anyhow::{anyhow, Result};
 use core::f32::consts::PI;
+use rand::prelude::*;
 
 macro_rules! define_builtins {
     (
@@ -25,10 +27,10 @@ macro_rules! define_builtins {
         ];
 
         // Generate the handle_builtin function with match statements
-        pub fn handle_builtin(name: &str, args: &[Value]) -> Result<Value> {
+        pub fn handle_builtin(name: &str, cache: &Cache, args: &[Value]) -> Result<Value> {
             match name {
                 $(
-                    $name => $func(args),
+                    $name => $func(cache, args),
                 )*
                 _ => Err(anyhow!("Unknown function: {}", name)),
             }
@@ -37,30 +39,6 @@ macro_rules! define_builtins {
 }
 
 define_builtins! {
-    "pi" => pi,
-    "π" => pi,
-    "sin" => sin,
-    "cos" => cos,
-    "tan" => tan,
-    "asin" => asin,
-    "acos" => acos,
-    "atan" => atan,
-    "atan2" => atan2,
-    "sinh" => sinh,
-    "cosh" => cosh,
-    "tanh" => tanh,
-    "asinh" => asinh,
-    "acosh" => acosh,
-    "atanh" => atanh,
-    "ln" => ln,
-    "log10" => log10,
-    "log" => log,
-    "floor" => floor,
-    "ceil" => ceil,
-    "abs" => abs,
-    "sqrt" => sqrt,
-    "min" => min,
-    "max" => max,
     "+" => add,
     "add" => add,
     "-" => sub,
@@ -106,6 +84,38 @@ define_builtins! {
     "range" => range,
     "..=" => rangei,
     "rangei" => rangei,
+    "pi" => pi,
+    "π" => pi,
+    "sin" => sin,
+    "cos" => cos,
+    "tan" => tan,
+    "asin" => asin,
+    "acos" => acos,
+    "atan" => atan,
+    "atan2" => atan2,
+    "sinh" => sinh,
+    "cosh" => cosh,
+    "tanh" => tanh,
+    "asinh" => asinh,
+    "acosh" => acosh,
+    "atanh" => atanh,
+    "ln" => ln,
+    "log10" => log10,
+    "log" => log,
+    "floor" => floor,
+    "ceil" => ceil,
+    "abs" => abs,
+    "sqrt" => sqrt,
+    "min" => min,
+    "max" => max,
+    "rand" => rand,
+    "randi" => randi,
+    "rand_range" => rand_range,
+    "randi_range" => randi_range,
+    "rand_rangei" => rand_rangei,
+    "randi_rangei" => randi_rangei,
+    "shuffle" => shuffle,
+    "choose" => choose,
     "t" => translate,
     "translate" => translate,
     "tx" => translatex,
@@ -167,301 +177,7 @@ define_builtins! {
     "close" => close,
 }
 
-pub fn pi(args: &[Value]) -> Result<Value> {
-    if args.len() != 0 {
-        return Err(anyhow!("Invalid number of arguments to `pi` function."));
-    }
-
-    Ok(Value::Float(PI))
-}
-
-pub fn sin(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `sin` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).sin())),
-        Value::Float(n) => Ok(Value::Float(n.sin())),
-        _ => Err(anyhow!("Invalid type passed to `sin` function.")),
-    }
-}
-
-pub fn cos(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `cos` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).cos())),
-        Value::Float(n) => Ok(Value::Float(n.cos())),
-        _ => Err(anyhow!("Invalid type passed to `cos` function.")),
-    }
-}
-
-pub fn tan(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `tan` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).tan())),
-        Value::Float(n) => Ok(Value::Float(n.tan())),
-        _ => Err(anyhow!("Invalid type passed to `tan` function.")),
-    }
-}
-
-pub fn asin(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `asin` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).asin())),
-        Value::Float(n) => Ok(Value::Float(n.asin())),
-        _ => Err(anyhow!("Invalid type passed to `asin` function.")),
-    }
-}
-
-pub fn acos(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `acos` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).acos())),
-        Value::Float(n) => Ok(Value::Float(n.acos())),
-        _ => Err(anyhow!("Invalid type passed to `acos` function.")),
-    }
-}
-
-pub fn atan(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `atan` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).atan())),
-        Value::Float(n) => Ok(Value::Float(n.atan())),
-        _ => Err(anyhow!("Invalid type passed to `atan` function.")),
-    }
-}
-
-pub fn atan2(args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `atan2` function."));
-    }
-
-    let y = match args[0] {
-        Value::Integer(n) => n as f32,
-        Value::Float(n) => n,
-        _ => return Err(anyhow!("Invalid type passed to `atan2` function.")),
-    };
-
-    let x = match args[1] {
-        Value::Integer(n) => n as f32,
-        Value::Float(n) => n,
-        _ => return Err(anyhow!("Invalid type passed to `atan2` function.")),
-    };
-
-    Ok(Value::Float(y.atan2(x)))
-}
-
-pub fn sinh(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `sinh` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).sinh())),
-        Value::Float(n) => Ok(Value::Float(n.sinh())),
-        _ => Err(anyhow!("Invalid type passed to `sinh` function.")),
-    }
-}
-
-pub fn cosh(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `cosh` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).cosh())),
-        Value::Float(n) => Ok(Value::Float(n.cosh())),
-        _ => Err(anyhow!("Invalid type passed to `cosh` function.")),
-    }
-}
-
-pub fn tanh(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `tanh` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).tanh())),
-        Value::Float(n) => Ok(Value::Float(n.tanh())),
-        _ => Err(anyhow!("Invalid type passed to `tanh` function.")),
-    }
-}
-
-pub fn asinh(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `asinh` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).asinh())),
-        Value::Float(n) => Ok(Value::Float(n.asinh())),
-        _ => Err(anyhow!("Invalid type passed to `asinh` function.")),
-    }
-}
-
-pub fn acosh(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `acosh` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).acosh())),
-        Value::Float(n) => Ok(Value::Float(n.acosh())),
-        _ => Err(anyhow!("Invalid type passed to `acosh` function.")),
-    }
-}
-
-pub fn atanh(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `atanh` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).atanh())),
-        Value::Float(n) => Ok(Value::Float(n.atanh())),
-        _ => Err(anyhow!("Invalid type passed to `atanh` function.")),
-    }
-}
-
-pub fn ln(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `ln` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).ln())),
-        Value::Float(n) => Ok(Value::Float(n.ln())),
-        _ => Err(anyhow!("Invalid type passed to `ln` function.")),
-    }
-}
-
-pub fn log10(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `log10` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).log10())),
-        Value::Float(n) => Ok(Value::Float(n.log10())),
-        _ => Err(anyhow!("Invalid type passed to `log10` function.")),
-    }
-}
-
-pub fn log(args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `log` function."));
-    }
-
-    let n = match args[0] {
-        Value::Integer(n) => n as f32,
-        Value::Float(n) => n,
-        _ => return Err(anyhow!("Invalid type passed to `log` function.")),
-    };
-
-    let b = match args[0] {
-        Value::Integer(b) => b as f32,
-        Value::Float(b) => b,
-        _ => return Err(anyhow!("Invalid type passed to `log` function.")),
-    };
-
-    Ok(Value::Float(n.log(b)))
-}
-
-pub fn abs(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `abs` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Integer(n.abs())),
-        Value::Float(n) => Ok(Value::Float(n.abs())),
-        _ => Err(anyhow!("Invalid type passed to `abs` function.")),
-    }
-}
-
-pub fn floor(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `floor` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Integer(n)),
-        Value::Float(n) => Ok(Value::Integer(n.floor() as i32)),
-        _ => Err(anyhow!("Invalid type passed to `floor` function.")),
-    }
-}
-
-pub fn ceil(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `ceil` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Integer(n)),
-        Value::Float(n) => Ok(Value::Integer(n.ceil() as i32)),
-        _ => Err(anyhow!("Invalid type passed to `ceil` function.")),
-    }
-}
-
-pub fn sqrt(args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `sqrt` function."));
-    }
-
-    match args[0] {
-        Value::Integer(n) => Ok(Value::Float((n as f32).sqrt())),
-        Value::Float(n) => Ok(Value::Float(n.sqrt())),
-        _ => Err(anyhow!("Invalid type passed to `sqrt` function.")),
-    }
-}
-
-pub fn min(args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `min` function."));
-    }
-
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.min(*b))),
-        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
-            Ok(Value::Float((*a as f32).min(*b)))
-        }
-        _ => Err(anyhow!("Invalid type passed to `min` function.")),
-    }
-}
-
-pub fn max(args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `max` function."));
-    }
-
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
-        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
-            Ok(Value::Float((*a as f32).max(*b)))
-        }
-        _ => Err(anyhow!("Invalid type passed to `max` function.")),
-    }
-}
-
-pub fn add(args: &[Value]) -> Result<Value> {
+pub fn add(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `add` function."));
     }
@@ -476,7 +192,7 @@ pub fn add(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn sub(args: &[Value]) -> Result<Value> {
+pub fn sub(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `sub` function."));
     }
@@ -490,7 +206,7 @@ pub fn sub(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn mul(args: &[Value]) -> Result<Value> {
+pub fn mul(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `mul` function."));
     }
@@ -505,7 +221,7 @@ pub fn mul(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn div(args: &[Value]) -> Result<Value> {
+pub fn div(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `div` function."));
     }
@@ -519,7 +235,7 @@ pub fn div(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn modulo(args: &[Value]) -> Result<Value> {
+pub fn modulo(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `mod` function."));
     }
@@ -533,7 +249,7 @@ pub fn modulo(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn pow(args: &[Value]) -> Result<Value> {
+pub fn pow(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `pow` function."));
     }
@@ -547,7 +263,7 @@ pub fn pow(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitand(args: &[Value]) -> Result<Value> {
+pub fn bitand(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `bitand` function."));
     }
@@ -561,7 +277,7 @@ pub fn bitand(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitor(args: &[Value]) -> Result<Value> {
+pub fn bitor(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `bitor` function."));
     }
@@ -575,7 +291,7 @@ pub fn bitor(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitxor(args: &[Value]) -> Result<Value> {
+pub fn bitxor(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `bitxor` function."));
     }
@@ -589,7 +305,7 @@ pub fn bitxor(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitleft(args: &[Value]) -> Result<Value> {
+pub fn bitleft(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `bitleft` function."
@@ -605,7 +321,7 @@ pub fn bitleft(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitright(args: &[Value]) -> Result<Value> {
+pub fn bitright(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `bitright` function."
@@ -621,7 +337,7 @@ pub fn bitright(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn eq(args: &[Value]) -> Result<Value> {
+pub fn eq(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `eq` function."));
     }
@@ -638,7 +354,7 @@ pub fn eq(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn neq(args: &[Value]) -> Result<Value> {
+pub fn neq(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `neq` function."));
     }
@@ -654,7 +370,7 @@ pub fn neq(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn lt(args: &[Value]) -> Result<Value> {
+pub fn lt(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `lt` function."));
     }
@@ -668,7 +384,7 @@ pub fn lt(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn lte(args: &[Value]) -> Result<Value> {
+pub fn lte(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `lte` function."));
     }
@@ -682,7 +398,7 @@ pub fn lte(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn gt(args: &[Value]) -> Result<Value> {
+pub fn gt(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `gt` function."));
     }
@@ -696,7 +412,7 @@ pub fn gt(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn gte(args: &[Value]) -> Result<Value> {
+pub fn gte(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `gte` function."));
     }
@@ -710,7 +426,7 @@ pub fn gte(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn and(args: &[Value]) -> Result<Value> {
+pub fn and(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `and` function."));
     }
@@ -721,7 +437,7 @@ pub fn and(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn or(args: &[Value]) -> Result<Value> {
+pub fn or(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `or` function."));
     }
@@ -732,7 +448,7 @@ pub fn or(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn compose(args: &[Value]) -> Result<Value> {
+pub fn compose(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `compose` function."
@@ -776,7 +492,7 @@ pub fn compose(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn collect(args: &[Value]) -> Result<Value> {
+pub fn collect(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!(
             "Invalid number of arguments to `collect` function."
@@ -839,7 +555,7 @@ pub fn collect(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn range(args: &[Value]) -> Result<Value> {
+pub fn range(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `range` function."));
     }
@@ -857,7 +573,7 @@ pub fn range(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn rangei(args: &[Value]) -> Result<Value> {
+pub fn rangei(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `rangei` function."));
     }
@@ -875,7 +591,438 @@ pub fn rangei(args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn translate(args: &[Value]) -> Result<Value> {
+pub fn pi(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 0 {
+        return Err(anyhow!("Invalid number of arguments to `pi` function."));
+    }
+
+    Ok(Value::Float(PI))
+}
+
+pub fn sin(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `sin` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).sin())),
+        Value::Float(n) => Ok(Value::Float(n.sin())),
+        _ => Err(anyhow!("Invalid type passed to `sin` function.")),
+    }
+}
+
+pub fn cos(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `cos` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).cos())),
+        Value::Float(n) => Ok(Value::Float(n.cos())),
+        _ => Err(anyhow!("Invalid type passed to `cos` function.")),
+    }
+}
+
+pub fn tan(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `tan` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).tan())),
+        Value::Float(n) => Ok(Value::Float(n.tan())),
+        _ => Err(anyhow!("Invalid type passed to `tan` function.")),
+    }
+}
+
+pub fn asin(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `asin` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).asin())),
+        Value::Float(n) => Ok(Value::Float(n.asin())),
+        _ => Err(anyhow!("Invalid type passed to `asin` function.")),
+    }
+}
+
+pub fn acos(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `acos` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).acos())),
+        Value::Float(n) => Ok(Value::Float(n.acos())),
+        _ => Err(anyhow!("Invalid type passed to `acos` function.")),
+    }
+}
+
+pub fn atan(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `atan` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).atan())),
+        Value::Float(n) => Ok(Value::Float(n.atan())),
+        _ => Err(anyhow!("Invalid type passed to `atan` function.")),
+    }
+}
+
+pub fn atan2(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `atan2` function."));
+    }
+
+    let y = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `atan2` function.")),
+    };
+
+    let x = match args[1] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `atan2` function.")),
+    };
+
+    Ok(Value::Float(y.atan2(x)))
+}
+
+pub fn sinh(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `sinh` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).sinh())),
+        Value::Float(n) => Ok(Value::Float(n.sinh())),
+        _ => Err(anyhow!("Invalid type passed to `sinh` function.")),
+    }
+}
+
+pub fn cosh(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `cosh` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).cosh())),
+        Value::Float(n) => Ok(Value::Float(n.cosh())),
+        _ => Err(anyhow!("Invalid type passed to `cosh` function.")),
+    }
+}
+
+pub fn tanh(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `tanh` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).tanh())),
+        Value::Float(n) => Ok(Value::Float(n.tanh())),
+        _ => Err(anyhow!("Invalid type passed to `tanh` function.")),
+    }
+}
+
+pub fn asinh(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `asinh` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).asinh())),
+        Value::Float(n) => Ok(Value::Float(n.asinh())),
+        _ => Err(anyhow!("Invalid type passed to `asinh` function.")),
+    }
+}
+
+pub fn acosh(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `acosh` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).acosh())),
+        Value::Float(n) => Ok(Value::Float(n.acosh())),
+        _ => Err(anyhow!("Invalid type passed to `acosh` function.")),
+    }
+}
+
+pub fn atanh(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `atanh` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).atanh())),
+        Value::Float(n) => Ok(Value::Float(n.atanh())),
+        _ => Err(anyhow!("Invalid type passed to `atanh` function.")),
+    }
+}
+
+pub fn ln(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `ln` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).ln())),
+        Value::Float(n) => Ok(Value::Float(n.ln())),
+        _ => Err(anyhow!("Invalid type passed to `ln` function.")),
+    }
+}
+
+pub fn log10(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `log10` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).log10())),
+        Value::Float(n) => Ok(Value::Float(n.log10())),
+        _ => Err(anyhow!("Invalid type passed to `log10` function.")),
+    }
+}
+
+pub fn log(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `log` function."));
+    }
+
+    let n = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `log` function.")),
+    };
+
+    let b = match args[0] {
+        Value::Integer(b) => b as f32,
+        Value::Float(b) => b,
+        _ => return Err(anyhow!("Invalid type passed to `log` function.")),
+    };
+
+    Ok(Value::Float(n.log(b)))
+}
+
+pub fn abs(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `abs` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Integer(n.abs())),
+        Value::Float(n) => Ok(Value::Float(n.abs())),
+        _ => Err(anyhow!("Invalid type passed to `abs` function.")),
+    }
+}
+
+pub fn floor(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `floor` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Integer(n)),
+        Value::Float(n) => Ok(Value::Integer(n.floor() as i32)),
+        _ => Err(anyhow!("Invalid type passed to `floor` function.")),
+    }
+}
+
+pub fn ceil(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `ceil` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Integer(n)),
+        Value::Float(n) => Ok(Value::Integer(n.ceil() as i32)),
+        _ => Err(anyhow!("Invalid type passed to `ceil` function.")),
+    }
+}
+
+pub fn sqrt(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `sqrt` function."));
+    }
+
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).sqrt())),
+        Value::Float(n) => Ok(Value::Float(n.sqrt())),
+        _ => Err(anyhow!("Invalid type passed to `sqrt` function.")),
+    }
+}
+
+pub fn min(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `min` function."));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.min(*b))),
+        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
+            Ok(Value::Float((*a as f32).min(*b)))
+        }
+        _ => Err(anyhow!("Invalid type passed to `min` function.")),
+    }
+}
+
+pub fn max(_cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `max` function."));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
+        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
+            Ok(Value::Float((*a as f32).max(*b)))
+        }
+        _ => Err(anyhow!("Invalid type passed to `max` function.")),
+    }
+}
+
+pub fn rand(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 0 {
+        return Err(anyhow!("Invalid number of arguments to `rand` function."));
+    }
+
+    Ok(Value::Float(cache.rng().random()))
+}
+
+pub fn randi(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 0 {
+        return Err(anyhow!("Invalid number of arguments to `randi` function."));
+    }
+
+    if cache.rng().random() {
+        Ok(Value::Integer(1))
+    } else {
+        Ok(Value::Integer(0))
+    }
+}
+
+pub fn rand_range(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `rand_range` function."
+        ));
+    }
+
+    let a = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `rand_range` function.")),
+    };
+
+    let b = match args[1] {
+        Value::Integer(b) => b as f32,
+        Value::Float(b) => b,
+        _ => return Err(anyhow!("Invalid type passed to `rand_range` function.")),
+    };
+
+    Ok(Value::Float(cache.rng().random_range(a..b)))
+}
+
+pub fn randi_range(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `randi_range` function."
+        ));
+    }
+
+    let a = match args[0] {
+        Value::Integer(n) => n,
+        Value::Float(n) => n as i32,
+        _ => return Err(anyhow!("Invalid type passed to `randi_range` function.")),
+    };
+
+    let b = match args[1] {
+        Value::Integer(b) => b,
+        Value::Float(b) => b as i32,
+        _ => return Err(anyhow!("Invalid type passed to `randi_range` function.")),
+    };
+
+    Ok(Value::Integer(cache.rng().random_range(a..b)))
+}
+
+pub fn rand_rangei(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `rand_rangei` function."
+        ));
+    }
+
+    let a = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `rand_rangei` function.")),
+    };
+
+    let b = match args[1] {
+        Value::Integer(b) => b as f32,
+        Value::Float(b) => b,
+        _ => return Err(anyhow!("Invalid type passed to `rand_rangei` function.")),
+    };
+
+    Ok(Value::Float(cache.rng().random_range(a..=b)))
+}
+
+pub fn randi_rangei(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `randi_rangei` function."
+        ));
+    }
+
+    let a = match args[0] {
+        Value::Integer(n) => n,
+        Value::Float(n) => n as i32,
+        _ => return Err(anyhow!("Invalid type passed to `randi_rangei` function.")),
+    };
+
+    let b = match args[1] {
+        Value::Integer(b) => b,
+        Value::Float(b) => b as i32,
+        _ => return Err(anyhow!("Invalid type passed to `randi_rangei` function.")),
+    };
+
+    Ok(Value::Integer(cache.rng().random_range(a..=b)))
+}
+
+pub fn shuffle(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `shuffle` function."
+        ));
+    }
+
+    let mut list = match &args[0] {
+        Value::List(list) => list.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `shuffle` function.")),
+    };
+
+    list.shuffle(&mut cache.rng());
+    Ok(Value::List(list))
+}
+
+pub fn choose(cache: &Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(anyhow!("Invalid number of arguments to `choose` function."));
+    }
+
+    let list = match &args[0] {
+        Value::List(list) => list,
+        _ => return Err(anyhow!("Invalid type passed to `choose` function.")),
+    };
+
+    Ok(list.choose(&mut cache.rng()).unwrap().clone())
+}
+
+pub fn translate(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 3 {
         return Err(anyhow!(
             "Invalid number of arguments to `translate` function."
@@ -904,7 +1051,7 @@ pub fn translate(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn translatex(args: &[Value]) -> Result<Value> {
+pub fn translatex(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `translatex` function."
@@ -926,7 +1073,7 @@ pub fn translatex(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn translatey(args: &[Value]) -> Result<Value> {
+pub fn translatey(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `translatey` function."
@@ -948,7 +1095,7 @@ pub fn translatey(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn translateb(args: &[Value]) -> Result<Value> {
+pub fn translateb(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `translateb` function."
@@ -970,7 +1117,7 @@ pub fn translateb(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn rotate(args: &[Value]) -> Result<Value> {
+pub fn rotate(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `rotate` function."));
     }
@@ -990,7 +1137,7 @@ pub fn rotate(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn rotate_at(args: &[Value]) -> Result<Value> {
+pub fn rotate_at(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 4 {
         return Err(anyhow!(
             "Invalid number of arguments to `rotate_at` function."
@@ -1024,7 +1171,7 @@ pub fn rotate_at(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scale(args: &[Value]) -> Result<Value> {
+pub fn scale(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 3 {
         return Err(anyhow!("Invalid number of arguments to `scale` function."));
     }
@@ -1050,7 +1197,7 @@ pub fn scale(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scalex(args: &[Value]) -> Result<Value> {
+pub fn scalex(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `scalex` function."));
     }
@@ -1070,7 +1217,7 @@ pub fn scalex(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scaley(args: &[Value]) -> Result<Value> {
+pub fn scaley(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `scaley` function."));
     }
@@ -1090,7 +1237,7 @@ pub fn scaley(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scaleb(args: &[Value]) -> Result<Value> {
+pub fn scaleb(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `scaleb` function."));
     }
@@ -1110,7 +1257,7 @@ pub fn scaleb(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skew(args: &[Value]) -> Result<Value> {
+pub fn skew(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 3 {
         return Err(anyhow!("Invalid number of arguments to `skew` function."));
     }
@@ -1136,7 +1283,7 @@ pub fn skew(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skewx(args: &[Value]) -> Result<Value> {
+pub fn skewx(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `skewx` function."));
     }
@@ -1156,7 +1303,7 @@ pub fn skewx(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skewy(args: &[Value]) -> Result<Value> {
+pub fn skewy(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `skewy` function."));
     }
@@ -1176,7 +1323,7 @@ pub fn skewy(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skewb(args: &[Value]) -> Result<Value> {
+pub fn skewb(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `skewb` function."));
     }
@@ -1196,7 +1343,7 @@ pub fn skewb(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn flip(args: &[Value]) -> Result<Value> {
+pub fn flip(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `flip` function."));
     }
@@ -1216,7 +1363,7 @@ pub fn flip(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn fliph(args: &[Value]) -> Result<Value> {
+pub fn fliph(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `fliph` function."));
     }
@@ -1230,7 +1377,7 @@ pub fn fliph(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn flipv(args: &[Value]) -> Result<Value> {
+pub fn flipv(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `flipv` function."));
     }
@@ -1244,7 +1391,7 @@ pub fn flipv(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn flipd(args: &[Value]) -> Result<Value> {
+pub fn flipd(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `flipd` function."));
     }
@@ -1258,7 +1405,7 @@ pub fn flipd(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hsl(args: &[Value]) -> Result<Value> {
+pub fn hsl(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 4 {
         return Err(anyhow!("Invalid number of arguments to `hsl` function."));
     }
@@ -1290,7 +1437,7 @@ pub fn hsl(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hsla(args: &[Value]) -> Result<Value> {
+pub fn hsla(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 5 {
         return Err(anyhow!("Invalid number of arguments to `hsla` function."));
     }
@@ -1328,7 +1475,7 @@ pub fn hsla(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hue(args: &[Value]) -> Result<Value> {
+pub fn hue(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hue` function."));
     }
@@ -1348,7 +1495,7 @@ pub fn hue(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn saturation(args: &[Value]) -> Result<Value> {
+pub fn saturation(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `saturation` function."
@@ -1370,7 +1517,7 @@ pub fn saturation(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn lightness(args: &[Value]) -> Result<Value> {
+pub fn lightness(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `lightness` function."
@@ -1392,7 +1539,7 @@ pub fn lightness(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn alpha(args: &[Value]) -> Result<Value> {
+pub fn alpha(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `alpha` function."));
     }
@@ -1412,7 +1559,7 @@ pub fn alpha(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hshift(args: &[Value]) -> Result<Value> {
+pub fn hshift(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hshift` function."));
     }
@@ -1432,7 +1579,7 @@ pub fn hshift(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn sshift(args: &[Value]) -> Result<Value> {
+pub fn sshift(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `sshift` function."));
     }
@@ -1452,7 +1599,7 @@ pub fn sshift(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn lshift(args: &[Value]) -> Result<Value> {
+pub fn lshift(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `lshift` function."));
     }
@@ -1472,7 +1619,7 @@ pub fn lshift(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn ashift(args: &[Value]) -> Result<Value> {
+pub fn ashift(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `ashift` function."));
     }
@@ -1492,7 +1639,7 @@ pub fn ashift(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hex(args: &[Value]) -> Result<Value> {
+pub fn hex(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hex` function."));
     }
@@ -1511,7 +1658,7 @@ pub fn hex(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn move_to(args: &[Value]) -> Result<Value> {
+pub fn move_to(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `move_to` function."
@@ -1539,7 +1686,7 @@ pub fn move_to(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Arc::new(Mutex::new(shape))))
 }
 
-pub fn line_to(args: &[Value]) -> Result<Value> {
+pub fn line_to(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `line_to` function."
@@ -1567,7 +1714,7 @@ pub fn line_to(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Arc::new(Mutex::new(shape))))
 }
 
-pub fn quad_to(args: &[Value]) -> Result<Value> {
+pub fn quad_to(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 4 {
         return Err(anyhow!(
             "Invalid number of arguments to `quad_to` function."
@@ -1607,7 +1754,7 @@ pub fn quad_to(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Arc::new(Mutex::new(shape))))
 }
 
-pub fn cubic_to(args: &[Value]) -> Result<Value> {
+pub fn cubic_to(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 6 {
         return Err(anyhow!(
             "Invalid number of arguments to `cubic_to` function."
@@ -1659,7 +1806,7 @@ pub fn cubic_to(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Arc::new(Mutex::new(shape))))
 }
 
-pub fn close(args: &[Value]) -> Result<Value> {
+pub fn close(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 0 {
         return Err(anyhow!("Invalid number of arguments to `close` function."));
     }

@@ -121,7 +121,7 @@ fn reduce_binary_operation(
             // Calculate synchronously if non-recursive
             let a = reduce_expr(stack, cache, &operation.a)?;
             let b = reduce_expr(stack, cache, &operation.b)?;
-            handle_builtin(operation.op.as_str(), &[a, b])
+            handle_builtin(operation.op.as_str(), cache, &[a, b])
         }
         _ => {
             // Calculate in parallel if recursion is possible
@@ -129,7 +129,7 @@ fn reduce_binary_operation(
                 .into_par_iter()
                 .map(|arg| reduce_expr(stack, cache, &arg))
                 .collect();
-            handle_builtin(operation.op.as_str(), &args?)
+            handle_builtin(operation.op.as_str(), cache, &args?)
         }
     }
 }
@@ -149,7 +149,7 @@ fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
             return Ok(value);
         }
 
-        let value = handle_builtin(call.name, &args)?;
+        let value = handle_builtin(call.name, cache, &args)?;
         cache.insert(key, &value);
         return Ok(value);
     }
