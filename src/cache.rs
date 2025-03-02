@@ -280,6 +280,7 @@ enum CacheValue {
     Integer(i32),
     Float(f32),
     Boolean(bool),
+    Hex([u8; 3]),
     Shape(CacheShape),
     List(Vec<CacheValue>),
 }
@@ -290,6 +291,7 @@ impl From<&Value> for CacheValue {
             Value::Integer(n) => CacheValue::Integer(*n),
             Value::Float(n) => CacheValue::Float(*n),
             Value::Boolean(b) => CacheValue::Boolean(*b),
+            Value::Hex(h) => CacheValue::Hex(*h),
             Value::Shape(s) => CacheValue::Shape((&*lock_shape(s)).into()),
             Value::List(list) => CacheValue::List(list.iter().map(CacheValue::from).collect()),
         }
@@ -302,6 +304,7 @@ impl Into<Value> for CacheValue {
             CacheValue::Integer(n) => Value::Integer(n),
             CacheValue::Float(n) => Value::Float(n),
             CacheValue::Boolean(b) => Value::Boolean(b),
+            CacheValue::Hex(h) => Value::Hex(h),
             CacheValue::Shape(s) => Value::Shape(Arc::new(Mutex::new(s.into()))),
             CacheValue::List(list) => {
                 Value::List(list.iter().cloned().map(CacheValue::into).collect())

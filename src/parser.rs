@@ -2,11 +2,11 @@
 use alloc::{boxed::Box, vec::Vec};
 
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::{
     alpha1, alphanumeric1, char, digit1, i32, line_ending, multispace0, multispace1, space0, space1,
 };
-use nom::combinator::{eof, map, not, opt, peek, recognize, value, verify};
+use nom::combinator::{eof, map, map_res, not, opt, peek, recognize, value, verify};
 use nom::error::{Error, ErrorKind};
 use nom::multi::{many0, many1, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
@@ -28,6 +28,7 @@ pub enum Literal {
     Integer(i32),
     Float(f32),
     Boolean(bool),
+    Hex([u8; 3]),
     Shape(ShapeKind),
     List(Vec<Literal>),
 }
@@ -189,6 +190,40 @@ fn boolean(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
+fn from_hex(input: &str) -> Result<u8, core::num::ParseIntError> {
+    u8::from_str_radix(input, 16)
+}
+
+fn from_hex_single(c: &str) -> Result<u8, core::num::ParseIntError> {
+    let mut input = String::new();
+    input.push_str(c);
+    input.push_str(c);
+    u8::from_str_radix(&input, 16)
+}
+
+fn is_hex_digit(c: char) -> bool {
+    c.is_digit(16)
+}
+
+fn hex_primary(input: &str) -> IResult<&str, u8> {
+    map_res(take_while_m_n(2, 2, is_hex_digit), from_hex).parse(input)
+}
+
+fn hex_primary_single(input: &str) -> IResult<&str, u8> {
+    map_res(take_while_m_n(1, 1, is_hex_digit), from_hex_single).parse(input)
+}
+
+fn hex(input: &str) -> IResult<&str, Literal> {
+    let (input, _) = tag("#")(input)?;
+    let (input, (r, g, b)) = alt((
+        (hex_primary, hex_primary, hex_primary),
+        (hex_primary_single, hex_primary_single, hex_primary_single),
+    ))
+    .parse(input)?;
+
+    Ok((input, Literal::Hex([r, g, b])))
+}
+
 fn shape(input: &str) -> IResult<&str, Literal> {
     let (input, shape) = alt((
         value(ShapeKind::Triangle, tag("TRIANGLE")),
@@ -212,7 +247,7 @@ fn list(input: &str) -> IResult<&str, Literal> {
 }
 
 fn literal(input: &str) -> IResult<&str, Literal> {
-    alt((float, integer, boolean, shape, list)).parse(input)
+    alt((float, integer, boolean, hex, shape, list)).parse(input)
 }
 
 fn end(input: &str) -> IResult<&str, &str> {

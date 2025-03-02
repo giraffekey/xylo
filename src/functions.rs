@@ -134,9 +134,8 @@ define_builtins! {
     "flipv" => flipv,
     "fd" => flipd,
     "flipd" => flipd,
-    // "hsl" => hsl,
-    // "hsla" => hsla,
-    // "hex" => hex,
+    "hsl" => hsl,
+    "hsla" => hsla,
     "h" => hue,
     "hue" => hue,
     "sat" => saturation,
@@ -145,6 +144,11 @@ define_builtins! {
     "lightness" => lightness,
     "a" => alpha,
     "alpha" => alpha,
+    "hshift" => hshift,
+    "sshift" => sshift,
+    "lshift" => lshift,
+    "ashift" => ashift,
+    "hex" => hex,
     // "blend" => blend,
     "move_to" => move_to,
     "line_to" => line_to,
@@ -1170,6 +1174,76 @@ pub fn flipd(args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
+pub fn hsl(args: &[Value]) -> Result<Value> {
+    if args.len() != 4 {
+        return Err(anyhow!("Invalid number of arguments to `hsl` function."));
+    }
+
+    let h = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hsl` function.")),
+    };
+
+    let s = match args[1] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hsl` function.")),
+    };
+
+    let l = match args[2] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hsl` function.")),
+    };
+
+    let shape = match &args[3] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `hsl` function.")),
+    };
+
+    lock_shape(&shape).set_hsl(h, s, l);
+    Ok(Value::Shape(shape))
+}
+
+pub fn hsla(args: &[Value]) -> Result<Value> {
+    if args.len() != 5 {
+        return Err(anyhow!("Invalid number of arguments to `hsla` function."));
+    }
+
+    let h = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hsla` function.")),
+    };
+
+    let s = match args[1] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hsla` function.")),
+    };
+
+    let l = match args[2] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hsla` function.")),
+    };
+
+    let a = match args[3] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hsla` function.")),
+    };
+
+    let shape = match &args[4] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `hsla` function.")),
+    };
+
+    lock_shape(&shape).set_hsla(h, s, l, a);
+    Ok(Value::Shape(shape))
+}
+
 pub fn hue(args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hue` function."));
@@ -1251,6 +1325,105 @@ pub fn alpha(args: &[Value]) -> Result<Value> {
     };
 
     lock_shape(&shape).set_alpha(a);
+    Ok(Value::Shape(shape))
+}
+
+pub fn hshift(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `hshift` function."));
+    }
+
+    let h = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `hshift` function.")),
+    };
+
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `hshift` function.")),
+    };
+
+    lock_shape(&shape).shift_hue(h);
+    Ok(Value::Shape(shape))
+}
+
+pub fn sshift(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `sshift` function."));
+    }
+
+    let s = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `sshift` function.")),
+    };
+
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `sshift` function.")),
+    };
+
+    lock_shape(&shape).shift_saturation(s);
+    Ok(Value::Shape(shape))
+}
+
+pub fn lshift(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `lshift` function."));
+    }
+
+    let l = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `lshift` function.")),
+    };
+
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `lshift` function.")),
+    };
+
+    lock_shape(&shape).shift_lightness(l);
+    Ok(Value::Shape(shape))
+}
+
+pub fn ashift(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `ashift` function."));
+    }
+
+    let a = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `ashift` function.")),
+    };
+
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `ashift` function.")),
+    };
+
+    lock_shape(&shape).shift_alpha(a);
+    Ok(Value::Shape(shape))
+}
+
+pub fn hex(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `hex` function."));
+    }
+
+    let hex = match args[0] {
+        Value::Hex(hex) => hex,
+        _ => return Err(anyhow!("Invalid type passed to `hex` function.")),
+    };
+
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `hex` function.")),
+    };
+
+    lock_shape(&shape).set_hex(hex);
     Ok(Value::Shape(shape))
 }
 

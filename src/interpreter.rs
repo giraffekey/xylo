@@ -22,6 +22,7 @@ pub enum ValueKind {
     Integer,
     Float,
     Boolean,
+    Hex,
     Shape,
     List(Box<ValueKind>),
     Unknown,
@@ -32,6 +33,7 @@ pub enum Value {
     Integer(i32),
     Float(f32),
     Boolean(bool),
+    Hex([u8; 3]),
     Shape(Arc<Mutex<Shape>>),
     List(Vec<Value>),
 }
@@ -42,6 +44,7 @@ impl Value {
             Self::Integer(_) => Ok(ValueKind::Integer),
             Self::Float(_) => Ok(ValueKind::Float),
             Self::Boolean(_) => Ok(ValueKind::Boolean),
+            Self::Hex(_) => Ok(ValueKind::Hex),
             Self::Shape(_) => Ok(ValueKind::Shape),
             Self::List(list) => {
                 let kind = list
@@ -88,6 +91,7 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
         Literal::Integer(n) => Ok(Value::Integer(*n)),
         Literal::Float(n) => Ok(Value::Float(*n)),
         Literal::Boolean(b) => Ok(Value::Boolean(*b)),
+        Literal::Hex(hex) => Ok(Value::Hex(*hex)),
         Literal::Shape(kind) => {
             let shape = match kind {
                 ShapeKind::Square => SQUARE,

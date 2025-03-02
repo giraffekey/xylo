@@ -7,7 +7,7 @@ use {
     spin::{Mutex, MutexGuard},
 };
 
-use palette::{Hsla, RgbHue};
+use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
 use serde::Serialize;
 use tiny_skia::Transform;
 
@@ -20,9 +20,9 @@ pub static IDENTITY: Transform = Transform {
     ty: 0.0,
 };
 
-pub static WHITE: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 0.0, 1.0, 1.0);
+pub static WHITE: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 1.0, 1.0, 1.0);
 
-pub static TRANSPARENT: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 0.0, 1.0, 0.0);
+pub static TRANSPARENT: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 1.0, 1.0, 0.0);
 
 pub static SQUARE: BasicShape = BasicShape::Square {
     x: -1.0,
@@ -239,6 +239,41 @@ impl Shape {
         }
     }
 
+    pub fn set_hsl(&mut self, hue: f32, saturation: f32, lightness: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
+            | Self::Composite { color, .. }
+            | Self::Collection { color, .. } => {
+                color.hue = hue.into();
+                color.saturation = saturation;
+                color.lightness = lightness;
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_hsla(&mut self, hue: f32, saturation: f32, lightness: f32, alpha: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
+            | Self::Composite { color, .. }
+            | Self::Collection { color, .. } => {
+                color.hue = hue.into();
+                color.saturation = saturation;
+                color.lightness = lightness;
+                color.alpha = alpha;
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
     pub fn set_hue(&mut self, hue: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
@@ -294,6 +329,86 @@ impl Shape {
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
                 color.alpha = alpha;
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn shift_hue(&mut self, hue: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
+            | Self::Composite { color, .. }
+            | Self::Collection { color, .. } => {
+                color.hue += hue;
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn shift_saturation(&mut self, saturation: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
+            | Self::Composite { color, .. }
+            | Self::Collection { color, .. } => {
+                color.saturation += saturation;
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn shift_lightness(&mut self, lightness: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
+            | Self::Composite { color, .. }
+            | Self::Collection { color, .. } => {
+                color.lightness += lightness;
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn shift_alpha(&mut self, alpha: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
+            | Self::Composite { color, .. }
+            | Self::Collection { color, .. } => {
+                color.alpha += alpha;
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_hex(&mut self, hex: [u8; 3]) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color })
+            | Self::Path { color, .. }
+            | Self::Composite { color, .. }
+            | Self::Collection { color, .. } => {
+                let new_color = Rgb::from(hex);
+                let new_color: Rgb<f32> = new_color.into();
+                let new_color = Hsl::from_color(new_color);
+                color.hue = new_color.hue;
+                color.saturation = new_color.saturation;
+                color.lightness = new_color.lightness;
             }
             Self::Basic(BasicShape::Empty) => (),
         }
