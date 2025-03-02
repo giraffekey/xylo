@@ -73,6 +73,16 @@ define_builtins! {
     "mod" => modulo,
     "**" => pow,
     "pow" => pow,
+    "&" => bitand,
+    "bitand" => bitand,
+    "|" => bitor,
+    "bitor" => bitor,
+    "^" => bitxor,
+    "bitxor" => bitxor,
+    "<<" => bitleft,
+    "bitleft" => bitleft,
+    ">>" => bitright,
+    "bitright" => bitright,
     "==" => eq,
     "eq" => eq,
     "!=" => neq,
@@ -534,6 +544,80 @@ pub fn pow(args: &[Value]) -> Result<Value> {
         (Value::Integer(a), Value::Float(b)) => Ok(Value::Float((*a as f32).powf(*b))),
         (Value::Float(a), Value::Integer(b)) => Ok(Value::Float(a.powf(*b as f32))),
         _ => Err(anyhow!("Invalid type passed to `pow` function.")),
+    }
+}
+
+pub fn bitand(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `bitand` function."));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a & b)),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 & *b as i32)),
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Integer(a & *b as i32)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Integer(*a as i32 & b)),
+        _ => Err(anyhow!("Invalid type passed to `bitand` function.")),
+    }
+}
+
+pub fn bitor(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `bitor` function."));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a | b)),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 | *b as i32)),
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Integer(a | *b as i32)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Integer(*a as i32 | b)),
+        _ => Err(anyhow!("Invalid type passed to `bitor` function.")),
+    }
+}
+
+pub fn bitxor(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `bitxor` function."));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a ^ b)),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 ^ *b as i32)),
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Integer(a ^ *b as i32)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Integer(*a as i32 ^ b)),
+        _ => Err(anyhow!("Invalid type passed to `bitxor` function.")),
+    }
+}
+
+pub fn bitleft(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `bitleft` function."
+        ));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a << b)),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Integer((*a as i32) << *b as i32)),
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Integer(a << *b as i32)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Integer((*a as i32) << b)),
+        _ => Err(anyhow!("Invalid type passed to `bitleft` function.")),
+    }
+}
+
+pub fn bitright(args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!(
+            "Invalid number of arguments to `bitright` function."
+        ));
+    }
+
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a >> b)),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 >> *b as i32)),
+        (Value::Integer(a), Value::Float(b)) => Ok(Value::Integer(a >> *b as i32)),
+        (Value::Float(a), Value::Integer(b)) => Ok(Value::Integer(*a as i32 >> b)),
+        _ => Err(anyhow!("Invalid type passed to `bitright` function.")),
     }
 }
 

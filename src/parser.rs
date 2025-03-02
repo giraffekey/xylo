@@ -1,5 +1,5 @@
 #[cfg(feature = "no-std")]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
@@ -41,6 +41,11 @@ pub enum BinaryOperator {
     Division,
     Modulo,
     Exponentiation,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitLeft,
+    BitRight,
     EqualTo,
     NotEqualTo,
     LessThan,
@@ -67,9 +72,9 @@ impl BinaryOperator {
             | Self::LessThanOrEqualTo
             | Self::GreaterThan
             | Self::GreaterThanOrEqualTo => 0,
-            Self::And => 2,
-            Self::Or => 1,
-            Self::RangeExclusive | Self::RangeInclusive => 3,
+            Self::And | Self::BitAnd => 2,
+            Self::Or | Self::BitOr | Self::BitXor => 1,
+            Self::RangeExclusive | Self::RangeInclusive | Self::BitLeft | Self::BitRight => 3,
         }
     }
 
@@ -81,6 +86,11 @@ impl BinaryOperator {
             Self::Division => "/",
             Self::Modulo => "%",
             Self::Exponentiation => "**",
+            Self::BitAnd => "&",
+            Self::BitOr => "|",
+            Self::BitXor => "^",
+            Self::BitLeft => "<<",
+            Self::BitRight => ">>",
             Self::EqualTo => "==",
             Self::NotEqualTo => "!=",
             Self::LessThan => "<",
@@ -260,46 +270,60 @@ fn block(input: &str, indent: usize) -> IResult<&str, Expr> {
 
 fn _binary_operator_tag(input: &str) -> IResult<&str, &str> {
     alt((
-        tag("+"),
-        recognize((tag("-"), peek(not(tag(">"))))),
-        tag("**"),
-        tag("*"),
-        tag("/"),
-        tag("%"),
-        tag(":"),
-        tag("=="),
-        tag("!="),
-        tag("<="),
-        tag("<"),
-        tag(">="),
-        tag(">"),
-        tag("&&"),
-        tag("||"),
-        tag("..="),
-        tag(".."),
+        alt((
+            tag("+"),
+            recognize((tag("-"), peek(not(tag(">"))))),
+            tag("**"),
+            tag("*"),
+            tag("/"),
+            tag("%"),
+            tag(":"),
+            tag("=="),
+            tag("!="),
+            tag("<<"),
+            tag("<="),
+            tag("<"),
+            tag(">>"),
+            tag(">="),
+            tag(">"),
+            tag("&&"),
+            tag("&"),
+            tag("||"),
+            tag("|"),
+            tag("..="),
+            tag(".."),
+        )),
+        tag("^"),
     ))
     .parse(input)
 }
 
 fn binary_operator(input: &str) -> IResult<&str, BinaryOperator> {
     alt((
-        value(BinaryOperator::Addition, tag("+")),
-        value(BinaryOperator::Subtraction, (tag("-"), peek(not(tag(">"))))),
-        value(BinaryOperator::Exponentiation, tag("**")),
-        value(BinaryOperator::Multiplication, tag("*")),
-        value(BinaryOperator::Division, tag("/")),
-        value(BinaryOperator::Modulo, tag("%")),
-        value(BinaryOperator::Composition, tag(":")),
-        value(BinaryOperator::EqualTo, tag("==")),
-        value(BinaryOperator::NotEqualTo, tag("!=")),
-        value(BinaryOperator::LessThanOrEqualTo, tag("<=")),
-        value(BinaryOperator::LessThan, tag("<")),
-        value(BinaryOperator::GreaterThanOrEqualTo, tag(">=")),
-        value(BinaryOperator::GreaterThan, tag(">")),
-        value(BinaryOperator::And, tag("&&")),
-        value(BinaryOperator::Or, tag("||")),
-        value(BinaryOperator::RangeInclusive, tag("..=")),
-        value(BinaryOperator::RangeExclusive, tag("..")),
+        alt((
+            value(BinaryOperator::Addition, tag("+")),
+            value(BinaryOperator::Subtraction, (tag("-"), peek(not(tag(">"))))),
+            value(BinaryOperator::Exponentiation, tag("**")),
+            value(BinaryOperator::Multiplication, tag("*")),
+            value(BinaryOperator::Division, tag("/")),
+            value(BinaryOperator::Modulo, tag("%")),
+            value(BinaryOperator::Composition, tag(":")),
+            value(BinaryOperator::EqualTo, tag("==")),
+            value(BinaryOperator::NotEqualTo, tag("!=")),
+            value(BinaryOperator::BitLeft, tag("<<")),
+            value(BinaryOperator::LessThanOrEqualTo, tag("<=")),
+            value(BinaryOperator::LessThan, tag("<")),
+            value(BinaryOperator::BitRight, tag(">>")),
+            value(BinaryOperator::GreaterThanOrEqualTo, tag(">=")),
+            value(BinaryOperator::GreaterThan, tag(">")),
+            value(BinaryOperator::And, tag("&&")),
+            value(BinaryOperator::BitAnd, tag("&")),
+            value(BinaryOperator::Or, tag("||")),
+            value(BinaryOperator::BitOr, tag("|")),
+            value(BinaryOperator::RangeInclusive, tag("..=")),
+            value(BinaryOperator::RangeExclusive, tag("..")),
+        )),
+        value(BinaryOperator::BitXor, tag("^")),
     ))
     .parse(input)
 }
