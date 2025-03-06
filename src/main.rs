@@ -5,7 +5,7 @@ use {std::time::SystemTime, xylo_lang::generate_file};
 fn main() {
     let now = SystemTime::now();
     generate_file("example.xylo", "example.png", 400, 400).unwrap();
-    println!("{:?}", SystemTime::now().duration_since(now));
+    println!("{:?}", SystemTime::now().duration_since(now).unwrap());
 }
 
 #[cfg(not(feature = "std"))]

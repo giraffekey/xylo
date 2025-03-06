@@ -68,21 +68,21 @@ impl Value {
 #[derive(Debug, Clone)]
 struct Stack<'a> {
     functions: HashMap<&'a str, Function<'a>>,
+    operands: Vec<Value>,
     scope: Option<(&'a str, usize)>,
-    depth: usize,
 }
 
 #[derive(Debug, Clone)]
-enum Block<'a> {
+enum FunctionBlock<'a> {
     Value(Value),
-    Expr(Expr<'a>),
+    Block(Block<'a>),
 }
 
 #[derive(Debug, Clone)]
 struct Function<'a> {
     params: Vec<&'a str>,
     weighted: bool,
-    blocks: Vec<(Block<'a>, f32)>,
+    blocks: Vec<(FunctionBlock<'a>, f32)>,
     scope: Option<(&'a str, usize)>,
 }
 
@@ -111,221 +111,187 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
     }
 }
 
-fn reduce_binary_operation(
-    stack: &Stack,
-    cache: &Cache,
-    operation: &BinaryOperation,
-) -> Result<Value> {
-    match (&*operation.a, &*operation.b) {
-        (Expr::Literal(_), Expr::Literal(_)) | (Expr::Literal(_), _) | (_, Expr::Literal(_)) => {
-            // Calculate synchronously if non-recursive
-            let a = reduce_expr(stack, cache, &operation.a)?;
-            let b = reduce_expr(stack, cache, &operation.b)?;
-            handle_builtin(operation.op.as_str(), cache, &[a, b])
-        }
-        _ => {
-            // Calculate in parallel if recursion is possible
-            let args: Result<Vec<Value>> = [operation.a.clone(), operation.b.clone()]
-                .into_par_iter()
-                .map(|arg| reduce_expr(stack, cache, &arg))
-                .collect();
-            handle_builtin(operation.op.as_str(), cache, &args?)
-        }
-    }
+fn reduce_binary_operation(stack: &mut Stack, cache: &Cache, op: &BinaryOperator) -> Result<Value> {
+    let b = stack.operands.pop().unwrap();
+    let a = stack.operands.pop().unwrap();
+    handle_builtin(op.as_str(), cache, &[a, b])
 }
 
-fn reduce_call(stack: &Stack, cache: &Cache, call: &Call) -> Result<Value> {
-    let args: Result<Vec<Value>> = call
-        .args
-        .clone()
-        .into_par_iter()
-        .map(|arg| reduce_expr(stack, cache, &arg))
-        .collect();
-    let args = args?;
+fn reduce_call<'a>(
+    stack: &mut Stack<'a>,
+    cache: &Cache,
+    name: &'a str,
+    argc: usize,
+) -> Result<Value> {
+    let mut args = Vec::with_capacity(argc);
+    for _ in 0..argc {
+        args.push(stack.operands.pop().unwrap());
+    }
+    args.reverse();
 
-    if BUILTIN_FUNCTIONS.contains(&call.name) {
-        let key = Cache::hash_call(call.name, 0, &args, stack.scope);
+    if BUILTIN_FUNCTIONS.contains(&name) {
+        let key = Cache::hash_call(name, 0, &args, stack.scope);
         if let Some(value) = cache.get(key) {
             return Ok(value);
         }
 
-        let value = handle_builtin(call.name, cache, &args)?;
+        let value = handle_builtin(name, cache, &args)?;
         cache.insert(key, &value);
-        return Ok(value);
-    }
-
-    match stack.functions.get(call.name) {
-        Some(function) => {
-            // Temporary. Will implement currying later.
-            if call.args.len() != function.params.len() {
-                return Err(anyhow!(format!(
-                    "Incorrect number of arguments passed to `{}` function.",
-                    call.name
-                )));
-            }
-
-            let (i, block) = if function.weighted {
-                let index_weights = function.blocks.iter().enumerate();
-                let dist = WeightedIndex::new(index_weights.clone().map(|(_, (_, weight))| weight))
-                    .unwrap();
-                index_weights
-                    .map(|(i, (block, _))| (i, block))
-                    .nth(dist.sample(&mut cache.rng()))
-                    .unwrap()
-            } else {
-                (0, &function.blocks[0].0)
-            };
-
-            let key = if function.scope.is_none() {
-                let key = Cache::hash_call(call.name, i, &args, stack.scope);
-                if let Some(value) = cache.get(key) {
-                    return Ok(value);
+        Ok(value)
+    } else {
+        match stack.functions.clone().get(name) {
+            Some(function) => {
+                // Temporary. Will implement currying later.
+                if args.len() != function.params.len() {
+                    return Err(anyhow!(format!(
+                        "Incorrect number of arguments passed to `{}` function.",
+                        name
+                    )));
                 }
-                Some(key)
-            } else {
-                None
-            };
 
-            match block {
-                Block::Value(value) => Ok(value.clone()),
-                Block::Expr(expr) => {
-                    let functions: Vec<(&str, Function)> = function
-                        .params
-                        .clone()
-                        .par_iter()
-                        .zip(args)
-                        .map(|(param, arg)| {
-                            (
-                                *param,
-                                Function {
-                                    params: vec![],
-                                    weighted: false,
-                                    blocks: vec![(Block::Value(arg), 0.0)],
-                                    scope: Some((call.name, i)),
-                                },
-                            )
-                        })
-                        .collect();
+                let (i, block) = if function.weighted {
+                    let index_weights = function.blocks.iter().enumerate();
+                    let dist =
+                        WeightedIndex::new(index_weights.clone().map(|(_, (_, weight))| weight))
+                            .unwrap();
+                    index_weights
+                        .map(|(i, (block, _))| (i, block))
+                        .nth(dist.sample(&mut cache.rng()))
+                        .unwrap()
+                } else {
+                    (0, &function.blocks[0].0)
+                };
 
-                    let mut stack = stack.clone();
-                    stack.depth += 1;
-                    stack.scope = Some((call.name, i));
+                let key = if function.scope.is_none() {
+                    let key = Cache::hash_call(name, i, &args, stack.scope);
+                    if let Some(value) = cache.get(key) {
+                        return Ok(value);
+                    }
+                    Some(key)
+                } else {
+                    None
+                };
 
-                    if function.scope.is_none() {
-                        stack.functions = stack
-                            .functions
+                let scope = Some((name, i));
+                match block {
+                    FunctionBlock::Value(value) => Ok(value.clone()),
+                    FunctionBlock::Block(block) => {
+                        let functions: Vec<(&str, Function)> = function
+                            .params
+                            .clone()
                             .iter()
-                            .filter_map(|(name, f)| {
-                                if f.scope.is_none() {
-                                    Some((*name, f.clone()))
-                                } else {
-                                    None
-                                }
+                            .zip(args)
+                            .map(|(param, arg)| {
+                                (
+                                    *param,
+                                    Function {
+                                        params: vec![],
+                                        weighted: false,
+                                        blocks: vec![(FunctionBlock::Value(arg), 0.0)],
+                                        scope,
+                                    },
+                                )
                             })
                             .collect();
+
+                        let mut stack = stack.clone();
+                        stack.scope = scope;
+                        if function.scope.is_none() {
+                            stack.functions = stack
+                                .functions
+                                .iter()
+                                .filter_map(|(name, f)| {
+                                    if f.scope.is_none() {
+                                        Some((*name, f.clone()))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                        }
+                        stack.functions.extend(functions);
+
+                        let value = reduce_block(&mut stack, cache, &block)?;
+
+                        if let Some(key) = key {
+                            cache.insert(key, &value);
+                        }
+
+                        Ok(value)
                     }
-                    stack.functions.extend(functions);
-
-                    let value = reduce_expr(&stack, cache, &expr)?;
-
-                    if let Some(key) = key {
-                        cache.insert(key, &value);
-                    }
-
-                    Ok(value)
                 }
             }
+            None => Err(anyhow!(format!("Function `{}` not found", name))),
         }
-        None => Err(anyhow!(format!("Function `{}` not found", call.name))),
     }
 }
 
-fn reduce_let<'a>(stack: &Stack<'a>, cache: &Cache, let_statement: &Let<'a>) -> Result<Value> {
+fn reduce_let<'a>(
+    stack: &Stack<'a>,
+    cache: &Cache,
+    definitions: &[LetDefinition],
+    block: &[Token],
+) -> Result<Value> {
     let mut stack = stack.clone();
-    stack.functions.extend(
-        let_statement
-            .definitions
-            .clone()
-            .into_iter()
-            .map(|definition| {
-                (
-                    definition.name,
-                    Function {
-                        params: definition.params,
-                        weighted: false,
-                        blocks: vec![(Block::Expr(definition.block), 0.0)],
-                        scope: stack.scope,
-                    },
-                )
-            }),
-    );
+    stack.functions.extend(definitions.iter().map(|definition| {
+        (
+            definition.name,
+            Function {
+                params: definition.params.clone(),
+                weighted: false,
+                blocks: vec![(FunctionBlock::Block(definition.block.clone()), 0.0)],
+                scope: stack.scope,
+            },
+        )
+    }));
 
-    reduce_expr(&stack, cache, &let_statement.block)
+    reduce_block(&mut stack, cache, block)
 }
 
-fn reduce_if(stack: &Stack, cache: &Cache, if_statement: &If) -> Result<Value> {
-    let condition = reduce_expr(stack, cache, &if_statement.condition)?;
-    let is_true = match condition {
-        Value::Boolean(b) => b,
-        _ => return Err(anyhow!("If condition must reduce to a boolean.")),
-    };
-    if is_true {
-        reduce_expr(stack, cache, &if_statement.if_block)
-    } else {
-        reduce_expr(stack, cache, &if_statement.else_block)
+fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
+    match (&a, &b) {
+        (Value::Integer(a), Literal::Integer(b)) => Ok(a == b),
+        (Value::Float(a), Literal::Float(b)) => Ok(a == b),
+        (Value::Integer(a), Literal::Float(b)) | (Value::Float(b), Literal::Integer(a)) => {
+            Ok(*a as f32 == *b)
+        }
+        (Value::Boolean(a), Literal::Boolean(b)) => Ok(a == b),
+        (Value::Hex(a), Literal::Hex(b)) => Ok(a == b),
+        (Value::Shape(_a), Literal::Shape(_b)) => todo!(),
+        (Value::List(a), Literal::List(b)) => {
+            if a.len() != b.len() {
+                return Ok(false);
+            }
+            let matches: Result<Vec<bool>> =
+                a.iter().zip(b).map(|(a, b)| pattern_match(a, b)).collect();
+            Ok(matches?.iter().all(|does_match| *does_match))
+        }
+        _ => return Err(anyhow!("Incorrect type comparison in match statement.")),
     }
 }
 
-fn reduce_match(stack: &Stack, cache: &Cache, match_statement: &Match) -> Result<Value> {
-    let a = reduce_expr(stack, cache, &match_statement.condition)?;
-    for (pattern, block) in &match_statement.patterns {
+fn reduce_match(stack: &mut Stack, patterns: &[(Pattern, usize)]) -> Result<usize> {
+    let a = stack.operands.pop().unwrap();
+
+    let mut index = 0;
+    for (pattern, skip) in patterns {
         match pattern {
             Pattern::Matches(matches) => {
                 for b in matches {
-                    let b = reduce_expr(stack, cache, &b)?;
-                    let matching = match (&a, &b) {
-                        (Value::Integer(a), Value::Integer(b)) => a == b,
-                        (Value::Float(a), Value::Float(b)) => a == b,
-                        (Value::Integer(a), Value::Float(b))
-                        | (Value::Float(b), Value::Integer(a)) => *a as f32 == *b,
-                        (Value::Boolean(a), Value::Boolean(b)) => a == b,
-                        (Value::Shape(_a), Value::Shape(_b)) => todo!(),
-                        (Value::Integer(a), Value::List(list)) => list
-                            .iter()
-                            .map(|value| match value {
-                                Value::Integer(b) => Ok(*a == *b),
-                                _ => Err(anyhow!("Incorrect type comparison in match statement.")),
-                            })
-                            .try_fold(false, |acc, res| res.map(|x| acc || x))?,
-                        (Value::Float(a), Value::List(list)) => list
-                            .iter()
-                            .map(|value| match value {
-                                Value::Float(b) => Ok(*a == *b),
-                                _ => Err(anyhow!("Incorrect type comparison in match statement.")),
-                            })
-                            .try_fold(false, |acc, res| res.map(|x| acc || x))?,
-                        (Value::Boolean(a), Value::List(list)) => list
-                            .iter()
-                            .map(|value| match value {
-                                Value::Boolean(b) => Ok(*a == *b),
-                                _ => Err(anyhow!("Incorrect type comparison in match statement.")),
-                            })
-                            .try_fold(false, |acc, res| res.map(|x| acc || x))?,
-                        (Value::Shape(_a), Value::List(_list)) => todo!(),
-                        _ => return Err(anyhow!("Incorrect type comparison in match statement.")),
-                    };
-                    if matching {
-                        return reduce_expr(stack, cache, &block);
+                    if pattern_match(&a, b)? {
+                        return Ok(index);
                     }
+                    index += skip;
                 }
             }
+            Pattern::Wildcard => return Ok(index),
         }
     }
     Err(anyhow!("Not all possibilities covered in match statement"))
 }
 
-fn reduce_for(stack: &Stack, cache: &Cache, for_statement: &For) -> Result<Value> {
-    let iter = reduce_expr(stack, cache, &for_statement.iter)?;
+fn reduce_for(stack: &mut Stack, cache: &Cache, var: &str, block: &[Token]) -> Result<Value> {
+    let iter = stack.operands.pop().unwrap();
     let items = match iter {
         Value::List(list) => list,
         Value::Integer(n) => {
@@ -348,15 +314,15 @@ fn reduce_for(stack: &Stack, cache: &Cache, for_statement: &For) -> Result<Value
         .map(|item| {
             let mut stack = stack.clone();
             stack.functions.insert(
-                for_statement.var,
+                var,
                 Function {
                     params: vec![],
                     weighted: false,
-                    blocks: vec![(Block::Value(item), 0.0)],
+                    blocks: vec![(FunctionBlock::Value(item), 0.0)],
                     scope: stack.scope,
                 },
             );
-            reduce_expr(&stack, cache, &for_statement.block)
+            reduce_block(&mut stack, cache, block)
         })
         .collect();
 
@@ -365,8 +331,8 @@ fn reduce_for(stack: &Stack, cache: &Cache, for_statement: &For) -> Result<Value
     Ok(list)
 }
 
-fn reduce_loop(stack: &Stack, cache: &Cache, loop_statement: &Loop) -> Result<Value> {
-    let count = reduce_expr(stack, cache, &loop_statement.count)?;
+fn reduce_loop<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -> Result<Value> {
+    let count = stack.operands.pop().unwrap();
     let count = match count {
         Value::Integer(n) => n,
         Value::Float(n) => n as i32,
@@ -378,7 +344,10 @@ fn reduce_loop(stack: &Stack, cache: &Cache, loop_statement: &Loop) -> Result<Va
 
     let res: Result<Vec<Value>> = (0..count)
         .into_par_iter()
-        .map(|_| reduce_expr(stack, cache, &loop_statement.block))
+        .map(|_| {
+            let mut stack = stack.clone();
+            reduce_block(&mut stack, cache, block)
+        })
         .collect();
 
     let list = Value::List(res?);
@@ -386,17 +355,67 @@ fn reduce_loop(stack: &Stack, cache: &Cache, loop_statement: &Loop) -> Result<Va
     Ok(list)
 }
 
-fn reduce_expr(stack: &Stack, cache: &Cache, expr: &Expr) -> Result<Value> {
-    match expr {
-        Expr::Literal(literal) => reduce_literal(literal),
-        Expr::BinaryOperation(operation) => reduce_binary_operation(stack, cache, operation),
-        Expr::Call(call) => reduce_call(stack, cache, call),
-        Expr::Let(let_statement) => reduce_let(&stack, cache, let_statement),
-        Expr::If(if_statement) => reduce_if(stack, cache, if_statement),
-        Expr::Match(match_statement) => reduce_match(stack, cache, match_statement),
-        Expr::For(for_statement) => reduce_for(stack, cache, for_statement),
-        Expr::Loop(loop_statement) => reduce_loop(stack, cache, loop_statement),
+fn reduce_block<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -> Result<Value> {
+    let mut index = 0;
+    while index < block.len() {
+        match &block[index] {
+            Token::Literal(literal) => {
+                stack.operands.push(reduce_literal(literal)?);
+                index += 1;
+            }
+            Token::BinaryOperator(op) => {
+                let value = reduce_binary_operation(stack, cache, op)?;
+                stack.operands.push(value);
+                index += 1;
+            }
+            Token::Call(name, argc) => {
+                let value = reduce_call(stack, cache, name, *argc)?;
+                stack.operands.push(value);
+                index += 1;
+            }
+            Token::Jump(skip) => index += skip + 1,
+            Token::Let(definitions, skip) => {
+                let block = &block[index + 1..index + skip + 1];
+                let value = reduce_let(stack, cache, definitions, block)?;
+                stack.operands.push(value);
+                index += skip + 1;
+            }
+            Token::If(skip) => {
+                let condition = stack.operands.pop().unwrap();
+                let is_true = match condition {
+                    Value::Boolean(b) => b,
+                    _ => return Err(anyhow!("If condition must reduce to a boolean.")),
+                };
+
+                if is_true {
+                    index += 1;
+                } else {
+                    index += skip + 1;
+                }
+            }
+            Token::Match(patterns) => {
+                let skip = reduce_match(stack, patterns)?;
+                index += skip + 1;
+            }
+            Token::For(var, skip) => {
+                let block = &block[index + 1..index + skip + 1];
+                let value = reduce_for(stack, cache, var, block)?;
+                stack.operands.push(value);
+                index += skip + 1;
+            }
+            Token::Loop(skip) => {
+                let block = &block[index + 1..index + skip + 1];
+                let value = reduce_loop(stack, cache, block)?;
+                stack.operands.push(value);
+                index += skip + 1;
+            }
+        }
     }
+
+    stack
+        .operands
+        .pop()
+        .ok_or_else(|| anyhow!("Missing operand"))
 }
 
 pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
@@ -411,7 +430,7 @@ pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                 function.weighted = true;
                 function
                     .blocks
-                    .push((Block::Expr(definition.block), definition.weight.unwrap()));
+                    .push((FunctionBlock::Block(definition.block), definition.weight));
             }
             None => {
                 functions.insert(
@@ -419,7 +438,7 @@ pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                     Function {
                         params: definition.params,
                         weighted: false,
-                        blocks: vec![(Block::Expr(definition.block), definition.weight.unwrap())],
+                        blocks: vec![(FunctionBlock::Block(definition.block), definition.weight)],
                         scope: None,
                     },
                 );
@@ -427,19 +446,14 @@ pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
         }
     }
 
-    let stack = Stack {
+    let mut stack = Stack {
         functions,
+        operands: Vec::new(),
         scope: None,
-        depth: 0,
     };
-    let cache = Cache::new(seed)?;
+    let mut cache = Cache::new(seed)?;
 
-    let call = Call {
-        name: "root",
-        args: Vec::new(),
-    };
-
-    let shape = match reduce_call(&stack, &cache, &call)? {
+    let shape = match reduce_call(&mut stack, &mut cache, "root", 0)? {
         Value::Shape(shape) => shape,
         _ => return Err(anyhow!("The `root` function must return a shape.")),
     };

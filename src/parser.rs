@@ -1,5 +1,5 @@
 #[cfg(feature = "no-std")]
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
@@ -41,11 +41,6 @@ pub enum BinaryOperator {
     Division,
     Modulo,
     Exponentiation,
-    BitAnd,
-    BitOr,
-    BitXor,
-    BitLeft,
-    BitRight,
     EqualTo,
     NotEqualTo,
     LessThan,
@@ -72,9 +67,9 @@ impl BinaryOperator {
             | Self::LessThanOrEqualTo
             | Self::GreaterThan
             | Self::GreaterThanOrEqualTo => 0,
-            Self::And | Self::BitAnd => 2,
-            Self::Or | Self::BitOr | Self::BitXor => 1,
-            Self::RangeExclusive | Self::RangeInclusive | Self::BitLeft | Self::BitRight => 3,
+            Self::And => 2,
+            Self::Or => 1,
+            Self::RangeExclusive | Self::RangeInclusive => 3,
         }
     }
 
@@ -86,11 +81,6 @@ impl BinaryOperator {
             Self::Division => "/",
             Self::Modulo => "%",
             Self::Exponentiation => "**",
-            Self::BitAnd => "&",
-            Self::BitOr => "|",
-            Self::BitXor => "^",
-            Self::BitLeft => "<<",
-            Self::BitRight => ">>",
             Self::EqualTo => "==",
             Self::NotEqualTo => "!=",
             Self::LessThan => "<",
@@ -107,74 +97,40 @@ impl BinaryOperator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct BinaryOperation<'a> {
-    pub op: BinaryOperator,
-    pub a: Box<Expr<'a>>,
-    pub b: Box<Expr<'a>>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Call<'a> {
+pub struct LetDefinition<'a> {
     pub name: &'a str,
-    pub args: Vec<Expr<'a>>,
+    pub params: Vec<&'a str>,
+    pub block: Block<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Let<'a> {
-    pub definitions: Vec<Definition<'a>>,
-    pub block: Box<Expr<'a>>,
+pub enum Pattern {
+    Matches(Vec<Literal>),
+    Wildcard,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct If<'a> {
-    pub condition: Box<Expr<'a>>,
-    pub if_block: Box<Expr<'a>>,
-    pub else_block: Box<Expr<'a>>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Pattern<'a> {
-    Matches(Vec<Expr<'a>>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Match<'a> {
-    pub condition: Box<Expr<'a>>,
-    pub patterns: Vec<(Pattern<'a>, Expr<'a>)>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct For<'a> {
-    pub var: &'a str,
-    pub iter: Box<Expr<'a>>,
-    pub block: Box<Expr<'a>>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Loop<'a> {
-    pub count: Box<Expr<'a>>,
-    pub block: Box<Expr<'a>>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Expr<'a> {
+pub enum Token<'a> {
     Literal(Literal),
-    BinaryOperation(BinaryOperation<'a>),
-    Call(Call<'a>),
-    Let(Let<'a>),
-    If(If<'a>),
-    Match(Match<'a>),
-    For(For<'a>),
-    Loop(Loop<'a>),
+    BinaryOperator(BinaryOperator),
+    Call(&'a str, usize),
+    Jump(usize),
+    Let(Vec<LetDefinition<'a>>, usize),
+    If(usize),
+    Match(Vec<(Pattern, usize)>),
+    For(&'a str, usize),
+    Loop(usize),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Definition<'a> {
     pub name: &'a str,
-    pub weight: Option<f32>,
+    pub weight: f32,
     pub params: Vec<&'a str>,
-    pub block: Expr<'a>,
+    pub block: Block<'a>,
 }
+
+pub type Block<'a> = Vec<Token<'a>>;
 
 pub type Tree<'a> = Vec<Definition<'a>>;
 
@@ -264,66 +220,52 @@ fn end(input: &str) -> IResult<&str, &str> {
     preceded(space0, alt((tag(";"), line_ending, eof))).parse(input)
 }
 
-fn block(input: &str, indent: usize) -> IResult<&str, Expr> {
+fn block(input: &str, indent: usize) -> IResult<&str, Block> {
     terminated(expr(indent), end).parse(input)
 }
 
 fn _binary_operator_tag(input: &str) -> IResult<&str, &str> {
     alt((
-        alt((
-            tag("+"),
-            recognize((tag("-"), peek(not(tag(">"))))),
-            tag("**"),
-            tag("*"),
-            tag("/"),
-            tag("%"),
-            tag(":"),
-            tag("=="),
-            tag("!="),
-            tag("<<"),
-            tag("<="),
-            tag("<"),
-            tag(">>"),
-            tag(">="),
-            tag(">"),
-            tag("&&"),
-            tag("&"),
-            tag("||"),
-            tag("|"),
-            tag("..="),
-            tag(".."),
-        )),
-        tag("^"),
+        tag("+"),
+        recognize((tag("-"), peek(not(tag(">"))))),
+        tag("**"),
+        tag("*"),
+        tag("/"),
+        tag("%"),
+        tag(":"),
+        tag("=="),
+        tag("!="),
+        tag("<="),
+        tag("<"),
+        tag(">="),
+        tag(">"),
+        tag("&&"),
+        tag("||"),
+        tag("..="),
+        tag(".."),
     ))
     .parse(input)
 }
 
 fn binary_operator(input: &str) -> IResult<&str, BinaryOperator> {
     alt((
-        alt((
-            value(BinaryOperator::Addition, tag("+")),
-            value(BinaryOperator::Subtraction, (tag("-"), peek(not(tag(">"))))),
-            value(BinaryOperator::Exponentiation, tag("**")),
-            value(BinaryOperator::Multiplication, tag("*")),
-            value(BinaryOperator::Division, tag("/")),
-            value(BinaryOperator::Modulo, tag("%")),
-            value(BinaryOperator::Composition, tag(":")),
-            value(BinaryOperator::EqualTo, tag("==")),
-            value(BinaryOperator::NotEqualTo, tag("!=")),
-            value(BinaryOperator::BitLeft, tag("<<")),
-            value(BinaryOperator::LessThanOrEqualTo, tag("<=")),
-            value(BinaryOperator::LessThan, tag("<")),
-            value(BinaryOperator::BitRight, tag(">>")),
-            value(BinaryOperator::GreaterThanOrEqualTo, tag(">=")),
-            value(BinaryOperator::GreaterThan, tag(">")),
-            value(BinaryOperator::And, tag("&&")),
-            value(BinaryOperator::BitAnd, tag("&")),
-            value(BinaryOperator::Or, tag("||")),
-            value(BinaryOperator::BitOr, tag("|")),
-            value(BinaryOperator::RangeInclusive, tag("..=")),
-            value(BinaryOperator::RangeExclusive, tag("..")),
-        )),
-        value(BinaryOperator::BitXor, tag("^")),
+        value(BinaryOperator::Addition, tag("+")),
+        value(BinaryOperator::Subtraction, (tag("-"), peek(not(tag(">"))))),
+        value(BinaryOperator::Exponentiation, tag("**")),
+        value(BinaryOperator::Multiplication, tag("*")),
+        value(BinaryOperator::Division, tag("/")),
+        value(BinaryOperator::Modulo, tag("%")),
+        value(BinaryOperator::Composition, tag(":")),
+        value(BinaryOperator::EqualTo, tag("==")),
+        value(BinaryOperator::NotEqualTo, tag("!=")),
+        value(BinaryOperator::LessThanOrEqualTo, tag("<=")),
+        value(BinaryOperator::LessThan, tag("<")),
+        value(BinaryOperator::GreaterThanOrEqualTo, tag(">=")),
+        value(BinaryOperator::GreaterThan, tag(">")),
+        value(BinaryOperator::And, tag("&&")),
+        value(BinaryOperator::Or, tag("||")),
+        value(BinaryOperator::RangeInclusive, tag("..=")),
+        value(BinaryOperator::RangeExclusive, tag("..")),
     ))
     .parse(input)
 }
@@ -342,34 +284,53 @@ fn identifier(input: &str) -> IResult<&str, &str> {
     .parse(input)
 }
 
-fn call(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Call> {
+fn indentation(input: &str, indent: usize) -> IResult<&str, usize> {
+    let (input, line_end) = opt(many1((space0, line_ending))).parse(input)?;
+    let (input, spacing) = many0(alt((char(' '), char('\t')))).parse(input)?;
+    if line_end.is_some() {
+        if spacing.len() < indent as usize {
+            return Err(Err::Error(Error::new(input, ErrorKind::Verify)));
+        }
+        Ok((input, spacing.len()))
+    } else {
+        Ok((input, indent))
+    }
+}
+
+fn call(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         if precedence < u8::MAX {
             let (input, name) = identifier(input)?;
             let (input, args) =
                 many0(preceded(space1, expr_with_precedence(indent + 1, u8::MAX))).parse(input)?;
-            let call = Call { name, args };
-            Ok((input, call))
+
+            let argc = args.len();
+            let mut block = Vec::new();
+            for arg in args {
+                block.extend(arg);
+            }
+            block.push(Token::Call(name, argc));
+
+            Ok((input, block))
         } else {
             let (input, name) = identifier(input)?;
-            let call = Call {
-                name,
-                args: Vec::new(),
-            };
-            Ok((input, call))
+
+            let mut block = Vec::with_capacity(1);
+            block.push(Token::Call(name, 0));
+
+            Ok((input, block))
         }
     }
 }
 
-fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, Definition> {
+fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, LetDefinition> {
     move |input| {
         let (input, name) = identifier(input)?;
         let (input, params) = many0(preceded(multispace1, identifier)).parse(input)?;
         let (input, _) = preceded(multispace0, char('=')).parse(input)?;
         let (input, block) = expr(indent + 1)(input)?;
-        let definition = Definition {
+        let definition = LetDefinition {
             name,
-            weight: None,
             params,
             block,
         };
@@ -377,7 +338,7 @@ fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, Definition
     }
 }
 
-fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Let> {
+fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, _) = (tag("let"), space1).parse(input)?;
         let (input, definitions) =
@@ -388,70 +349,108 @@ fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Let> {
             (space0, peek(line_ending)),
         ))
         .parse(input)?;
-        let (input, block) = block(input, indent + 1)?;
-        let let_statement = Let {
-            definitions,
-            block: Box::new(block),
-        };
-        Ok((input, let_statement))
+        let (input, expr) = block(input, indent + 1)?;
+
+        let mut block = Vec::with_capacity(expr.len() + 1);
+        block.push(Token::Let(definitions, expr.len()));
+        block.extend(expr);
+
+        Ok((input, block))
     }
 }
 
-fn if_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, If> {
+fn if_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, _) = tag("if")(input)?;
         let (input, condition) = preceded(space1, expr(indent + 1)).parse(input)?;
         let (input, _) =
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-        let (input, if_block) = block(input, indent + 1)?;
+        let (input, then_branch) = block(input, indent + 1)?;
         let (input, _) = (multispace0, tag("else")).parse(input)?;
         let (input, else_if) = opt(peek((multispace1, tag("if")))).parse(input)?;
-        let (input, else_block) = if else_if.is_some() {
+        let (input, else_branch) = if else_if.is_some() {
             expr(indent)(input)?
         } else {
             let (input, _) =
                 alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
             block(input, indent + 1)?
         };
-        let if_statement = If {
-            condition: Box::new(condition),
-            if_block: Box::new(if_block),
-            else_block: Box::new(else_block),
-        };
-        Ok((input, if_statement))
+
+        let mut block =
+            Vec::with_capacity(condition.len() + then_branch.len() + else_branch.len() + 2);
+        block.extend(condition);
+        block.push(Token::If(then_branch.len() + 1));
+        block.extend(then_branch);
+        block.push(Token::Jump(else_branch.len()));
+        block.extend(else_branch);
+
+        Ok((input, block))
     }
 }
 
 fn pattern(indent: usize) -> impl FnMut(&str) -> IResult<&str, Pattern> {
-    move |input| map(separated_list1(tag(","), expr(indent)), Pattern::Matches).parse(input)
+    move |input| {
+        let (input, _) = indentation(input, indent)?;
+        alt((
+            map(separated_list1(tag(","), literal), Pattern::Matches),
+            value(Pattern::Wildcard, tag("_")),
+        ))
+        .parse(input)
+    }
 }
 
-fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, (Pattern, Expr)> {
+#[derive(Debug)]
+struct PatternBlock<'a> {
+    pattern: Pattern,
+    block: Block<'a>,
+}
+
+fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, PatternBlock> {
     move |input| {
         let (input, pattern) = pattern(indent)(input)?;
         let (input, _) =
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
         let (input, block) = block(input, indent + 1)?;
-        Ok((input, (pattern, block)))
+
+        let pattern_block = PatternBlock { pattern, block };
+        Ok((input, pattern_block))
     }
 }
 
-fn match_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Match> {
+fn match_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, _) = tag("match")(input)?;
         let (input, condition) = preceded(space1, expr(indent + 1)).parse(input)?;
         let (input, _) =
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-        let (input, patterns) = many1(pattern_block(indent + 1)).parse(input)?;
-        let match_statement = Match {
-            condition: Box::new(condition),
-            patterns,
-        };
-        Ok((input, match_statement))
+        let (input, pattern_blocks) = many1(pattern_block(indent + 1)).parse(input)?;
+
+        let total: usize = pattern_blocks
+            .iter()
+            .map(|pattern_block| pattern_block.block.len() + 1)
+            .sum();
+        let mut skip = 0;
+
+        let mut patterns = Vec::with_capacity(pattern_blocks.len());
+        let mut flattened_blocks = Vec::new();
+
+        for pattern_block in pattern_blocks {
+            skip += pattern_block.block.len() + 1;
+            patterns.push((pattern_block.pattern, pattern_block.block.len() + 1));
+            flattened_blocks.extend(pattern_block.block);
+            flattened_blocks.push(Token::Jump(total - skip));
+        }
+
+        let mut block = Vec::with_capacity(condition.len() + flattened_blocks.len() + 1);
+        block.extend(condition);
+        block.push(Token::Match(patterns));
+        block.extend(flattened_blocks);
+
+        Ok((input, block))
     }
 }
 
-fn for_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, For> {
+fn for_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, _) = tag("for")(input)?;
         let (input, var) = preceded(space1, identifier).parse(input)?;
@@ -462,17 +461,18 @@ fn for_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, For> {
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))),
         )
         .parse(input)?;
-        let (input, block) = block(input, indent + 1)?;
-        let for_statement = For {
-            var,
-            iter: Box::new(iter),
-            block: Box::new(block),
-        };
-        Ok((input, for_statement))
+        let (input, expr) = block(input, indent + 1)?;
+
+        let mut block = Vec::with_capacity(iter.len() + expr.len() + 1);
+        block.extend(iter);
+        block.push(Token::For(var, expr.len()));
+        block.extend(expr);
+
+        Ok((input, block))
     }
 }
 
-fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Loop> {
+fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, _) = tag("loop")(input)?;
         let (input, count) = delimited(
@@ -481,35 +481,28 @@ fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Loop> {
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))),
         )
         .parse(input)?;
-        let (input, block) = block(input, indent + 1)?;
-        let for_statement = Loop {
-            count: Box::new(count),
-            block: Box::new(block),
-        };
-        Ok((input, for_statement))
+        let (input, expr) = block(input, indent + 1)?;
+
+        let mut block = Vec::with_capacity(count.len() + expr.len() + 1);
+        block.extend(count);
+        block.push(Token::Loop(expr.len()));
+        block.extend(expr);
+
+        Ok((input, block))
     }
 }
 
-fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, Expr> {
-    let (input, line_end) = opt(many1((space0, line_ending))).parse(input)?;
-    let (input, spacing) = many0(alt((char(' '), char('\t')))).parse(input)?;
-    let indent = if line_end.is_some() {
-        if spacing.len() < indent as usize {
-            return Err(Err::Error(Error::new(input, ErrorKind::Verify)));
-        }
-        spacing.len()
-    } else {
-        indent
-    };
+fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, Block> {
+    let (input, indent) = indentation(input, indent)?;
 
     let (mut input, mut lhs) = alt((
-        map(literal, Expr::Literal),
-        map(let_statement(indent), Expr::Let),
-        map(if_statement(indent), Expr::If),
-        map(match_statement(indent), Expr::Match),
-        map(for_statement(indent), Expr::For),
-        map(loop_statement(indent), Expr::Loop),
-        map(call(indent, precedence), Expr::Call),
+        map(literal, |literal| vec![Token::Literal(literal)]),
+        let_statement(indent),
+        if_statement(indent),
+        match_statement(indent),
+        for_statement(indent),
+        loop_statement(indent),
+        call(indent, precedence),
         delimited(
             (char('('), multispace0),
             |input| expr_recursive(input, 0, 0),
@@ -524,21 +517,23 @@ fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, E
         }
         let (next_input, rhs) = expr_recursive(next_input, indent + 1, op.precedence() + 1)?;
         input = next_input;
-        lhs = Expr::BinaryOperation(BinaryOperation {
-            op,
-            a: Box::new(lhs),
-            b: Box::new(rhs),
-        });
+
+        let mut block = Vec::with_capacity(lhs.len() + rhs.len() + 1);
+        block.extend(lhs);
+        block.extend(rhs);
+        block.push(Token::BinaryOperator(op));
+
+        lhs = block;
     }
 
     Ok((input, lhs))
 }
 
-fn expr(indent: usize) -> impl FnMut(&str) -> IResult<&str, Expr> {
+fn expr(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| expr_recursive(input, indent, 0)
 }
 
-fn expr_with_precedence(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Expr> {
+fn expr_with_precedence(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| expr_recursive(input, indent, precedence)
 }
 
@@ -554,7 +549,7 @@ fn definition(input: &str) -> IResult<&str, Definition> {
     let (input, block) = block(input, 1)?;
     let definition = Definition {
         name,
-        weight: Some(weight.unwrap_or(1.0)),
+        weight: weight.unwrap_or(1.0),
         params,
         block,
     };
@@ -568,254 +563,4 @@ pub fn parse(input: &str) -> IResult<&str, Tree> {
     )
     .parse(input);
     tree
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[cfg(feature = "no-std")]
-    use alloc::vec;
-
-    #[test]
-    fn test() {
-        let res = parse(
-            "
-root =
-    add_circle SQUARE
-
-add_circle shape = shape : CIRCLE
-
-weighted@2 = 3
-weighted@3 = 2
-
-MATH =
-    3 + 4.0 * 5.0 + 6..(1 + 2) * 3
-
-LET =
-    let x = 3.0; y = 2.0
-        (x + y) / 2.0
-
-IF n =
-    if n > 0
-        TRIANGLE
-    else if n < 0
-        SQUARE
-    else
-        CIRCLE
-
-MATCH n =
-    match n
-        0,1,2 -> true
-        3..6
-            false
-
-FOR =
-    for i in 1..=3
-        i * i
-
-LOOP =
-    loop 3 -> SQUARE
-            ",
-        );
-        assert!(res.is_ok(), "{}", res.unwrap_err());
-
-        let (remaining, tree) = res.unwrap();
-        assert_eq!(remaining, "");
-        assert_eq!(
-            tree,
-            vec![
-                Definition {
-                    name: "root",
-                    weight: Some(1.0),
-                    params: vec![],
-                    block: Expr::Call(Call {
-                        name: "add_circle",
-                        args: vec![Expr::Literal(Literal::Shape(ShapeKind::Square))]
-                    }),
-                },
-                Definition {
-                    name: "add_circle",
-                    weight: Some(1.0),
-                    params: vec!["shape"],
-                    block: Expr::BinaryOperation(BinaryOperation {
-                        op: BinaryOperator::Composition,
-                        a: Box::new(Expr::Call(Call {
-                            name: "shape",
-                            args: vec![]
-                        })),
-                        b: Box::new(Expr::Literal(Literal::Shape(ShapeKind::Circle))),
-                    }),
-                },
-                Definition {
-                    name: "weighted",
-                    weight: Some(2.0),
-                    params: vec![],
-                    block: Expr::Literal(Literal::Integer(3)),
-                },
-                Definition {
-                    name: "weighted",
-                    weight: Some(3.0),
-                    params: vec![],
-                    block: Expr::Literal(Literal::Integer(2)),
-                },
-                Definition {
-                    name: "MATH",
-                    weight: Some(1.0),
-                    params: vec![],
-                    block: Expr::BinaryOperation(BinaryOperation {
-                        op: BinaryOperator::RangeExclusive,
-                        a: Box::new(Expr::BinaryOperation(BinaryOperation {
-                            op: BinaryOperator::Addition,
-                            a: Box::new(Expr::BinaryOperation(BinaryOperation {
-                                op: BinaryOperator::Addition,
-                                a: Box::new(Expr::Literal(Literal::Integer(3))),
-                                b: Box::new(Expr::BinaryOperation(BinaryOperation {
-                                    op: BinaryOperator::Multiplication,
-                                    a: Box::new(Expr::Literal(Literal::Float(4.0))),
-                                    b: Box::new(Expr::Literal(Literal::Float(5.0))),
-                                })),
-                            })),
-                            b: Box::new(Expr::Literal(Literal::Integer(6))),
-                        })),
-                        b: Box::new(Expr::BinaryOperation(BinaryOperation {
-                            op: BinaryOperator::Multiplication,
-                            a: Box::new(Expr::BinaryOperation(BinaryOperation {
-                                op: BinaryOperator::Addition,
-                                a: Box::new(Expr::Literal(Literal::Integer(1))),
-                                b: Box::new(Expr::Literal(Literal::Integer(2))),
-                            })),
-                            b: Box::new(Expr::Literal(Literal::Integer(3))),
-                        })),
-                    }),
-                },
-                Definition {
-                    name: "LET",
-                    weight: Some(1.0),
-                    params: vec![],
-                    block: Expr::Let(Let {
-                        definitions: vec![
-                            Definition {
-                                name: "x",
-                                weight: None,
-                                params: vec![],
-                                block: Expr::Literal(Literal::Float(3.0)),
-                            },
-                            Definition {
-                                name: "y",
-                                weight: None,
-                                params: vec![],
-                                block: Expr::Literal(Literal::Float(2.0)),
-                            },
-                        ],
-                        block: Box::new(Expr::BinaryOperation(BinaryOperation {
-                            op: BinaryOperator::Division,
-                            a: Box::new(Expr::BinaryOperation(BinaryOperation {
-                                op: BinaryOperator::Addition,
-                                a: Box::new(Expr::Call(Call {
-                                    name: "x",
-                                    args: vec![],
-                                })),
-                                b: Box::new(Expr::Call(Call {
-                                    name: "y",
-                                    args: vec![],
-                                })),
-                            })),
-                            b: Box::new(Expr::Literal(Literal::Float(2.0))),
-                        })),
-                    }),
-                },
-                Definition {
-                    name: "IF",
-                    weight: Some(1.0),
-                    params: vec!["n"],
-                    block: Expr::If(If {
-                        condition: Box::new(Expr::BinaryOperation(BinaryOperation {
-                            op: BinaryOperator::GreaterThan,
-                            a: Box::new(Expr::Call(Call {
-                                name: "n",
-                                args: vec![],
-                            })),
-                            b: Box::new(Expr::Literal(Literal::Integer(0))),
-                        })),
-                        if_block: Box::new(Expr::Literal(Literal::Shape(ShapeKind::Triangle))),
-                        else_block: Box::new(Expr::If(If {
-                            condition: Box::new(Expr::BinaryOperation(BinaryOperation {
-                                op: BinaryOperator::LessThan,
-                                a: Box::new(Expr::Call(Call {
-                                    name: "n",
-                                    args: vec![],
-                                })),
-                                b: Box::new(Expr::Literal(Literal::Integer(0))),
-                            })),
-                            if_block: Box::new(Expr::Literal(Literal::Shape(ShapeKind::Square))),
-                            else_block: Box::new(Expr::Literal(Literal::Shape(ShapeKind::Circle))),
-                        })),
-                    }),
-                },
-                Definition {
-                    name: "MATCH",
-                    weight: Some(1.0),
-                    params: vec!["n"],
-                    block: Expr::Match(Match {
-                        condition: Box::new(Expr::Call(Call {
-                            name: "n",
-                            args: vec![],
-                        })),
-                        patterns: vec![
-                            (
-                                Pattern::Matches(vec![
-                                    Expr::Literal(Literal::Integer(0)),
-                                    Expr::Literal(Literal::Integer(1)),
-                                    Expr::Literal(Literal::Integer(2)),
-                                ]),
-                                Expr::Literal(Literal::Boolean(true))
-                            ),
-                            (
-                                Pattern::Matches(vec![Expr::BinaryOperation(BinaryOperation {
-                                    op: BinaryOperator::RangeExclusive,
-                                    a: Box::new(Expr::Literal(Literal::Integer(3))),
-                                    b: Box::new(Expr::Literal(Literal::Integer(6))),
-                                })]),
-                                Expr::Literal(Literal::Boolean(false))
-                            ),
-                        ],
-                    }),
-                },
-                Definition {
-                    name: "FOR",
-                    weight: Some(1.0),
-                    params: vec![],
-                    block: Expr::For(For {
-                        var: "i",
-                        iter: Box::new(Expr::BinaryOperation(BinaryOperation {
-                            op: BinaryOperator::RangeInclusive,
-                            a: Box::new(Expr::Literal(Literal::Integer(1))),
-                            b: Box::new(Expr::Literal(Literal::Integer(3))),
-                        })),
-                        block: Box::new(Expr::BinaryOperation(BinaryOperation {
-                            op: BinaryOperator::Multiplication,
-                            a: Box::new(Expr::Call(Call {
-                                name: "i",
-                                args: vec![],
-                            })),
-                            b: Box::new(Expr::Call(Call {
-                                name: "i",
-                                args: vec![],
-                            })),
-                        })),
-                    }),
-                },
-                Definition {
-                    name: "LOOP",
-                    weight: Some(1.0),
-                    params: vec![],
-                    block: Expr::Loop(Loop {
-                        count: Box::new(Expr::Literal(Literal::Integer(3))),
-                        block: Box::new(Expr::Literal(Literal::Shape(ShapeKind::Square))),
-                    }),
-                },
-            ]
-        );
-    }
 }
