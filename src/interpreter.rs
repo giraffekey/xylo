@@ -8,14 +8,13 @@ use {
 };
 
 use crate::cache::Cache;
-use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS};
+use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS, RAND_FUNCTIONS};
 use crate::parser::*;
 use crate::shape::{unwrap_shape, Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
 use anyhow::{anyhow, Result};
 use hashbrown::HashMap;
 use rand::distr::{weighted::WeightedIndex, Distribution};
-use rayon::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueKind {
@@ -65,11 +64,20 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Stack<'a> {
-    functions: HashMap<&'a str, Function<'a>>,
+    frames: Vec<HashMap<&'a str, Function<'a>>>,
     operands: Vec<Value>,
     scope: Option<(&'a str, usize)>,
+}
+
+impl Stack<'_> {
+    pub fn get_function(&self, name: &str) -> Option<&Function> {
+        self.frames
+            .iter()
+            .rev()
+            .find_map(|functions| functions.get(name))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -111,12 +119,6 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
     }
 }
 
-fn reduce_binary_operation(stack: &mut Stack, cache: &Cache, op: &BinaryOperator) -> Result<Value> {
-    let b = stack.operands.pop().unwrap();
-    let a = stack.operands.pop().unwrap();
-    handle_builtin(op.as_str(), cache, &[a, b])
-}
-
 fn reduce_call<'a>(
     stack: &mut Stack<'a>,
     cache: &Cache,
@@ -130,16 +132,20 @@ fn reduce_call<'a>(
     args.reverse();
 
     if BUILTIN_FUNCTIONS.contains(&name) {
-        let key = Cache::hash_call(name, 0, &args, stack.scope);
-        if let Some(value) = cache.get(key) {
-            return Ok(value);
-        }
+        if RAND_FUNCTIONS.contains(&name) {
+            handle_builtin(name, cache, &args)
+        } else {
+            let key = Cache::hash_call(name, 0, &args, stack.scope);
+            if let Some(value) = cache.get(key) {
+                return Ok(value);
+            }
 
-        let value = handle_builtin(name, cache, &args)?;
-        cache.insert(key, &value);
-        Ok(value)
+            let value = handle_builtin(name, cache, &args)?;
+            cache.insert(key, &value);
+            Ok(value)
+        }
     } else {
-        match stack.functions.clone().get(name) {
+        match stack.get_function(name) {
             Some(function) => {
                 // Temporary. Will implement currying later.
                 if args.len() != function.params.len() {
@@ -176,7 +182,7 @@ fn reduce_call<'a>(
                 match block {
                     FunctionBlock::Value(value) => Ok(value.clone()),
                     FunctionBlock::Block(block) => {
-                        let functions: Vec<(&str, Function)> = function
+                        let functions = function
                             .params
                             .clone()
                             .iter()
@@ -194,24 +200,19 @@ fn reduce_call<'a>(
                             })
                             .collect();
 
-                        let mut stack = stack.clone();
-                        stack.scope = scope;
-                        if function.scope.is_none() {
-                            stack.functions = stack
-                                .functions
-                                .iter()
-                                .filter_map(|(name, f)| {
-                                    if f.scope.is_none() {
-                                        Some((*name, f.clone()))
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-                        }
-                        stack.functions.extend(functions);
+                        let mut frames = if function.scope.is_none() {
+                            vec![stack.frames[0].clone()]
+                        } else {
+                            stack.frames.clone()
+                        };
+                        frames.push(functions);
 
-                        let value = reduce_block(&mut stack, cache, &block)?;
+                        let mut stack = Stack {
+                            frames,
+                            operands: Vec::new(),
+                            scope,
+                        };
+                        let value = reduce_block(&mut stack, cache, block)?;
 
                         if let Some(key) = key {
                             cache.insert(key, &value);
@@ -224,28 +225,6 @@ fn reduce_call<'a>(
             None => Err(anyhow!(format!("Function `{}` not found", name))),
         }
     }
-}
-
-fn reduce_let<'a>(
-    stack: &Stack<'a>,
-    cache: &Cache,
-    definitions: &[LetDefinition],
-    block: &[Token],
-) -> Result<Value> {
-    let mut stack = stack.clone();
-    stack.functions.extend(definitions.iter().map(|definition| {
-        (
-            definition.name,
-            Function {
-                params: definition.params.clone(),
-                weighted: false,
-                blocks: vec![(FunctionBlock::Block(definition.block.clone()), 0.0)],
-                scope: stack.scope,
-            },
-        )
-    }));
-
-    reduce_block(&mut stack, cache, block)
 }
 
 fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
@@ -270,93 +249,11 @@ fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
     }
 }
 
-fn reduce_match(stack: &mut Stack, patterns: &[(Pattern, usize)]) -> Result<usize> {
-    let a = stack.operands.pop().unwrap();
-
-    let mut index = 0;
-    for (pattern, skip) in patterns {
-        match pattern {
-            Pattern::Matches(matches) => {
-                for b in matches {
-                    if pattern_match(&a, b)? {
-                        return Ok(index);
-                    }
-                    index += skip;
-                }
-            }
-            Pattern::Wildcard => return Ok(index),
-        }
-    }
-    Err(anyhow!("Not all possibilities covered in match statement"))
-}
-
-fn reduce_for(stack: &mut Stack, cache: &Cache, var: &str, block: &[Token]) -> Result<Value> {
-    let iter = stack.operands.pop().unwrap();
-    let items = match iter {
-        Value::List(list) => list,
-        Value::Integer(n) => {
-            if n < 0 {
-                return Err(anyhow!("Cannot iterate over negative number."));
-            }
-            (0..n).map(Value::Integer).collect()
-        }
-        Value::Float(n) => {
-            if n < 0.0 {
-                return Err(anyhow!("Cannot iterate over negative number."));
-            }
-            (0..n as i32).map(Value::Integer).collect()
-        }
-        _ => return Err(anyhow!("Value is not iterable.")),
-    };
-
-    let res: Result<Vec<Value>> = items
-        .into_par_iter()
-        .map(|item| {
-            let mut stack = stack.clone();
-            stack.functions.insert(
-                var,
-                Function {
-                    params: vec![],
-                    weighted: false,
-                    blocks: vec![(FunctionBlock::Value(item), 0.0)],
-                    scope: stack.scope,
-                },
-            );
-            reduce_block(&mut stack, cache, block)
-        })
-        .collect();
-
-    let list = Value::List(res?);
-    list.kind()?;
-    Ok(list)
-}
-
-fn reduce_loop<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -> Result<Value> {
-    let count = stack.operands.pop().unwrap();
-    let count = match count {
-        Value::Integer(n) => n,
-        Value::Float(n) => n as i32,
-        _ => return Err(anyhow!("Value must be a number.")),
-    };
-    if count < 0 {
-        return Err(anyhow!("Cannot iterate over negative number."));
-    }
-
-    let res: Result<Vec<Value>> = (0..count)
-        .into_par_iter()
-        .map(|_| {
-            let mut stack = stack.clone();
-            reduce_block(&mut stack, cache, block)
-        })
-        .collect();
-
-    let list = Value::List(res?);
-    list.kind()?;
-    Ok(list)
-}
-
 fn reduce_block<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -> Result<Value> {
     let mut index = 0;
+    let mut for_stack = Vec::new();
+    let mut loop_stack = Vec::new();
+
     while index < block.len() {
         match &block[index] {
             Token::Literal(literal) => {
@@ -364,7 +261,9 @@ fn reduce_block<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -
                 index += 1;
             }
             Token::BinaryOperator(op) => {
-                let value = reduce_binary_operation(stack, cache, op)?;
+                let b = stack.operands.pop().unwrap();
+                let a = stack.operands.pop().unwrap();
+                let value = handle_builtin(op.as_str(), cache, &[a, b])?;
                 stack.operands.push(value);
                 index += 1;
             }
@@ -374,11 +273,31 @@ fn reduce_block<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -
                 index += 1;
             }
             Token::Jump(skip) => index += skip + 1,
-            Token::Let(definitions, skip) => {
-                let block = &block[index + 1..index + skip + 1];
-                let value = reduce_let(stack, cache, definitions, block)?;
-                stack.operands.push(value);
-                index += skip + 1;
+            Token::Pop => {
+                stack.frames.pop().unwrap();
+                index += 1;
+            }
+            Token::Let(definitions) => {
+                stack.frames.push(
+                    definitions
+                        .iter()
+                        .map(|definition| {
+                            (
+                                definition.name,
+                                Function {
+                                    params: definition.params.clone(),
+                                    weighted: false,
+                                    blocks: vec![(
+                                        FunctionBlock::Block(definition.block.clone()),
+                                        0.0,
+                                    )],
+                                    scope: stack.scope,
+                                },
+                            )
+                        })
+                        .collect(),
+                );
+                index += 1;
             }
             Token::If(skip) => {
                 let condition = stack.operands.pop().unwrap();
@@ -394,20 +313,127 @@ fn reduce_block<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -
                 }
             }
             Token::Match(patterns) => {
-                let skip = reduce_match(stack, patterns)?;
-                index += skip + 1;
+                let a = stack.operands.pop().unwrap();
+
+                let mut found = false;
+                'a: for (pattern, skip) in patterns {
+                    match pattern {
+                        Pattern::Matches(matches) => {
+                            for b in matches {
+                                if pattern_match(&a, b)? {
+                                    found = true;
+                                    break 'a;
+                                }
+                                index += skip;
+                            }
+                        }
+                        Pattern::Wildcard => {
+                            found = true;
+                            break 'a;
+                        }
+                    }
+                }
+
+                if !found {
+                    return Err(anyhow!("Not all possibilities covered in match statement"));
+                }
+
+                index += 1;
             }
-            Token::For(var, skip) => {
-                let block = &block[index + 1..index + skip + 1];
-                let value = reduce_for(stack, cache, var, block)?;
-                stack.operands.push(value);
-                index += skip + 1;
+            Token::ForStart(var) => {
+                let iter = stack.operands.pop().unwrap();
+                let mut items = match iter {
+                    Value::List(list) => list,
+                    Value::Integer(n) => {
+                        if n < 0 {
+                            return Err(anyhow!("Cannot iterate over negative number."));
+                        }
+                        (0..n).map(Value::Integer).collect()
+                    }
+                    Value::Float(n) => {
+                        if n < 0.0 {
+                            return Err(anyhow!("Cannot iterate over negative number."));
+                        }
+                        (0..n as i32).map(Value::Integer).collect()
+                    }
+                    _ => return Err(anyhow!("Value is not iterable.")),
+                };
+                items.reverse();
+
+                stack.frames.push(
+                    [(
+                        *var,
+                        Function {
+                            params: vec![],
+                            weighted: false,
+                            blocks: vec![(FunctionBlock::Value(items.pop().unwrap()), 0.0)],
+                            scope: stack.scope,
+                        },
+                    )]
+                    .into(),
+                );
+
+                for_stack.push((index, *var, items, Vec::new()));
+                index += 1;
             }
-            Token::Loop(skip) => {
-                let block = &block[index + 1..index + skip + 1];
-                let value = reduce_loop(stack, cache, block)?;
-                stack.operands.push(value);
-                index += skip + 1;
+            Token::ForEnd => {
+                if let Some((start, var, items, values)) = for_stack.last_mut() {
+                    values.push(stack.operands.pop().unwrap());
+
+                    if items.len() > 0 {
+                        stack.frames.push(
+                            [(
+                                *var,
+                                Function {
+                                    params: vec![],
+                                    weighted: false,
+                                    blocks: vec![(FunctionBlock::Value(items.pop().unwrap()), 0.0)],
+                                    scope: stack.scope,
+                                },
+                            )]
+                            .into(),
+                        );
+                        index = *start + 1; // Jump back to ForStart
+                    } else {
+                        let list = Value::List(values.to_vec());
+                        list.kind()?;
+                        stack.operands.push(list);
+
+                        for_stack.pop().unwrap(); // Exit for loop
+                        index += 1;
+                    }
+                }
+            }
+            Token::LoopStart => {
+                let count = stack.operands.pop().unwrap();
+                let count = match count {
+                    Value::Integer(n) => n,
+                    Value::Float(n) => n as i32,
+                    _ => return Err(anyhow!("Value must be a number.")),
+                };
+                if count < 0 {
+                    return Err(anyhow!("Cannot iterate over negative number."));
+                }
+
+                loop_stack.push((index, count, Vec::new()));
+                index += 1;
+            }
+            Token::LoopEnd => {
+                if let Some((start, remaining, values)) = loop_stack.last_mut() {
+                    *remaining -= 1;
+                    values.push(stack.operands.pop().unwrap());
+
+                    if *remaining > 0 {
+                        index = *start + 1; // Jump back to LoopStart
+                    } else {
+                        let list = Value::List(values.to_vec());
+                        list.kind()?;
+                        stack.operands.push(list);
+
+                        loop_stack.pop().unwrap(); // Exit loop
+                        index += 1;
+                    }
+                }
             }
         }
     }
@@ -447,7 +473,7 @@ pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
     }
 
     let mut stack = Stack {
-        functions,
+        frames: vec![functions],
         operands: Vec::new(),
         scope: None,
     };
@@ -470,11 +496,11 @@ mod tests {
         //         let (_, tree) = parse(
         //             "
         // root =
-        // 	let shape = SQUARE
-        // 		s (pi * 25) 50 (add_circle shape)
+        //  let shape = SQUARE
+        //      s (pi * 25) 50 (add_circle shape)
 
         // add_circle shape = shape : CIRCLE
-        //     		",
+        //          ",
         //         )
         //         .unwrap();
         //         let shape = compile(tree).unwrap();

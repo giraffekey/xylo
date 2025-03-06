@@ -22,7 +22,7 @@ macro_rules! define_builtins {
         ),* $(,)?
     ) => {
         // Generate the static BUILTIN_FUNCTIONS array
-        pub const BUILTIN_FUNCTIONS: &[&str] = &[
+        pub static BUILTIN_FUNCTIONS: &[&str] = &[
             $($name),*
         ];
 
@@ -176,6 +176,17 @@ define_builtins! {
     "cubic_to" => cubic_to,
     "close" => close,
 }
+
+pub static RAND_FUNCTIONS: &[&str] = &[
+    "rand",
+    "randi",
+    "rand_range",
+    "randi_range",
+    "rand_rangei",
+    "randi_rangei",
+    "shuffle",
+    "choose",
+];
 
 pub fn add(_cache: &Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {

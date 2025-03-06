@@ -115,11 +115,14 @@ pub enum Token<'a> {
     BinaryOperator(BinaryOperator),
     Call(&'a str, usize),
     Jump(usize),
-    Let(Vec<LetDefinition<'a>>, usize),
+    Pop,
+    Let(Vec<LetDefinition<'a>>),
     If(usize),
     Match(Vec<(Pattern, usize)>),
-    For(&'a str, usize),
-    Loop(usize),
+    ForStart(&'a str),
+    ForEnd,
+    LoopStart,
+    LoopEnd,
 }
 
 #[derive(Debug, PartialEq)]
@@ -351,9 +354,10 @@ fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         .parse(input)?;
         let (input, expr) = block(input, indent + 1)?;
 
-        let mut block = Vec::with_capacity(expr.len() + 1);
-        block.push(Token::Let(definitions, expr.len()));
+        let mut block = Vec::with_capacity(expr.len() + 2);
+        block.push(Token::Let(definitions));
         block.extend(expr);
+        block.push(Token::Pop);
 
         Ok((input, block))
     }
@@ -463,10 +467,12 @@ fn for_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         .parse(input)?;
         let (input, expr) = block(input, indent + 1)?;
 
-        let mut block = Vec::with_capacity(iter.len() + expr.len() + 1);
+        let mut block = Vec::with_capacity(iter.len() + expr.len() + 3);
         block.extend(iter);
-        block.push(Token::For(var, expr.len()));
+        block.push(Token::ForStart(var));
         block.extend(expr);
+        block.push(Token::Pop);
+        block.push(Token::ForEnd);
 
         Ok((input, block))
     }
@@ -483,10 +489,11 @@ fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         .parse(input)?;
         let (input, expr) = block(input, indent + 1)?;
 
-        let mut block = Vec::with_capacity(count.len() + expr.len() + 1);
+        let mut block = Vec::with_capacity(count.len() + expr.len() + 2);
         block.extend(count);
-        block.push(Token::Loop(expr.len()));
+        block.push(Token::LoopStart);
         block.extend(expr);
+        block.push(Token::LoopEnd);
 
         Ok((input, block))
     }
