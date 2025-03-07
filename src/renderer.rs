@@ -2,7 +2,7 @@
 use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use alloc::rc::Rc;
+use alloc::{rc::Rc, vec::Vec};
 
 use crate::shape::{BasicShape, PathSegment, Shape};
 
