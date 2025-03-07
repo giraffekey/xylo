@@ -74,12 +74,7 @@ impl Stack<'_> {
         self.frames
             .iter()
             .rev()
-            .find_map(|functions| match functions.get(name) {
-                Some(function) if function.scope.is_none() || function.scope == self.scope => {
-                    Some(function)
-                }
-                _ => None,
-            })
+            .find_map(|functions| functions.get(name))
     }
 }
 
@@ -138,13 +133,13 @@ fn reduce_call<'a>(
         if RAND_FUNCTIONS.contains(&name) {
             handle_builtin(name, cache, &args)
         } else {
-            let key = Cache::hash_call(name, 0, &args, stack.scope);
-            if let Some(value) = cache.get(key) {
-                return Ok(value);
-            }
+            // let key = Cache::hash_call(name, 0, &args, stack.scope);
+            // if let Some(value) = cache.get(key) {
+            //     return Ok(value);
+            // }
 
             let value = handle_builtin(name, cache, &args)?;
-            cache.insert(key, &value);
+            // cache.insert(key, &value);
             Ok(value)
         }
     } else {
@@ -171,15 +166,15 @@ fn reduce_call<'a>(
                     (0, &function.blocks[0].0)
                 };
 
-                let key = if function.scope.is_none() {
-                    let key = Cache::hash_call(name, i, &args, stack.scope);
-                    if let Some(value) = cache.get(key) {
-                        return Ok(value);
-                    }
-                    Some(key)
-                } else {
-                    None
-                };
+                // let key = if function.scope.is_none() {
+                //     let key = Cache::hash_call(name, i, &args, stack.scope);
+                //     if let Some(value) = cache.get(key) {
+                //         return Ok(value);
+                //     }
+                //     Some(key)
+                // } else {
+                //     None
+                // };
 
                 let scope = Some((name, i));
                 match block {
@@ -203,7 +198,11 @@ fn reduce_call<'a>(
                             })
                             .collect();
 
-                        let mut frames = stack.frames.clone();
+                        let mut frames = if function.scope.is_none() {
+                            vec![stack.frames[0].clone()]
+                        } else {
+                            stack.frames.clone()
+                        };
                         frames.push(functions);
 
                         let mut stack = Stack {
@@ -213,9 +212,9 @@ fn reduce_call<'a>(
                         };
                         let value = reduce_block(&mut stack, cache, block)?;
 
-                        if let Some(key) = key {
-                            cache.insert(key, &value);
-                        }
+                        // if let Some(key) = key {
+                        //     cache.insert(key, &value);
+                        // }
 
                         Ok(value)
                     }
@@ -363,6 +362,7 @@ fn reduce_block<'a>(
                 };
                 items.reverse();
 
+                let len = items.len();
                 stack.frames.push(
                     [(
                         *var,
@@ -376,7 +376,7 @@ fn reduce_block<'a>(
                     .into(),
                 );
 
-                for_stack.push((index, *var, items, Vec::new()));
+                for_stack.push((index, *var, items, Vec::with_capacity(len)));
                 index += 1;
             }
             Token::ForEnd => {
@@ -418,7 +418,7 @@ fn reduce_block<'a>(
                     return Err(anyhow!("Cannot iterate over negative number."));
                 }
 
-                loop_stack.push((index, count, Vec::new()));
+                loop_stack.push((index, count, Vec::with_capacity(count as usize)));
                 index += 1;
             }
             Token::LoopEnd => {

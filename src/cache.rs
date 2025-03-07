@@ -10,11 +10,11 @@ use {
 use crate::interpreter::Value;
 use crate::shape::{BasicShape, PathSegment, Shape};
 
-use ahash::AHasher;
+// use ahash::AHasher;
 use anyhow::Result;
 use core::cell::RefCell;
-use core::hash::Hasher;
-use hashbrown::HashMap;
+// use core::hash::Hasher;
+// use hashbrown::HashMap;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use serde::Serialize;
@@ -313,7 +313,7 @@ impl Into<Value> for CacheValue {
 #[derive(Debug)]
 pub struct Cache {
     pub rng: ChaCha8Rng,
-    call_results: HashMap<u64, CacheValue>,
+    // call_results: HashMap<u64, CacheValue>,
 }
 
 impl Cache {
@@ -331,36 +331,36 @@ impl Cache {
         };
         Ok(Self {
             rng: ChaCha8Rng::from_seed(seed),
-            call_results: HashMap::new(),
+            // call_results: HashMap::new(),
         })
     }
 
-    pub fn hash_call(
-        name: &str,
-        index: usize,
-        args: &[Value],
-        scope: Option<(&str, usize)>,
-    ) -> u64 {
-        let args: Vec<CacheValue> = args.iter().map(CacheValue::from).collect();
+    // pub fn hash_call(
+    //     name: &str,
+    //     index: usize,
+    //     args: &[Value],
+    //     scope: Option<(&str, usize)>,
+    // ) -> u64 {
+    //     let args: Vec<CacheValue> = args.iter().map(CacheValue::from).collect();
 
-        let mut buf = Vec::new();
-        buf.extend(name.as_bytes());
-        buf.extend(index.to_be_bytes());
-        buf.extend(bincode::serialize(&args).unwrap());
-        buf.extend(bincode::serialize(&scope).unwrap());
+    //     let mut buf = Vec::new();
+    //     buf.extend(name.as_bytes());
+    //     buf.extend(index.to_be_bytes());
+    //     buf.extend(bincode::serialize(&args).unwrap());
+    //     buf.extend(bincode::serialize(&scope).unwrap());
 
-        let mut hasher = AHasher::default();
-        hasher.write(&buf);
-        hasher.finish()
-    }
+    //     let mut hasher = AHasher::default();
+    //     hasher.write(&buf);
+    //     hasher.finish()
+    // }
 
-    pub fn get(&self, key: u64) -> Option<Value> {
-        self.call_results.get(&key).map(|r| r.clone().into())
-    }
+    // pub fn get(&self, key: u64) -> Option<Value> {
+    //     self.call_results.get(&key).map(|r| r.clone().into())
+    // }
 
-    pub fn insert(&mut self, key: u64, value: &Value) {
-        self.call_results.insert(key, value.into());
-    }
+    // pub fn insert(&mut self, key: u64, value: &Value) {
+    //     self.call_results.insert(key, value.into());
+    // }
 }
 
 #[cfg(feature = "std")]

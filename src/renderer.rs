@@ -8,7 +8,19 @@ use crate::shape::{BasicShape, PathSegment, Shape};
 
 use anyhow::Result;
 use palette::{blend::Blend, rgb::Rgba, FromColor};
-use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Rect, Shader, Transform};
+use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, Rect, Shader, Transform};
+
+#[derive(Debug)]
+enum ShapeData<'a> {
+    FillPath {
+        path: Path,
+        transform: Transform,
+        paint: Paint<'a>,
+    },
+    Fill {
+        color: Color,
+    },
+}
 
 fn solid_color_paint<'a>(color: Rgba<f32>) -> Paint<'a> {
     let color = Color::from_rgba(color.red, color.green, color.blue, color.alpha).unwrap();
@@ -18,8 +30,8 @@ fn solid_color_paint<'a>(color: Rgba<f32>) -> Paint<'a> {
     }
 }
 
-fn render_shape(
-    pixmap: &mut Pixmap,
+fn convert_shape(
+    data: &mut Vec<ShapeData>,
     shape: Shape,
     parent_transform: Transform,
     parent_color: Rgba<f32>,
@@ -37,7 +49,11 @@ fn render_shape(
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             let paint = solid_color_paint(color);
-            pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
+            data.push(ShapeData::FillPath {
+                path,
+                transform,
+                paint,
+            });
         }
         Shape::Basic(BasicShape::Circle {
             x,
@@ -50,7 +66,11 @@ fn render_shape(
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             let paint = solid_color_paint(color);
-            pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
+            data.push(ShapeData::FillPath {
+                path,
+                transform,
+                paint,
+            });
         }
         Shape::Basic(BasicShape::Triangle {
             points,
@@ -67,12 +87,16 @@ fn render_shape(
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             let paint = solid_color_paint(color);
-            pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
+            data.push(ShapeData::FillPath {
+                path,
+                transform,
+                paint,
+            });
         }
         Shape::Basic(BasicShape::Fill { color }) => {
             let color = Rgba::from_color(*color).overlay(parent_color);
             let color = Color::from_rgba(color.red, color.green, color.blue, color.alpha).unwrap();
-            pixmap.fill(color);
+            data.push(ShapeData::Fill { color });
         }
         Shape::Basic(BasicShape::Empty) => (),
         Shape::Path {
@@ -97,7 +121,11 @@ fn render_shape(
             let path = pb.finish();
 
             if let Some(path) = path {
-                pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
+                data.push(ShapeData::FillPath {
+                    path,
+                    transform,
+                    paint,
+                });
             }
         }
         Shape::Composite {
@@ -109,9 +137,9 @@ fn render_shape(
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             let a = Rc::try_unwrap(a).unwrap().into_inner();
-            render_shape(pixmap, a, transform, color)?;
+            convert_shape(data, a, transform, color)?;
             let b = Rc::try_unwrap(b).unwrap().into_inner();
-            render_shape(pixmap, b, transform, color)?;
+            convert_shape(data, b, transform, color)?;
         }
         Shape::Collection {
             shapes,
@@ -122,7 +150,7 @@ fn render_shape(
             let color = Rgba::from_color(color).overlay(parent_color);
             for shape in shapes {
                 let shape = Rc::try_unwrap(shape).unwrap().into_inner();
-                render_shape(pixmap, shape, transform, color)?;
+                convert_shape(data, shape, transform, color)?;
             }
         }
     }
@@ -130,9 +158,24 @@ fn render_shape(
 }
 
 pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
+    let mut data = Vec::new();
+    let transform = Transform::from_translate(width as f32 / 2.0, height as f32 / 2.0);
+    convert_shape(&mut data, shape, transform, Rgba::new(1.0, 1.0, 1.0, 0.0))?;
+
     let mut pixmap = Pixmap::new(width, height).unwrap();
-    let transform =
-        Transform::from_translate(pixmap.width() as f32 / 2.0, pixmap.height() as f32 / 2.0);
-    render_shape(&mut pixmap, shape, transform, Rgba::new(1.0, 1.0, 1.0, 0.0))?;
+    for shape_data in data {
+        match shape_data {
+            ShapeData::FillPath {
+                path,
+                transform,
+                paint,
+            } => {
+                pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
+            }
+            ShapeData::Fill { color } => {
+                pixmap.fill(color);
+            }
+        }
+    }
     Ok(pixmap)
 }
