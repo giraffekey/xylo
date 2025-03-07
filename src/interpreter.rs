@@ -1,18 +1,16 @@
 #[cfg(feature = "std")]
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use {
-    alloc::{boxed::Box, format, sync::Arc, vec, vec::Vec},
-    spin::Mutex,
-};
+use alloc::{boxed::Box, format, rc::Rc, vec, vec::Vec};
 
 use crate::cache::Cache;
 use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS, RAND_FUNCTIONS};
 use crate::parser::*;
-use crate::shape::{unwrap_shape, Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
+use crate::shape::{Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
 use anyhow::{anyhow, Result};
+use core::cell::RefCell;
 use hashbrown::HashMap;
 use rand::distr::{weighted::WeightedIndex, Distribution};
 
@@ -33,7 +31,7 @@ pub enum Value {
     Float(f32),
     Boolean(bool),
     Hex([u8; 3]),
-    Shape(Arc<Mutex<Shape>>),
+    Shape(Rc<RefCell<Shape>>),
     List(Vec<Value>),
 }
 
@@ -76,7 +74,12 @@ impl Stack<'_> {
         self.frames
             .iter()
             .rev()
-            .find_map(|functions| functions.get(name))
+            .find_map(|functions| match functions.get(name) {
+                Some(function) if function.scope.is_none() || function.scope == self.scope => {
+                    Some(function)
+                }
+                _ => None,
+            })
     }
 }
 
@@ -108,7 +111,7 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
                 ShapeKind::Fill => FILL,
                 ShapeKind::Empty => EMPTY,
             };
-            Ok(Value::Shape(Arc::new(Mutex::new(Shape::Basic(shape)))))
+            Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(shape)))))
         }
         Literal::List(list) => {
             let list: Result<Vec<Value>> = list.iter().map(reduce_literal).collect();
@@ -121,7 +124,7 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
 
 fn reduce_call<'a>(
     stack: &mut Stack<'a>,
-    cache: &Cache,
+    cache: &mut Cache,
     name: &'a str,
     argc: usize,
 ) -> Result<Value> {
@@ -162,7 +165,7 @@ fn reduce_call<'a>(
                             .unwrap();
                     index_weights
                         .map(|(i, (block, _))| (i, block))
-                        .nth(dist.sample(&mut cache.rng()))
+                        .nth(dist.sample(&mut cache.rng))
                         .unwrap()
                 } else {
                     (0, &function.blocks[0].0)
@@ -200,11 +203,7 @@ fn reduce_call<'a>(
                             })
                             .collect();
 
-                        let mut frames = if function.scope.is_none() {
-                            vec![stack.frames[0].clone()]
-                        } else {
-                            stack.frames.clone()
-                        };
+                        let mut frames = stack.frames.clone();
                         frames.push(functions);
 
                         let mut stack = Stack {
@@ -249,7 +248,11 @@ fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
     }
 }
 
-fn reduce_block<'a>(stack: &mut Stack<'a>, cache: &Cache, block: &[Token<'a>]) -> Result<Value> {
+fn reduce_block<'a>(
+    stack: &mut Stack<'a>,
+    cache: &mut Cache,
+    block: &[Token<'a>],
+) -> Result<Value> {
     let mut index = 0;
     let mut for_stack = Vec::new();
     let mut loop_stack = Vec::new();
@@ -483,7 +486,7 @@ pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
         Value::Shape(shape) => shape,
         _ => return Err(anyhow!("The `root` function must return a shape.")),
     };
-    Ok(unwrap_shape(shape))
+    Ok(Rc::try_unwrap(shape).unwrap().into_inner())
 }
 
 #[cfg(test)]

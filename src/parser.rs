@@ -1,5 +1,5 @@
 #[cfg(feature = "no-std")]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};

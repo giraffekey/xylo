@@ -1,23 +1,20 @@
 #[cfg(feature = "std")]
-use {
-    rand::rng,
-    std::sync::{Arc, Mutex, MutexGuard},
-};
+use {rand::rng, std::rc::Rc};
 
 #[cfg(feature = "no-std")]
 use {
-    alloc::{boxed::Box, sync::Arc, vec::Vec},
+    alloc::{boxed::Box, rc::Rc, vec::Vec},
     anyhow::anyhow,
-    spin::{Mutex, MutexGuard},
 };
 
 use crate::interpreter::Value;
-use crate::shape::{lock_shape, BasicShape, PathSegment, Shape};
+use crate::shape::{BasicShape, PathSegment, Shape};
 
 use ahash::AHasher;
 use anyhow::Result;
+use core::cell::RefCell;
 use core::hash::Hasher;
-use dashmap::DashMap;
+use hashbrown::HashMap;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use serde::Serialize;
@@ -187,8 +184,8 @@ impl From<&Shape> for CacheShape {
                 transform,
                 color,
             } => CacheShape::Composite {
-                a: Box::new((&*lock_shape(a)).into()),
-                b: Box::new((&*lock_shape(b)).into()),
+                a: Box::new((&a.borrow().clone()).into()),
+                b: Box::new((&b.borrow().clone()).into()),
                 transform: transform_to_data(*transform),
                 color: (*color).into(),
             },
@@ -199,7 +196,7 @@ impl From<&Shape> for CacheShape {
             } => CacheShape::Collection {
                 shapes: shapes
                     .iter()
-                    .map(|shape| (&*lock_shape(shape)).into())
+                    .map(|shape| (&shape.borrow().clone()).into())
                     .collect(),
                 transform: transform_to_data(*transform),
                 color: (*color).into(),
@@ -227,8 +224,8 @@ impl Into<Shape> for CacheShape {
                 transform,
                 color,
             } => {
-                let a = Arc::new(Mutex::new((*a).into()));
-                let b = Arc::new(Mutex::new((*b).into()));
+                let a = Rc::new(RefCell::new((*a).into()));
+                let b = Rc::new(RefCell::new((*b).into()));
                 Shape::Composite {
                     a,
                     b,
@@ -244,7 +241,7 @@ impl Into<Shape> for CacheShape {
                 shapes: shapes
                     .iter()
                     .cloned()
-                    .map(|s| Arc::new(Mutex::new(s.into())))
+                    .map(|s| Rc::new(RefCell::new(s.into())))
                     .collect(),
                 transform: transform_from_data(transform),
                 color: color.into(),
@@ -292,7 +289,7 @@ impl From<&Value> for CacheValue {
             Value::Float(n) => CacheValue::Float(*n),
             Value::Boolean(b) => CacheValue::Boolean(*b),
             Value::Hex(h) => CacheValue::Hex(*h),
-            Value::Shape(s) => CacheValue::Shape((&*lock_shape(s)).into()),
+            Value::Shape(s) => CacheValue::Shape((&s.borrow().clone()).into()),
             Value::List(list) => CacheValue::List(list.iter().map(CacheValue::from).collect()),
         }
     }
@@ -305,7 +302,7 @@ impl Into<Value> for CacheValue {
             CacheValue::Float(n) => Value::Float(n),
             CacheValue::Boolean(b) => Value::Boolean(b),
             CacheValue::Hex(h) => Value::Hex(h),
-            CacheValue::Shape(s) => Value::Shape(Arc::new(Mutex::new(s.into()))),
+            CacheValue::Shape(s) => Value::Shape(Rc::new(RefCell::new(s.into()))),
             CacheValue::List(list) => {
                 Value::List(list.iter().cloned().map(CacheValue::into).collect())
             }
@@ -315,8 +312,8 @@ impl Into<Value> for CacheValue {
 
 #[derive(Debug)]
 pub struct Cache {
-    rng: Arc<Mutex<ChaCha8Rng>>,
-    call_results: DashMap<u64, CacheValue>,
+    pub rng: ChaCha8Rng,
+    call_results: HashMap<u64, CacheValue>,
 }
 
 impl Cache {
@@ -333,16 +330,9 @@ impl Cache {
             }
         };
         Ok(Self {
-            rng: Arc::new(Mutex::new(ChaCha8Rng::from_seed(seed))),
-            call_results: DashMap::new(),
+            rng: ChaCha8Rng::from_seed(seed),
+            call_results: HashMap::new(),
         })
-    }
-
-    pub fn rng(&self) -> MutexGuard<'_, ChaCha8Rng> {
-        #[cfg(feature = "std")]
-        return self.rng.lock().unwrap();
-        #[cfg(feature = "no-std")]
-        return self.rng.lock();
     }
 
     pub fn hash_call(
@@ -365,12 +355,10 @@ impl Cache {
     }
 
     pub fn get(&self, key: u64) -> Option<Value> {
-        self.call_results
-            .get(&key)
-            .map(|r| r.value().clone().into())
+        self.call_results.get(&key).map(|r| r.clone().into())
     }
 
-    pub fn insert(&self, key: u64, value: &Value) {
+    pub fn insert(&mut self, key: u64, value: &Value) {
         self.call_results.insert(key, value.into());
     }
 }

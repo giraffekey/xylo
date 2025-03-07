@@ -1,4 +1,10 @@
-use crate::shape::{unwrap_shape, BasicShape, PathSegment, Shape};
+#[cfg(feature = "std")]
+use std::rc::Rc;
+
+#[cfg(feature = "no-std")]
+use alloc::rc::Rc;
+
+use crate::shape::{BasicShape, PathSegment, Shape};
 
 use anyhow::Result;
 use palette::{blend::Blend, rgb::Rgba, FromColor};
@@ -102,9 +108,9 @@ fn render_shape(
         } => {
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
-            let a = unwrap_shape(a);
+            let a = Rc::try_unwrap(a).unwrap().into_inner();
             render_shape(pixmap, a, transform, color)?;
-            let b = unwrap_shape(b);
+            let b = Rc::try_unwrap(b).unwrap().into_inner();
             render_shape(pixmap, b, transform, color)?;
         }
         Shape::Collection {
@@ -115,7 +121,7 @@ fn render_shape(
             let transform = transform.post_concat(parent_transform);
             let color = Rgba::from_color(color).overlay(parent_color);
             for shape in shapes {
-                let shape = unwrap_shape(shape);
+                let shape = Rc::try_unwrap(shape).unwrap().into_inner();
                 render_shape(pixmap, shape, transform, color)?;
             }
         }

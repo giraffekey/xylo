@@ -1,12 +1,10 @@
 #[cfg(feature = "std")]
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use {
-    alloc::{sync::Arc, vec::Vec},
-    spin::{Mutex, MutexGuard},
-};
+use alloc::{rc::Rc, vec::Vec};
 
+use core::cell::RefCell;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
 use serde::Serialize;
 use tiny_skia::Transform;
@@ -97,13 +95,13 @@ pub enum Shape {
         color: Hsla<f32>,
     },
     Composite {
-        a: Arc<Mutex<Shape>>,
-        b: Arc<Mutex<Shape>>,
+        a: Rc<RefCell<Shape>>,
+        b: Rc<RefCell<Shape>>,
         transform: Transform,
         color: Hsla<f32>,
     },
     Collection {
-        shapes: Vec<Arc<Mutex<Shape>>>,
+        shapes: Vec<Rc<RefCell<Shape>>>,
         transform: Transform,
         color: Hsla<f32>,
     },
@@ -413,18 +411,4 @@ impl Shape {
             Self::Basic(BasicShape::Empty) => (),
         }
     }
-}
-
-pub fn unwrap_shape(shape: Arc<Mutex<Shape>>) -> Shape {
-    #[cfg(feature = "std")]
-    return Arc::try_unwrap(shape).unwrap().into_inner().unwrap();
-    #[cfg(feature = "no-std")]
-    return Arc::try_unwrap(shape).unwrap().into_inner();
-}
-
-pub fn lock_shape<'a>(shape: &'a Arc<Mutex<Shape>>) -> MutexGuard<'a, Shape> {
-    #[cfg(feature = "std")]
-    return shape.lock().unwrap();
-    #[cfg(feature = "no-std")]
-    return shape.lock();
 }
