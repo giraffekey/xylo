@@ -28,6 +28,7 @@ pub static SQUARE: BasicShape = BasicShape::Square {
     width: 2.0,
     height: 2.0,
     transform: IDENTITY,
+    zindex: None,
     color: WHITE,
 };
 
@@ -36,16 +37,21 @@ pub static CIRCLE: BasicShape = BasicShape::Circle {
     y: 0.0,
     radius: 1.0,
     transform: IDENTITY,
+    zindex: None,
     color: WHITE,
 };
 
 pub static TRIANGLE: BasicShape = BasicShape::Triangle {
     points: [-1.0, 0.577350269, 1.0, 0.577350269, 0.0, -1.154700538],
     transform: IDENTITY,
+    zindex: None,
     color: WHITE,
 };
 
-pub static FILL: BasicShape = BasicShape::Fill { color: WHITE };
+pub static FILL: BasicShape = BasicShape::Fill {
+    zindex: None,
+    color: WHITE,
+};
 
 pub static EMPTY: BasicShape = BasicShape::Empty;
 
@@ -66,6 +72,7 @@ pub enum BasicShape {
         width: f32,
         height: f32,
         transform: Transform,
+        zindex: Option<f32>,
         color: Hsla<f32>,
     },
     Circle {
@@ -73,14 +80,17 @@ pub enum BasicShape {
         y: f32,
         radius: f32,
         transform: Transform,
+        zindex: Option<f32>,
         color: Hsla<f32>,
     },
     Triangle {
         points: [f32; 6],
         transform: Transform,
+        zindex: Option<f32>,
         color: Hsla<f32>,
     },
     Fill {
+        zindex: Option<f32>,
         color: Hsla<f32>,
     },
     Empty,
@@ -92,17 +102,20 @@ pub enum Shape {
     Path {
         segments: Vec<PathSegment>,
         transform: Transform,
+        zindex: Option<f32>,
         color: Hsla<f32>,
     },
     Composite {
         a: Rc<RefCell<Shape>>,
         b: Rc<RefCell<Shape>>,
         transform: Transform,
+        zindex: Option<f32>,
         color: Hsla<f32>,
     },
     Collection {
         shapes: Vec<Rc<RefCell<Shape>>>,
         transform: Transform,
+        zindex: Option<f32>,
         color: Hsla<f32>,
     },
 }
@@ -237,12 +250,27 @@ impl Shape {
         }
     }
 
+    pub fn set_zindex(&mut self, z: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { zindex, .. })
+            | Self::Basic(BasicShape::Circle { zindex, .. })
+            | Self::Basic(BasicShape::Triangle { zindex, .. })
+            | Self::Basic(BasicShape::Fill { zindex, .. })
+            | Self::Path { zindex, .. }
+            | Self::Composite { zindex, .. }
+            | Self::Collection { zindex, .. } => {
+                *zindex = Some(z);
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
     pub fn set_hsl(&mut self, hue: f32, saturation: f32, lightness: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -259,7 +287,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -277,7 +305,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -292,7 +320,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -307,7 +335,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -322,7 +350,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -337,7 +365,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -352,7 +380,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -367,7 +395,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -382,7 +410,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {
@@ -397,7 +425,7 @@ impl Shape {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color })
+            | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. }
             | Self::Composite { color, .. }
             | Self::Collection { color, .. } => {

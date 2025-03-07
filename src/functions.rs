@@ -122,8 +122,6 @@ define_builtins! {
     "translatey" => translatey,
     "tt" => translateb,
     "translateb" => translateb,
-    // "z" => zindex,
-    // "zindex" => zindex,
     "r" => rotate,
     "rotate" => rotate,
     "ra" => rotate_at,
@@ -152,6 +150,8 @@ define_builtins! {
     "flipv" => flipv,
     "fd" => flipd,
     "flipd" => flipd,
+    "z" => zindex,
+    "zindex" => zindex,
     "hsl" => hsl,
     "hsla" => hsla,
     "h" => hue,
@@ -471,6 +471,7 @@ pub fn compose(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
                     Shape::Path {
                         segments: a,
                         transform: a_transform,
+                        zindex,
                         color,
                     },
                     Shape::Path {
@@ -485,6 +486,7 @@ pub fn compose(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
                     Shape::Path {
                         segments,
                         transform: a_transform.post_concat(*b_transform),
+                        zindex: *zindex,
                         color: *color,
                     }
                 }
@@ -492,6 +494,7 @@ pub fn compose(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
                     a: a.clone(),
                     b: b.clone(),
                     transform: IDENTITY,
+                    zindex: None,
                     color: TRANSPARENT,
                 },
             };
@@ -549,12 +552,14 @@ pub fn collect(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
                 Shape::Path {
                     segments,
                     transform,
+                    zindex: None,
                     color,
                 }
             } else {
                 Shape::Collection {
                     shapes,
                     transform: IDENTITY,
+                    zindex: None,
                     color: TRANSPARENT,
                 }
             };
@@ -1414,6 +1419,26 @@ pub fn flipd(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
+pub fn zindex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `zindex` function."));
+    }
+
+    let z = match args[0] {
+        Value::Integer(n) => n as f32,
+        Value::Float(n) => n,
+        _ => return Err(anyhow!("Invalid type passed to `zindex` function.")),
+    };
+
+    let shape = match &args[1] {
+        Value::Shape(shape) => shape.clone(),
+        _ => return Err(anyhow!("Invalid type passed to `zindex` function.")),
+    };
+
+    shape.borrow_mut().set_zindex(z);
+    Ok(Value::Shape(shape))
+}
+
 pub fn hsl(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     if args.len() != 4 {
         return Err(anyhow!("Invalid number of arguments to `hsl` function."));
@@ -1690,6 +1715,7 @@ pub fn move_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     let shape = Shape::Path {
         segments,
         transform: IDENTITY,
+        zindex: None,
         color: WHITE,
     };
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
@@ -1718,6 +1744,7 @@ pub fn line_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     let shape = Shape::Path {
         segments,
         transform: IDENTITY,
+        zindex: None,
         color: WHITE,
     };
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
@@ -1758,6 +1785,7 @@ pub fn quad_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     let shape = Shape::Path {
         segments,
         transform: IDENTITY,
+        zindex: None,
         color: WHITE,
     };
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
@@ -1810,6 +1838,7 @@ pub fn cubic_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     let shape = Shape::Path {
         segments,
         transform: IDENTITY,
+        zindex: None,
         color: WHITE,
     };
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
@@ -1823,6 +1852,7 @@ pub fn close(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     let shape = Shape::Path {
         segments: vec![PathSegment::Close],
         transform: IDENTITY,
+        zindex: None,
         color: WHITE,
     };
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
