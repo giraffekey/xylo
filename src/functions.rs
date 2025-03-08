@@ -82,6 +82,10 @@ define_builtins! {
     "range" => range,
     "..=" => rangei,
     "rangei" => rangei,
+    "|>" => pipe,
+    "pipe" => pipe,
+    // "." => compose_fn,
+    // "compose_fn" => compose_fn,
     "pi" => pi,
     "π" => pi,
     "sin" => sin,
@@ -591,6 +595,22 @@ pub fn rangei(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
                 .collect(),
         )),
         _ => Err(anyhow!("Invalid type passed to `rangei` function.")),
+    }
+}
+
+pub fn pipe(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    if args.len() != 2 {
+        return Err(anyhow!("Invalid number of arguments to `pipe` function."));
+    }
+
+    let arg = args[0].clone();
+
+    match args[1].clone() {
+        Value::Function(name, argc, mut pre_args) => {
+            pre_args.push(arg);
+            Ok(Value::Function(name, argc - 1, pre_args))
+        }
+        _ => Err(anyhow!("Invalid type passed to `pipe` function.")),
     }
 }
 

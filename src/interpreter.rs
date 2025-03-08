@@ -311,11 +311,23 @@ fn execute_block<'a>(
                         continue 'a;
                     }
                 };
+
                 let value = handle_builtin(op.as_str(), rng, &[a, b])?;
                 stack.operands.push(value);
                 index += 1;
             }
             Token::Call(name, argc) => {
+                match block.get(index + 1) {
+                    Some(Token::BinaryOperator(_)) => {
+                        stack
+                            .operands
+                            .push(Value::Function((*name).into(), *argc, Vec::new()));
+                        index += 1;
+                        continue 'a;
+                    }
+                    _ => (),
+                }
+
                 let mut args = Vec::with_capacity(*argc);
                 for _ in 0..*argc {
                     let arg = match next_operand(stack, rng, &mut index)? {
