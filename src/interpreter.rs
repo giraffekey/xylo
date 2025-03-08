@@ -22,6 +22,7 @@ pub enum ValueKind {
     Boolean,
     Hex,
     Shape,
+    Function(usize),
     List(Box<ValueKind>),
     Unknown,
 }
@@ -33,6 +34,7 @@ pub enum Value {
     Boolean(bool),
     Hex([u8; 3]),
     Shape(Rc<RefCell<Shape>>),
+    Function(String, usize, Vec<Value>),
     List(Vec<Value>),
 }
 
@@ -44,6 +46,7 @@ impl Value {
             Self::Boolean(_) => Ok(ValueKind::Boolean),
             Self::Hex(_) => Ok(ValueKind::Hex),
             Self::Shape(_) => Ok(ValueKind::Shape),
+            Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
             Self::List(list) => {
                 let kind = list
                     .get(0)
@@ -102,13 +105,14 @@ impl Stack<'_> {
         }
     }
 
-    pub fn get_function(&self, name: &str) -> Option<&Function> {
+    pub fn get_function(&self, name: &str) -> Option<Function> {
         match self.frames[0].get(name) {
-            Some(function) => Some(function),
+            Some(function) => Some(function.clone()),
             None => self.frames[self.scope..]
                 .iter()
                 .rev()
-                .find_map(|functions| functions.get(name)),
+                .find_map(|functions| functions.get(name))
+                .cloned(),
         }
     }
 }
@@ -119,7 +123,7 @@ enum FunctionBlock {
     Block { start: usize },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Function {
     params: Vec<String>,
     weighted: bool,
@@ -155,25 +159,24 @@ fn reduce_call(
     stack: &mut Stack,
     rng: &mut ChaCha8Rng,
     name: &str,
-    argc: usize,
+    args: Vec<Value>,
 ) -> Result<FunctionBlock> {
-    let mut args = Vec::with_capacity(argc);
-    for _ in 0..argc {
-        args.push(stack.operands.pop().unwrap());
-    }
-    args.reverse();
-
     if BUILTIN_FUNCTIONS.contains(&name) {
         let value = handle_builtin(name, rng, &args)?;
         Ok(FunctionBlock::Value(value))
     } else {
         match stack.get_function(name) {
             Some(function) => {
-                // Temporary. Will implement currying later.
-                if args.len() != function.params.len() {
-                    return Err(anyhow!(format!(
-                        "Incorrect number of arguments passed to `{}` function.",
-                        name
+                if args.len() > function.params.len() {
+                    stack
+                        .operands
+                        .extend(args[function.params.len()..].to_vec());
+                } else if args.len() < function.params.len() {
+                    let argc = function.params.len() - args.len();
+                    return Ok(FunctionBlock::Value(Value::Function(
+                        name.into(),
+                        argc,
+                        args,
                     )));
                 }
 
@@ -193,8 +196,6 @@ fn reduce_call(
                 match block {
                     FunctionBlock::Value(_) => Ok(block.clone()),
                     FunctionBlock::Block { start } => {
-                        let start = *start;
-
                         let functions = function
                             .params
                             .clone()
@@ -215,7 +216,7 @@ fn reduce_call(
                         stack.scope = stack.frames.len();
                         stack.frames.push(functions);
 
-                        Ok(FunctionBlock::Block { start })
+                        Ok(FunctionBlock::Block { start: *start })
                     }
                 }
             }
@@ -246,6 +247,44 @@ fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
     }
 }
 
+#[derive(Debug)]
+enum Operand {
+    Value(Option<Value>),
+    Function,
+}
+
+fn next_operand(stack: &mut Stack, rng: &mut ChaCha8Rng, index: &mut usize) -> Result<Operand> {
+    match stack.operands.pop() {
+        Some(Value::Function(name, argc, pre_args)) => {
+            let mut args = Vec::with_capacity(pre_args.len() + argc);
+            args.extend(pre_args);
+
+            for _ in 0..argc {
+                let arg = match next_operand(stack, rng, index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => {
+                        stack.operands.extend(args);
+                        return Ok(Operand::Function);
+                    }
+                };
+                args.push(arg);
+            }
+            args.reverse();
+
+            let function_block = reduce_call(stack, rng, &name, args)?;
+            match function_block {
+                FunctionBlock::Value(value) => Ok(Operand::Value(Some(value))),
+                FunctionBlock::Block { start } => {
+                    stack.calls.push(*index);
+                    *index = start;
+                    Ok(Operand::Function)
+                }
+            }
+        }
+        value => Ok(Operand::Value(value)),
+    }
+}
+
 fn execute_block<'a>(
     stack: &mut Stack<'a>,
     rng: &mut ChaCha8Rng,
@@ -254,21 +293,43 @@ fn execute_block<'a>(
 ) -> Result<Value> {
     let mut index = start;
 
-    while index < block.len() {
+    'a: while index < block.len() {
         match &block[index] {
             Token::Literal(literal) => {
                 stack.operands.push(reduce_literal(literal)?);
                 index += 1;
             }
             Token::BinaryOperator(op) => {
-                let b = stack.operands.pop().unwrap();
-                let a = stack.operands.pop().unwrap();
+                let b = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => continue 'a,
+                };
+                let a = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => {
+                        stack.operands.push(b);
+                        continue 'a;
+                    }
+                };
                 let value = handle_builtin(op.as_str(), rng, &[a, b])?;
                 stack.operands.push(value);
                 index += 1;
             }
             Token::Call(name, argc) => {
-                let function_block = reduce_call(stack, rng, name, *argc)?;
+                let mut args = Vec::with_capacity(*argc);
+                for _ in 0..*argc {
+                    let arg = match next_operand(stack, rng, &mut index)? {
+                        Operand::Value(value) => value.unwrap(),
+                        Operand::Function => {
+                            stack.operands.extend(args);
+                            continue 'a;
+                        }
+                    };
+                    args.push(arg);
+                }
+                args.reverse();
+
+                let function_block = reduce_call(stack, rng, name, args)?;
                 match function_block {
                     FunctionBlock::Value(value) => {
                         stack.operands.push(value);
@@ -285,14 +346,24 @@ fn execute_block<'a>(
                 stack.frames.pop().unwrap();
                 index += 1;
             }
-            Token::Return => match stack.calls.pop() {
-                Some(last_index) => {
-                    stack.frames.pop().unwrap();
-                    stack.scope = stack.frames.len() - 1;
-                    index = last_index;
+            Token::Return => {
+                let value = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value,
+                    Operand::Function => continue 'a,
+                };
+                match stack.calls.pop() {
+                    Some(last_index) => {
+                        if let Some(value) = value {
+                            stack.operands.push(value);
+                        }
+
+                        stack.frames.pop().unwrap();
+                        stack.scope = stack.frames.len() - 1;
+                        index = last_index;
+                    }
+                    None => return Ok(value.unwrap()),
                 }
-                None => return Ok(stack.operands.pop().unwrap()),
-            },
+            }
             Token::Let(name, params, skip) => {
                 stack.frames.push(
                     [(
@@ -308,7 +379,10 @@ fn execute_block<'a>(
                 index += skip + 1;
             }
             Token::If(skip) => {
-                let condition = stack.operands.pop().unwrap();
+                let condition = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => continue 'a,
+                };
                 let is_true = match condition {
                     Value::Boolean(b) => b,
                     _ => return Err(anyhow!("If condition must reduce to a boolean.")),
@@ -321,23 +395,26 @@ fn execute_block<'a>(
                 }
             }
             Token::Match(patterns) => {
-                let a = stack.operands.pop().unwrap();
+                let a = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => continue 'a,
+                };
 
                 let mut found = false;
-                'a: for (pattern, skip) in patterns {
+                'b: for (pattern, skip) in patterns {
                     match pattern {
                         Pattern::Matches(matches) => {
                             for b in matches {
                                 if pattern_match(&a, b)? {
                                     found = true;
-                                    break 'a;
+                                    break 'b;
                                 }
                                 index += skip;
                             }
                         }
                         Pattern::Wildcard => {
                             found = true;
-                            break 'a;
+                            break 'b;
                         }
                     }
                 }
@@ -349,7 +426,10 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::ForStart(var) => {
-                let iter = stack.operands.pop().unwrap();
+                let iter = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => continue 'a,
+                };
                 let mut items = match iter {
                     Value::List(list) => list,
                     Value::Integer(n) => {
@@ -390,8 +470,12 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::ForEnd => {
+                let value = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value,
+                    Operand::Function => continue 'a,
+                };
                 if let Some(for_stack) = stack.fors.last_mut() {
-                    for_stack.values.push(stack.operands.pop().unwrap());
+                    for_stack.values.push(value.unwrap());
 
                     if for_stack.items.len() > 0 {
                         stack.frames.push(
@@ -417,10 +501,17 @@ fn execute_block<'a>(
                         stack.fors.pop().unwrap(); // Exit for loop
                         index += 1;
                     }
+                } else {
+                    if let Some(value) = value {
+                        stack.operands.push(value);
+                    }
                 }
             }
             Token::LoopStart => {
-                let count = stack.operands.pop().unwrap();
+                let count = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => continue 'a,
+                };
                 let count = match count {
                     Value::Integer(n) => n,
                     Value::Float(n) => n as i32,
@@ -438,9 +529,13 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::LoopEnd => {
+                let value = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value,
+                    Operand::Function => continue 'a,
+                };
                 if let Some(loop_stack) = stack.loops.last_mut() {
                     loop_stack.remaining -= 1;
-                    loop_stack.values.push(stack.operands.pop().unwrap());
+                    loop_stack.values.push(value.unwrap());
 
                     if loop_stack.remaining > 0 {
                         index = loop_stack.start; // Jump back to LoopStart
@@ -451,6 +546,10 @@ fn execute_block<'a>(
 
                         stack.loops.pop().unwrap(); // Exit loop
                         index += 1;
+                    }
+                } else {
+                    if let Some(value) = value {
+                        stack.operands.push(value);
                     }
                 }
             }
@@ -506,7 +605,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
     }
 
     let mut stack = Stack::new(functions);
-    let shape = match reduce_call(&mut stack, &mut rng, "root", 0)? {
+    let shape = match reduce_call(&mut stack, &mut rng, "root", Vec::new())? {
         FunctionBlock::Block { start } => {
             match execute_block(&mut stack, &mut rng, &block, start)? {
                 Value::Shape(shape) => shape,
