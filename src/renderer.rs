@@ -7,7 +7,7 @@ use alloc::{rc::Rc, vec::Vec};
 use crate::shape::{BasicShape, PathSegment, Shape};
 
 use anyhow::Result;
-use palette::{blend::Blend, rgb::Rgba, FromColor};
+use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, Rect, Shader, Transform};
 
 #[derive(Debug)]
@@ -24,21 +24,24 @@ enum ShapeData<'a> {
     },
 }
 
+fn convert_color(color: Rgba<f32>) -> Color {
+    Color::from_rgba(
+        color.red.clamp(0.0, 1.0),
+        color.green.clamp(0.0, 1.0),
+        color.blue.clamp(0.0, 1.0),
+        color.alpha.clamp(0.0, 1.0),
+    )
+    .unwrap()
+}
+
 fn solid_color_paint<'a>(color: Rgba<f32>) -> Paint<'a> {
-    let color = Color::from_rgba(color.red, color.green, color.blue, color.alpha).unwrap();
     Paint {
-        shader: Shader::SolidColor(color),
+        shader: Shader::SolidColor(convert_color(color)),
         ..Paint::default()
     }
 }
 
-fn convert_shape(
-    data: &mut Vec<ShapeData>,
-    shape: Shape,
-    parent_transform: Transform,
-    parent_zindex: Option<f32>,
-    parent_color: Rgba<f32>,
-) -> Result<()> {
+fn convert_shape(data: &mut Vec<ShapeData>, shape: Shape) -> Result<()> {
     match shape {
         Shape::Basic(BasicShape::Square {
             x,
@@ -50,10 +53,8 @@ fn convert_shape(
             color,
         }) => {
             let path = PathBuilder::from_rect(Rect::from_xywh(x, y, width, height).unwrap());
-            let transform = transform.post_concat(parent_transform);
-            let zindex = parent_zindex.unwrap_or(zindex.unwrap_or(0.0));
-            let color = Rgba::from_color(color).overlay(parent_color);
-            let paint = solid_color_paint(color);
+            let zindex = zindex.unwrap_or(0.0);
+            let paint = solid_color_paint(Rgba::from_color(*color));
             data.push(ShapeData::FillPath {
                 path,
                 transform,
@@ -70,10 +71,8 @@ fn convert_shape(
             color,
         }) => {
             let path = PathBuilder::from_circle(x, y, radius).unwrap();
-            let transform = transform.post_concat(parent_transform);
-            let zindex = parent_zindex.unwrap_or(zindex.unwrap_or(0.0));
-            let color = Rgba::from_color(color).overlay(parent_color);
-            let paint = solid_color_paint(color);
+            let zindex = zindex.unwrap_or(0.0);
+            let paint = solid_color_paint(Rgba::from_color(*color));
             data.push(ShapeData::FillPath {
                 path,
                 transform,
@@ -94,10 +93,8 @@ fn convert_shape(
             pb.close();
             let path = pb.finish().unwrap();
 
-            let transform = transform.post_concat(parent_transform);
-            let zindex = parent_zindex.unwrap_or(zindex.unwrap_or(0.0));
-            let color = Rgba::from_color(color).overlay(parent_color);
-            let paint = solid_color_paint(color);
+            let zindex = zindex.unwrap_or(0.0);
+            let paint = solid_color_paint(Rgba::from_color(*color));
             data.push(ShapeData::FillPath {
                 path,
                 transform,
@@ -106,9 +103,8 @@ fn convert_shape(
             });
         }
         Shape::Basic(BasicShape::Fill { zindex, color }) => {
-            let zindex = parent_zindex.unwrap_or(zindex.unwrap_or(0.0));
-            let color = Rgba::from_color(*color).overlay(parent_color);
-            let color = Color::from_rgba(color.red, color.green, color.blue, color.alpha).unwrap();
+            let zindex = zindex.unwrap_or(0.0);
+            let color = convert_color(Rgba::from_color(*color));
             data.push(ShapeData::Fill { zindex, color });
         }
         Shape::Basic(BasicShape::Empty) => (),
@@ -131,10 +127,8 @@ fn convert_shape(
             let path = pb.finish();
 
             if let Some(path) = path {
-                let transform = transform.post_concat(parent_transform);
-                let zindex = parent_zindex.unwrap_or(zindex.unwrap_or(0.0));
-                let color = Rgba::from_color(color).overlay(parent_color);
-                let paint = solid_color_paint(color);
+                let zindex = zindex.unwrap_or(0.0);
+                let paint = solid_color_paint(Rgba::from_color(*color));
 
                 data.push(ShapeData::FillPath {
                     path,
@@ -144,39 +138,16 @@ fn convert_shape(
                 });
             }
         }
-        Shape::Composite {
-            a,
-            b,
-            transform,
-            zindex,
-            color,
-        } => {
-            let transform = transform.post_concat(parent_transform);
-            let zindex = match parent_zindex {
-                Some(_) => parent_zindex,
-                None => zindex,
-            };
-            let color = Rgba::from_color(color).overlay(parent_color);
+        Shape::Composite { a, b } => {
             let a = Rc::try_unwrap(a).unwrap().into_inner();
-            convert_shape(data, a, transform, zindex, color)?;
+            convert_shape(data, a)?;
             let b = Rc::try_unwrap(b).unwrap().into_inner();
-            convert_shape(data, b, transform, zindex, color)?;
+            convert_shape(data, b)?;
         }
-        Shape::Collection {
-            shapes,
-            transform,
-            zindex,
-            color,
-        } => {
-            let transform = transform.post_concat(parent_transform);
-            let zindex = match parent_zindex {
-                Some(_) => parent_zindex,
-                None => zindex,
-            };
-            let color = Rgba::from_color(color).overlay(parent_color);
+        Shape::Collection { shapes } => {
             for shape in shapes {
                 let shape = Rc::try_unwrap(shape).unwrap().into_inner();
-                convert_shape(data, shape, transform, zindex, color)?;
+                convert_shape(data, shape)?;
             }
         }
     }
@@ -185,9 +156,7 @@ fn convert_shape(
 
 pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
     let mut data = Vec::new();
-    let transform = Transform::from_translate(width as f32 / 2.0, height as f32 / 2.0);
-    let color = Rgba::new(1.0, 1.0, 1.0, 0.0);
-    convert_shape(&mut data, shape, transform, None, color)?;
+    convert_shape(&mut data, shape)?;
     data.sort_by(|a, b| match (a, b) {
         (ShapeData::FillPath { zindex: a, .. }, ShapeData::FillPath { zindex: b, .. })
         | (ShapeData::FillPath { zindex: a, .. }, ShapeData::Fill { zindex: b, .. })
@@ -206,6 +175,9 @@ pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
                 paint,
                 ..
             } => {
+                let transform = transform
+                    .post_scale(1.0, -1.0)
+                    .post_translate(width as f32 / 2.0, height as f32 / 2.0);
                 pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
             }
             ShapeData::Fill { color, .. } => {

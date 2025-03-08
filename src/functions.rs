@@ -5,7 +5,7 @@ use std::rc::Rc;
 use alloc::{rc::Rc, vec, vec::Vec};
 
 use crate::interpreter::Value;
-use crate::shape::{PathSegment, Shape, IDENTITY, TRANSPARENT, WHITE};
+use crate::shape::{PathSegment, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
 use anyhow::{anyhow, Result};
@@ -407,12 +407,63 @@ pub fn compose(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
                         color: *color,
                     }
                 }
+                (Shape::Composite { a: aa, b: ab }, Shape::Composite { a: ba, b: bb }) => {
+                    let mut shapes = Vec::with_capacity(4);
+                    shapes.push(aa.clone());
+                    shapes.push(ab.clone());
+                    shapes.push(ba.clone());
+                    shapes.push(bb.clone());
+                    Shape::Collection { shapes }
+                }
+                (Shape::Collection { shapes: a }, Shape::Collection { shapes: b }) => {
+                    let mut shapes = Vec::with_capacity(a.len() + b.len());
+                    shapes.extend(a.iter().cloned());
+                    shapes.extend(b.iter().cloned());
+                    Shape::Collection { shapes }
+                }
+                (Shape::Composite { a: aa, b: ab }, Shape::Collection { shapes: b }) => {
+                    let mut shapes = Vec::with_capacity(b.len() + 2);
+                    shapes.push(aa.clone());
+                    shapes.push(ab.clone());
+                    shapes.extend(b.iter().cloned());
+                    Shape::Collection { shapes }
+                }
+                (Shape::Collection { shapes: a }, Shape::Composite { a: ba, b: bb }) => {
+                    let mut shapes = Vec::with_capacity(a.len() + 2);
+                    shapes.extend(a.iter().cloned());
+                    shapes.push(ba.clone());
+                    shapes.push(bb.clone());
+                    Shape::Collection { shapes }
+                }
+                (_, Shape::Composite { a: ba, b: bb }) => {
+                    let mut shapes = Vec::with_capacity(3);
+                    shapes.push(a.clone());
+                    shapes.push(ba.clone());
+                    shapes.push(bb.clone());
+                    Shape::Collection { shapes }
+                }
+                (Shape::Composite { a: aa, b: ab }, _) => {
+                    let mut shapes = Vec::with_capacity(3);
+                    shapes.push(aa.clone());
+                    shapes.push(ab.clone());
+                    shapes.push(b.clone());
+                    Shape::Collection { shapes }
+                }
+                (_, Shape::Collection { shapes: b }) => {
+                    let mut shapes = Vec::with_capacity(b.len() + 1);
+                    shapes.push(a.clone());
+                    shapes.extend(b.iter().cloned());
+                    Shape::Collection { shapes }
+                }
+                (Shape::Collection { shapes: a }, _) => {
+                    let mut shapes = Vec::with_capacity(a.len() + 1);
+                    shapes.extend(a.iter().cloned());
+                    shapes.push(b.clone());
+                    Shape::Collection { shapes }
+                }
                 _ => Shape::Composite {
                     a: a.clone(),
                     b: b.clone(),
-                    transform: IDENTITY,
-                    zindex: None,
-                    color: TRANSPARENT,
                 },
             };
             Ok(Value::Shape(Rc::new(RefCell::new(shape))))
@@ -444,17 +495,21 @@ pub fn collect(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
             let shape = if is_path {
                 let mut segments = Vec::with_capacity(shapes.len());
                 let mut transform = IDENTITY;
-                let color = WHITE;
+                let mut zindex = None;
+                let mut color = WHITE;
 
                 for path in shapes {
                     match &*path.borrow() {
                         Shape::Path {
                             segments: other_segments,
                             transform: other_transform,
-                            ..
+                            zindex: other_zindex,
+                            color: other_color,
                         } => {
                             segments.extend(other_segments);
                             transform = transform.post_concat(*other_transform);
+                            zindex = *other_zindex;
+                            color = *other_color;
                         }
                         _ => unreachable!(),
                     }
@@ -463,16 +518,11 @@ pub fn collect(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
                 Shape::Path {
                     segments,
                     transform,
-                    zindex: None,
+                    zindex,
                     color,
                 }
             } else {
-                Shape::Collection {
-                    shapes,
-                    transform: IDENTITY,
-                    zindex: None,
-                    color: TRANSPARENT,
-                }
+                Shape::Collection { shapes }
             };
             Ok(Value::Shape(Rc::new(RefCell::new(shape))))
         }
@@ -1468,7 +1518,7 @@ pub fn cubic_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
 }
 
-pub fn close(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+pub fn close(_rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
     let shape = Shape::Path {
         segments: vec![PathSegment::Close],
         transform: IDENTITY,

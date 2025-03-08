@@ -1,4 +1,5 @@
-root = l 0 FILL : ss 400 bouquet
+root =
+	l 0 FILL : ss 400 bouquet
 
 quality = 1000
 
@@ -7,15 +8,15 @@ bouquet =
     : r 15 flower6
 
 flower6 =
-    collect demiflower6
-    : flip 90 (collect demiflower6)
+    collect (demiflower6 12)
+    : flip 90 (collect (demiflower6 12))
 
 flower5 =
     collect demiflower5
     : flip 90 (collect demiflower5)
 
-demiflower6 =
-    for i in 0..12
+demiflower6 n =
+    for i in 0..n
     	r (i * 30) (petal6 quality)
 
 demiflower5 =
@@ -28,7 +29,7 @@ petal5 i =
 	else
 	    s 1 0.0001 SQUARE
 	    : ss 0.005 (tx -0.5 (l -1 CIRCLE))
-	    : tx 0.5 (r 144.04 (ss 0.998 (tx 0.5 (l 0.003 (petal5 (i - 1))))))
+	    : tx 0.5 (r 144.04 (ss 0.998 (tx 0.5 (lshift (1 / quality * 0.6) (petal5 (i - 1))))))
 
 petal6 i =
 	if i == 0
@@ -36,4 +37,4 @@ petal6 i =
 	else
 	    s 1 0.0001 SQUARE
 	    : tx -0.5 (ss 0.01 (l -1 CIRCLE))
-	    : tx 0.5 (r 120.21 (ss 0.996 (tx 0.5 (l 0.005 (petal6 (i - 1))))))
+	    : tx 0.5 (r 120.21 (ss 0.996 (tx 0.5 (lshift (1 / quality) (petal6 (i - 1))))))

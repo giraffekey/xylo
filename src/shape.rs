@@ -19,8 +19,6 @@ pub static IDENTITY: Transform = Transform {
 
 pub static WHITE: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 1.0, 1.0, 1.0);
 
-pub static TRANSPARENT: Hsla<f32> = Hsla::new_const(RgbHue::new(360.0), 1.0, 1.0, 0.0);
-
 pub static SQUARE: BasicShape = BasicShape::Square {
     x: -1.0,
     y: -1.0,
@@ -107,15 +105,9 @@ pub enum Shape {
     Composite {
         a: Rc<RefCell<Shape>>,
         b: Rc<RefCell<Shape>>,
-        transform: Transform,
-        zindex: Option<f32>,
-        color: Hsla<f32>,
     },
     Collection {
         shapes: Vec<Rc<RefCell<Shape>>>,
-        transform: Transform,
-        zindex: Option<f32>,
-        color: Hsla<f32>,
     },
 }
 
@@ -125,10 +117,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_translate(tx, ty);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().translate(tx, ty);
+                b.borrow_mut().translate(tx, ty);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().translate(tx, ty);
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -139,10 +138,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_rotate(r);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().rotate(r);
+                b.borrow_mut().rotate(r);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().rotate(r);
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -153,10 +159,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_rotate_at(r, tx, ty);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().rotate_at(r, tx, ty);
+                b.borrow_mut().rotate_at(r, tx, ty);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().rotate_at(r, tx, ty);
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -167,10 +180,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_scale(sx, sy);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().scale(sx, sy);
+                b.borrow_mut().scale(sx, sy);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().scale(sx, sy);
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -181,10 +201,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_concat(Transform::from_skew(kx, ky));
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().skew(kx, ky);
+                b.borrow_mut().skew(kx, ky);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().skew(kx, ky);
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -195,13 +222,20 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform
                     .post_rotate(f)
                     .post_scale(-1.0, 1.0)
                     .post_rotate(-f);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().flip(f);
+                b.borrow_mut().flip(f);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().flip(f);
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -212,10 +246,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_scale(-1.0, 1.0);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().fliph();
+                b.borrow_mut().fliph();
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().fliph();
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -226,10 +267,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_scale(1.0, -1.0);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().flipv();
+                b.borrow_mut().flipv();
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().flipv();
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -240,10 +288,17 @@ impl Shape {
             Self::Basic(BasicShape::Square { transform, .. })
             | Self::Basic(BasicShape::Circle { transform, .. })
             | Self::Basic(BasicShape::Triangle { transform, .. })
-            | Self::Path { transform, .. }
-            | Self::Composite { transform, .. }
-            | Self::Collection { transform, .. } => {
+            | Self::Path { transform, .. } => {
                 *transform = transform.post_scale(-1.0, -1.0);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().flipd();
+                b.borrow_mut().flipd();
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().flipd();
+                }
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
@@ -255,10 +310,39 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { zindex, .. })
             | Self::Basic(BasicShape::Triangle { zindex, .. })
             | Self::Basic(BasicShape::Fill { zindex, .. })
-            | Self::Path { zindex, .. }
-            | Self::Composite { zindex, .. }
-            | Self::Collection { zindex, .. } => {
+            | Self::Path { zindex, .. } => {
                 *zindex = Some(z);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_zindex(z);
+                b.borrow_mut().set_zindex(z);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().set_zindex(z);
+                }
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn shift_zindex(&mut self, z: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { zindex, .. })
+            | Self::Basic(BasicShape::Circle { zindex, .. })
+            | Self::Basic(BasicShape::Triangle { zindex, .. })
+            | Self::Basic(BasicShape::Fill { zindex, .. })
+            | Self::Path { zindex, .. } => {
+                *zindex = Some(zindex.unwrap_or(0.0) + z);
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().shift_zindex(z);
+                b.borrow_mut().shift_zindex(z);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().shift_zindex(z);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -270,12 +354,19 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.hue = hue.into();
                 color.saturation = saturation;
                 color.lightness = lightness;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_hsl(hue, saturation, lightness);
+                b.borrow_mut().set_hsl(hue, saturation, lightness);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().set_hsl(hue, saturation, lightness);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -287,13 +378,22 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.hue = hue.into();
                 color.saturation = saturation;
                 color.lightness = lightness;
                 color.alpha = alpha;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_hsla(hue, saturation, lightness, alpha);
+                b.borrow_mut().set_hsla(hue, saturation, lightness, alpha);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape
+                        .borrow_mut()
+                        .set_hsla(hue, saturation, lightness, alpha);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -305,10 +405,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.hue = hue.into();
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_hue(hue);
+                b.borrow_mut().set_hue(hue);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().set_hue(hue);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -320,10 +427,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.saturation = saturation;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_saturation(saturation);
+                b.borrow_mut().set_saturation(saturation);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().set_saturation(saturation);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -335,10 +449,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.lightness = lightness;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_lightness(lightness);
+                b.borrow_mut().set_lightness(lightness);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().set_lightness(lightness);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -350,10 +471,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.alpha = alpha;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_alpha(alpha);
+                b.borrow_mut().set_alpha(alpha);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().set_alpha(alpha);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -365,10 +493,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.hue += hue;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().shift_hue(hue);
+                b.borrow_mut().shift_hue(hue);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().shift_hue(hue);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -380,10 +515,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.saturation += saturation;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().shift_saturation(saturation);
+                b.borrow_mut().shift_saturation(saturation);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().shift_saturation(saturation);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -395,10 +537,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.lightness += lightness;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().shift_lightness(lightness);
+                b.borrow_mut().shift_lightness(lightness);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().shift_lightness(lightness);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -410,10 +559,17 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 color.alpha += alpha;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().shift_alpha(alpha);
+                b.borrow_mut().shift_alpha(alpha);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().shift_alpha(alpha);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
@@ -425,15 +581,22 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. }
-            | Self::Composite { color, .. }
-            | Self::Collection { color, .. } => {
+            | Self::Path { color, .. } => {
                 let new_color = Rgb::from(hex);
                 let new_color: Rgb<f32> = new_color.into();
                 let new_color = Hsl::from_color(new_color);
                 color.hue = new_color.hue;
                 color.saturation = new_color.saturation;
                 color.lightness = new_color.lightness;
+            }
+            Self::Composite { a, b } => {
+                a.borrow_mut().set_hex(hex);
+                b.borrow_mut().set_hex(hex);
+            }
+            Self::Collection { shapes } => {
+                for shape in shapes {
+                    shape.borrow_mut().set_hex(hex);
+                }
             }
             Self::Basic(BasicShape::Empty) => (),
         }
