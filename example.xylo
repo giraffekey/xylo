@@ -1,17 +1,39 @@
-root =
-	(l 0 FILL) : (collect grids)
+root = l 0 FILL : ss 400 bouquet
 
-grids =
-	for i in 0..24
-		grid (i * 15)
+quality = 1000
 
-grid angle =
-	r (angle) (collect cols)
+bouquet =
+    r 36 (ss 1.3 flower5)
+    : r 15 flower6
 
-cols =
-	for i in 0..5
-		collect (rows i)
+flower6 =
+    collect demiflower6
+    : flip 90 (collect demiflower6)
 
-rows i =
-	for j in 0..10
-		t (i * 40 - 200) (j * 40 - 200) (ss 4 (h (200 - i * 10) (sat 1 (l 0.5 SQUARE))))
+flower5 =
+    collect demiflower5
+    : flip 90 (collect demiflower5)
+
+demiflower6 =
+    for i in 0..12
+    	r (i * 30) (petal6 quality)
+
+demiflower5 =
+    for i in 0..5
+    	r (i * 72) (petal5 quality)
+
+petal5 i =
+	if i == 0
+		EMPTY
+	else
+	    s 1 0.0001 SQUARE
+	    : ss 0.005 (tx -0.5 (l -1 CIRCLE))
+	    : tx 0.5 (r 144.04 (ss 0.998 (tx 0.5 (l 0.003 (petal5 (i - 1))))))
+
+petal6 i =
+	if i == 0
+		EMPTY
+	else
+	    s 1 0.0001 SQUARE
+	    : tx -0.5 (ss 0.01 (l -1 CIRCLE))
+	    : tx 0.5 (r 120.21 (ss 0.996 (tx 0.5 (l 0.005 (petal6 (i - 1))))))

@@ -2,10 +2,9 @@
 use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use alloc::{boxed::Box, format, rc::Rc, vec, vec::Vec};
+use alloc::{boxed::Box, format, rc::Rc, string::String, vec, vec::Vec};
 
-use crate::cache::Cache;
-use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS, RAND_FUNCTIONS};
+use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS};
 use crate::parser::*;
 use crate::shape::{Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
@@ -13,6 +12,8 @@ use anyhow::{anyhow, Result};
 use core::cell::RefCell;
 use hashbrown::HashMap;
 use rand::distr::{weighted::WeightedIndex, Distribution};
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueKind {
@@ -63,33 +64,35 @@ impl Value {
 }
 
 #[derive(Debug)]
-struct Stack<'a> {
-    frames: Vec<HashMap<&'a str, Function<'a>>>,
+struct Stack {
+    frames: Vec<HashMap<String, Function>>,
     operands: Vec<Value>,
-    scope: Option<(&'a str, usize)>,
+    scope: usize,
 }
 
-impl Stack<'_> {
+impl Stack {
     pub fn get_function(&self, name: &str) -> Option<&Function> {
-        self.frames
-            .iter()
-            .rev()
-            .find_map(|functions| functions.get(name))
+        match self.frames[0].get(name) {
+            Some(function) => Some(function),
+            None => self.frames[self.scope..]
+                .iter()
+                .rev()
+                .find_map(|functions| functions.get(name)),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-enum FunctionBlock<'a> {
+enum FunctionBlock {
     Value(Value),
-    Block(Block<'a>),
+    Block { start: usize },
 }
 
 #[derive(Debug, Clone)]
-struct Function<'a> {
-    params: Vec<&'a str>,
+struct Function {
+    params: Vec<String>,
     weighted: bool,
-    blocks: Vec<(FunctionBlock<'a>, f32)>,
-    scope: Option<(&'a str, usize)>,
+    blocks: Vec<(FunctionBlock, f32)>,
 }
 
 fn reduce_literal(literal: &Literal) -> Result<Value> {
@@ -117,12 +120,12 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
     }
 }
 
-fn reduce_call<'a>(
-    stack: &mut Stack<'a>,
-    cache: &mut Cache,
-    name: &'a str,
+fn reduce_call(
+    stack: &mut Stack,
+    rng: &mut ChaCha8Rng,
+    name: &str,
     argc: usize,
-) -> Result<Value> {
+) -> Result<FunctionBlock> {
     let mut args = Vec::with_capacity(argc);
     for _ in 0..argc {
         args.push(stack.operands.pop().unwrap());
@@ -130,18 +133,8 @@ fn reduce_call<'a>(
     args.reverse();
 
     if BUILTIN_FUNCTIONS.contains(&name) {
-        if RAND_FUNCTIONS.contains(&name) {
-            handle_builtin(name, cache, &args)
-        } else {
-            // let key = Cache::hash_call(name, 0, &args, stack.scope);
-            // if let Some(value) = cache.get(key) {
-            //     return Ok(value);
-            // }
-
-            let value = handle_builtin(name, cache, &args)?;
-            // cache.insert(key, &value);
-            Ok(value)
-        }
+        let value = handle_builtin(name, rng, &args)?;
+        Ok(FunctionBlock::Value(value))
     } else {
         match stack.get_function(name) {
             Some(function) => {
@@ -153,33 +146,24 @@ fn reduce_call<'a>(
                     )));
                 }
 
-                let (i, block) = if function.weighted {
+                let (_i, block) = if function.weighted {
                     let index_weights = function.blocks.iter().enumerate();
                     let dist =
                         WeightedIndex::new(index_weights.clone().map(|(_, (_, weight))| weight))
                             .unwrap();
                     index_weights
                         .map(|(i, (block, _))| (i, block))
-                        .nth(dist.sample(&mut cache.rng))
+                        .nth(dist.sample(rng))
                         .unwrap()
                 } else {
                     (0, &function.blocks[0].0)
                 };
 
-                // let key = if function.scope.is_none() {
-                //     let key = Cache::hash_call(name, i, &args, stack.scope);
-                //     if let Some(value) = cache.get(key) {
-                //         return Ok(value);
-                //     }
-                //     Some(key)
-                // } else {
-                //     None
-                // };
-
-                let scope = Some((name, i));
                 match block {
-                    FunctionBlock::Value(value) => Ok(value.clone()),
-                    FunctionBlock::Block(block) => {
+                    FunctionBlock::Value(_) => Ok(block.clone()),
+                    FunctionBlock::Block { start } => {
+                        let start = *start;
+
                         let functions = function
                             .params
                             .clone()
@@ -187,36 +171,20 @@ fn reduce_call<'a>(
                             .zip(args)
                             .map(|(param, arg)| {
                                 (
-                                    *param,
+                                    param.into(),
                                     Function {
                                         params: vec![],
                                         weighted: false,
                                         blocks: vec![(FunctionBlock::Value(arg), 0.0)],
-                                        scope,
                                     },
                                 )
                             })
                             .collect();
 
-                        let mut frames = if function.scope.is_none() {
-                            vec![stack.frames[0].clone()]
-                        } else {
-                            stack.frames.clone()
-                        };
-                        frames.push(functions);
+                        stack.scope = stack.frames.len();
+                        stack.frames.push(functions);
 
-                        let mut stack = Stack {
-                            frames,
-                            operands: Vec::new(),
-                            scope,
-                        };
-                        let value = reduce_block(&mut stack, cache, block)?;
-
-                        // if let Some(key) = key {
-                        //     cache.insert(key, &value);
-                        // }
-
-                        Ok(value)
+                        Ok(FunctionBlock::Block { start })
                     }
                 }
             }
@@ -247,12 +215,14 @@ fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
     }
 }
 
-fn reduce_block<'a>(
-    stack: &mut Stack<'a>,
-    cache: &mut Cache,
-    block: &[Token<'a>],
+fn execute_block(
+    stack: &mut Stack,
+    rng: &mut ChaCha8Rng,
+    block: &[Token],
+    start: usize,
 ) -> Result<Value> {
-    let mut index = 0;
+    let mut index = start;
+    let mut call_stack = Vec::new();
     let mut for_stack = Vec::new();
     let mut loop_stack = Vec::new();
 
@@ -265,41 +235,49 @@ fn reduce_block<'a>(
             Token::BinaryOperator(op) => {
                 let b = stack.operands.pop().unwrap();
                 let a = stack.operands.pop().unwrap();
-                let value = handle_builtin(op.as_str(), cache, &[a, b])?;
+                let value = handle_builtin(op.as_str(), rng, &[a, b])?;
                 stack.operands.push(value);
                 index += 1;
             }
             Token::Call(name, argc) => {
-                let value = reduce_call(stack, cache, name, *argc)?;
-                stack.operands.push(value);
-                index += 1;
+                let function_block = reduce_call(stack, rng, name, *argc)?;
+                match function_block {
+                    FunctionBlock::Value(value) => {
+                        stack.operands.push(value);
+                        index += 1;
+                    }
+                    FunctionBlock::Block { start } => {
+                        call_stack.push(index + 1);
+                        index = start;
+                    }
+                }
             }
             Token::Jump(skip) => index += skip + 1,
             Token::Pop => {
                 stack.frames.pop().unwrap();
                 index += 1;
             }
-            Token::Let(definitions) => {
+            Token::Return => match call_stack.pop() {
+                Some(last_index) => {
+                    stack.frames.pop().unwrap();
+                    stack.scope = stack.frames.len() - 1;
+                    index = last_index;
+                }
+                None => return Ok(stack.operands.pop().unwrap()),
+            },
+            Token::Let(name, params, skip) => {
                 stack.frames.push(
-                    definitions
-                        .iter()
-                        .map(|definition| {
-                            (
-                                definition.name,
-                                Function {
-                                    params: definition.params.clone(),
-                                    weighted: false,
-                                    blocks: vec![(
-                                        FunctionBlock::Block(definition.block.clone()),
-                                        0.0,
-                                    )],
-                                    scope: stack.scope,
-                                },
-                            )
-                        })
-                        .collect(),
+                    [(
+                        (*name).into(),
+                        Function {
+                            params: params.iter().map(|s| (*s).into()).collect(),
+                            weighted: false,
+                            blocks: vec![(FunctionBlock::Block { start: index + 1 }, 0.0)],
+                        },
+                    )]
+                    .into(),
                 );
-                index += 1;
+                index += skip + 1;
             }
             Token::If(skip) => {
                 let condition = stack.operands.pop().unwrap();
@@ -365,12 +343,11 @@ fn reduce_block<'a>(
                 let len = items.len();
                 stack.frames.push(
                     [(
-                        *var,
+                        (*var).into(),
                         Function {
                             params: vec![],
                             weighted: false,
                             blocks: vec![(FunctionBlock::Value(items.pop().unwrap()), 0.0)],
-                            scope: stack.scope,
                         },
                     )]
                     .into(),
@@ -386,12 +363,11 @@ fn reduce_block<'a>(
                     if items.len() > 0 {
                         stack.frames.push(
                             [(
-                                *var,
+                                (*var).into(),
                                 Function {
                                     params: vec![],
                                     weighted: false,
                                     blocks: vec![(FunctionBlock::Value(items.pop().unwrap()), 0.0)],
-                                    scope: stack.scope,
                                 },
                             )]
                             .into(),
@@ -441,15 +417,30 @@ fn reduce_block<'a>(
         }
     }
 
-    stack
-        .operands
-        .pop()
-        .ok_or_else(|| anyhow!("Missing operand"))
+    Ok(stack.operands.pop().unwrap())
 }
 
-pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
-    let mut functions: HashMap<&str, Function> = HashMap::new();
+pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
+    let seed = match seed {
+        Some(seed) => seed,
+        None => {
+            #[cfg(feature = "std")]
+            {
+                gen_seed()
+            }
+            #[cfg(feature = "no-std")]
+            return Err(anyhow!("Seed required for rng."));
+        }
+    };
+    let mut rng = ChaCha8Rng::from_seed(seed);
+
+    let mut functions: HashMap<String, Function> = HashMap::new();
+    let mut block = Vec::new();
     for definition in tree {
+        let start = block.len();
+        block.extend(definition.block);
+        block.push(Token::Return);
+
         match functions.get_mut(definition.name) {
             Some(function) => {
                 if definition.params != function.params {
@@ -459,16 +450,15 @@ pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                 function.weighted = true;
                 function
                     .blocks
-                    .push((FunctionBlock::Block(definition.block), definition.weight));
+                    .push((FunctionBlock::Block { start }, definition.weight));
             }
             None => {
                 functions.insert(
-                    definition.name,
+                    definition.name.into(),
                     Function {
-                        params: definition.params,
+                        params: definition.params.iter().map(|s| (*s).into()).collect(),
                         weighted: false,
-                        blocks: vec![(FunctionBlock::Block(definition.block), definition.weight)],
-                        scope: None,
+                        blocks: vec![(FunctionBlock::Block { start }, definition.weight)],
                     },
                 );
             }
@@ -478,43 +468,24 @@ pub fn reduce(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
     let mut stack = Stack {
         frames: vec![functions],
         operands: Vec::new(),
-        scope: None,
+        scope: 0,
     };
-    let mut cache = Cache::new(seed)?;
-
-    let shape = match reduce_call(&mut stack, &mut cache, "root", 0)? {
-        Value::Shape(shape) => shape,
-        _ => return Err(anyhow!("The `root` function must return a shape.")),
+    let shape = match reduce_call(&mut stack, &mut rng, "root", 0)? {
+        FunctionBlock::Block { start } => {
+            match execute_block(&mut stack, &mut rng, &block, start)? {
+                Value::Shape(shape) => shape,
+                _ => return Err(anyhow!("The `root` function must return a shape.")),
+            }
+        }
+        _ => unreachable!(),
     };
     Ok(Rc::try_unwrap(shape).unwrap().into_inner())
 }
 
-#[cfg(test)]
-mod tests {
-    // use super::*;
-    // use core::f32::consts::PI;
-
-    #[test]
-    fn test() {
-        //         let (_, tree) = parse(
-        //             "
-        // root =
-        //  let shape = SQUARE
-        //      s (pi * 25) 50 (add_circle shape)
-
-        // add_circle shape = shape : CIRCLE
-        //          ",
-        //         )
-        //         .unwrap();
-        //         let shape = compile(tree).unwrap();
-        //         assert_eq!(
-        //             shape,
-        //             Shape::Composite {
-        //                 a: Box::new(SQUARE.clone()),
-        //                 b: Box::new(CIRCLE.clone()),
-        //                 transform: Transform::from_scale(PI * 25.0, 50.0),
-        //                 color: TRANSPARENT,
-        //             }
-        //         );
-    }
+#[cfg(feature = "std")]
+fn gen_seed() -> [u8; 32] {
+    let mut rng = rand::rng();
+    let mut seed = [0u8; 32];
+    rng.fill(&mut seed);
+    seed
 }

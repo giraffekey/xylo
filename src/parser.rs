@@ -1,6 +1,7 @@
 #[cfg(feature = "no-std")]
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 
+use core::iter;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::{
@@ -97,13 +98,6 @@ impl BinaryOperator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct LetDefinition<'a> {
-    pub name: &'a str,
-    pub params: Vec<&'a str>,
-    pub block: Block<'a>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     Matches(Vec<Literal>),
     Wildcard,
@@ -116,7 +110,8 @@ pub enum Token<'a> {
     Call(&'a str, usize),
     Jump(usize),
     Pop,
-    Let(Vec<LetDefinition<'a>>),
+    Return,
+    Let(&'a str, Vec<&'a str>, usize),
     If(usize),
     Match(Vec<(Pattern, usize)>),
     ForStart(&'a str),
@@ -326,18 +321,19 @@ fn call(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Bloc
     }
 }
 
-fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, LetDefinition> {
+fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, name) = identifier(input)?;
         let (input, params) = many0(preceded(multispace1, identifier)).parse(input)?;
         let (input, _) = preceded(multispace0, char('=')).parse(input)?;
-        let (input, block) = expr(indent + 1)(input)?;
-        let definition = LetDefinition {
-            name,
-            params,
-            block,
-        };
-        Ok((input, definition))
+        let (input, expr) = expr(indent + 1)(input)?;
+
+        let mut block = Vec::with_capacity(expr.len() + 2);
+        block.push(Token::Let(name, params, expr.len() + 1));
+        block.extend(expr);
+        block.push(Token::Return);
+
+        Ok((input, block))
     }
 }
 
@@ -354,10 +350,13 @@ fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         .parse(input)?;
         let (input, expr) = block(input, indent + 1)?;
 
-        let mut block = Vec::with_capacity(expr.len() + 2);
-        block.push(Token::Let(definitions));
+        let len = definitions.len();
+        let mut block = Vec::new();
+        for expr in definitions {
+            block.extend(expr);
+        }
         block.extend(expr);
-        block.push(Token::Pop);
+        block.extend(iter::repeat(Token::Pop).take(len));
 
         Ok((input, block))
     }

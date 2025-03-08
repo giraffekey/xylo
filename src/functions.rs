@@ -4,7 +4,6 @@ use std::rc::Rc;
 #[cfg(feature = "no-std")]
 use alloc::{rc::Rc, vec, vec::Vec};
 
-use crate::cache::Cache;
 use crate::interpreter::Value;
 use crate::shape::{PathSegment, Shape, IDENTITY, TRANSPARENT, WHITE};
 use core::cell::RefCell;
@@ -12,6 +11,7 @@ use core::cell::RefCell;
 use anyhow::{anyhow, Result};
 use core::f32::consts::PI;
 use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
 
 macro_rules! define_builtins {
     (
@@ -25,10 +25,10 @@ macro_rules! define_builtins {
         ];
 
         // Generate the handle_builtin function with match statements
-        pub fn handle_builtin(name: &str, cache: &mut Cache, args: &[Value]) -> Result<Value> {
+        pub fn handle_builtin(name: &str, rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
             match name {
                 $(
-                    $name => $func(cache, args),
+                    $name => $func(rng, args),
                 )*
                 _ => Err(anyhow!("Unknown function: {}", name)),
             }
@@ -175,18 +175,7 @@ define_builtins! {
     "close" => close,
 }
 
-pub static RAND_FUNCTIONS: &[&str] = &[
-    "rand",
-    "randi",
-    "rand_range",
-    "randi_range",
-    "rand_rangei",
-    "randi_rangei",
-    "shuffle",
-    "choose",
-];
-
-pub fn add(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn add(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `add` function."));
     }
@@ -201,7 +190,7 @@ pub fn add(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn sub(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn sub(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `sub` function."));
     }
@@ -215,7 +204,7 @@ pub fn sub(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn mul(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn mul(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `mul` function."));
     }
@@ -230,7 +219,7 @@ pub fn mul(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn div(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn div(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `div` function."));
     }
@@ -244,7 +233,7 @@ pub fn div(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn modulo(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn modulo(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `mod` function."));
     }
@@ -258,7 +247,7 @@ pub fn modulo(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn pow(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn pow(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `pow` function."));
     }
@@ -272,7 +261,7 @@ pub fn pow(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitand(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn bitand(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `bitand` function."));
     }
@@ -286,7 +275,7 @@ pub fn bitand(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitor(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn bitor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `bitor` function."));
     }
@@ -300,7 +289,7 @@ pub fn bitor(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitxor(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn bitxor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `bitxor` function."));
     }
@@ -314,7 +303,7 @@ pub fn bitxor(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitleft(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn bitleft(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `bitleft` function."
@@ -330,7 +319,7 @@ pub fn bitleft(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn bitright(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn bitright(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `bitright` function."
@@ -346,7 +335,7 @@ pub fn bitright(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn eq(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn eq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `eq` function."));
     }
@@ -363,7 +352,7 @@ pub fn eq(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn neq(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn neq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `neq` function."));
     }
@@ -379,7 +368,7 @@ pub fn neq(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn lt(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn lt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `lt` function."));
     }
@@ -393,7 +382,7 @@ pub fn lt(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn lte(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn lte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `lte` function."));
     }
@@ -407,7 +396,7 @@ pub fn lte(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn gt(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn gt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `gt` function."));
     }
@@ -421,7 +410,7 @@ pub fn gt(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn gte(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn gte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `gte` function."));
     }
@@ -435,7 +424,7 @@ pub fn gte(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn and(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn and(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `and` function."));
     }
@@ -446,7 +435,7 @@ pub fn and(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn or(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn or(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `or` function."));
     }
@@ -457,7 +446,7 @@ pub fn or(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn compose(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn compose(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `compose` function."
@@ -504,7 +493,7 @@ pub fn compose(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn collect(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn collect(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!(
             "Invalid number of arguments to `collect` function."
@@ -569,7 +558,7 @@ pub fn collect(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn range(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn range(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `range` function."));
     }
@@ -587,7 +576,7 @@ pub fn range(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn rangei(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn rangei(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `rangei` function."));
     }
@@ -605,7 +594,7 @@ pub fn rangei(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn pi(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn pi(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 0 {
         return Err(anyhow!("Invalid number of arguments to `pi` function."));
     }
@@ -613,7 +602,7 @@ pub fn pi(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Float(PI))
 }
 
-pub fn sin(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn sin(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `sin` function."));
     }
@@ -625,7 +614,7 @@ pub fn sin(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn cos(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn cos(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `cos` function."));
     }
@@ -637,7 +626,7 @@ pub fn cos(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn tan(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn tan(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `tan` function."));
     }
@@ -649,7 +638,7 @@ pub fn tan(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn asin(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn asin(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `asin` function."));
     }
@@ -661,7 +650,7 @@ pub fn asin(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn acos(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn acos(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `acos` function."));
     }
@@ -673,7 +662,7 @@ pub fn acos(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn atan(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn atan(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `atan` function."));
     }
@@ -685,7 +674,7 @@ pub fn atan(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn atan2(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn atan2(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `atan2` function."));
     }
@@ -705,7 +694,7 @@ pub fn atan2(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Float(y.atan2(x)))
 }
 
-pub fn sinh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn sinh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `sinh` function."));
     }
@@ -717,7 +706,7 @@ pub fn sinh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn cosh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn cosh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `cosh` function."));
     }
@@ -729,7 +718,7 @@ pub fn cosh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn tanh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn tanh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `tanh` function."));
     }
@@ -741,7 +730,7 @@ pub fn tanh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn asinh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn asinh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `asinh` function."));
     }
@@ -753,7 +742,7 @@ pub fn asinh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn acosh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn acosh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `acosh` function."));
     }
@@ -765,7 +754,7 @@ pub fn acosh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn atanh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn atanh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `atanh` function."));
     }
@@ -777,7 +766,7 @@ pub fn atanh(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn ln(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn ln(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `ln` function."));
     }
@@ -789,7 +778,7 @@ pub fn ln(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn log10(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn log10(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `log10` function."));
     }
@@ -801,7 +790,7 @@ pub fn log10(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn log(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn log(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `log` function."));
     }
@@ -821,7 +810,7 @@ pub fn log(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Float(n.log(b)))
 }
 
-pub fn abs(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn abs(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `abs` function."));
     }
@@ -833,7 +822,7 @@ pub fn abs(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn floor(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn floor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `floor` function."));
     }
@@ -845,7 +834,7 @@ pub fn floor(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn ceil(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn ceil(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `ceil` function."));
     }
@@ -857,7 +846,7 @@ pub fn ceil(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn sqrt(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn sqrt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `sqrt` function."));
     }
@@ -869,7 +858,7 @@ pub fn sqrt(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn min(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn min(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `min` function."));
     }
@@ -884,7 +873,7 @@ pub fn min(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn max(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn max(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `max` function."));
     }
@@ -899,27 +888,27 @@ pub fn max(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn rand(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn rand(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 0 {
         return Err(anyhow!("Invalid number of arguments to `rand` function."));
     }
 
-    Ok(Value::Float(cache.rng.random()))
+    Ok(Value::Float(rng.random()))
 }
 
-pub fn randi(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn randi(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 0 {
         return Err(anyhow!("Invalid number of arguments to `randi` function."));
     }
 
-    if cache.rng.random() {
+    if rng.random() {
         Ok(Value::Integer(1))
     } else {
         Ok(Value::Integer(0))
     }
 }
 
-pub fn rand_range(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn rand_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `rand_range` function."
@@ -938,10 +927,10 @@ pub fn rand_range(cache: &mut Cache, args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `rand_range` function.")),
     };
 
-    Ok(Value::Float(cache.rng.random_range(a..b)))
+    Ok(Value::Float(rng.random_range(a..b)))
 }
 
-pub fn randi_range(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn randi_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `randi_range` function."
@@ -960,10 +949,10 @@ pub fn randi_range(cache: &mut Cache, args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `randi_range` function.")),
     };
 
-    Ok(Value::Integer(cache.rng.random_range(a..b)))
+    Ok(Value::Integer(rng.random_range(a..b)))
 }
 
-pub fn rand_rangei(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn rand_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `rand_rangei` function."
@@ -982,10 +971,10 @@ pub fn rand_rangei(cache: &mut Cache, args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `rand_rangei` function.")),
     };
 
-    Ok(Value::Float(cache.rng.random_range(a..=b)))
+    Ok(Value::Float(rng.random_range(a..=b)))
 }
 
-pub fn randi_rangei(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn randi_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `randi_rangei` function."
@@ -1004,10 +993,10 @@ pub fn randi_rangei(cache: &mut Cache, args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `randi_rangei` function.")),
     };
 
-    Ok(Value::Integer(cache.rng.random_range(a..=b)))
+    Ok(Value::Integer(rng.random_range(a..=b)))
 }
 
-pub fn shuffle(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn shuffle(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!(
             "Invalid number of arguments to `shuffle` function."
@@ -1019,11 +1008,11 @@ pub fn shuffle(cache: &mut Cache, args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `shuffle` function.")),
     };
 
-    list.shuffle(&mut cache.rng);
+    list.shuffle(rng);
     Ok(Value::List(list))
 }
 
-pub fn choose(cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn choose(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `choose` function."));
     }
@@ -1033,10 +1022,10 @@ pub fn choose(cache: &mut Cache, args: &[Value]) -> Result<Value> {
         _ => return Err(anyhow!("Invalid type passed to `choose` function.")),
     };
 
-    Ok(list.choose(&mut cache.rng).unwrap().clone())
+    Ok(list.choose(rng).unwrap().clone())
 }
 
-pub fn translate(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn translate(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 3 {
         return Err(anyhow!(
             "Invalid number of arguments to `translate` function."
@@ -1065,7 +1054,7 @@ pub fn translate(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn translatex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn translatex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `translatex` function."
@@ -1087,7 +1076,7 @@ pub fn translatex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn translatey(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn translatey(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `translatey` function."
@@ -1109,7 +1098,7 @@ pub fn translatey(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn translateb(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn translateb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `translateb` function."
@@ -1131,7 +1120,7 @@ pub fn translateb(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn rotate(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn rotate(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `rotate` function."));
     }
@@ -1151,7 +1140,7 @@ pub fn rotate(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn rotate_at(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn rotate_at(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 4 {
         return Err(anyhow!(
             "Invalid number of arguments to `rotate_at` function."
@@ -1185,7 +1174,7 @@ pub fn rotate_at(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scale(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn scale(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 3 {
         return Err(anyhow!("Invalid number of arguments to `scale` function."));
     }
@@ -1211,7 +1200,7 @@ pub fn scale(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scalex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn scalex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `scalex` function."));
     }
@@ -1231,7 +1220,7 @@ pub fn scalex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scaley(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn scaley(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `scaley` function."));
     }
@@ -1251,7 +1240,7 @@ pub fn scaley(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn scaleb(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn scaleb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `scaleb` function."));
     }
@@ -1271,7 +1260,7 @@ pub fn scaleb(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skew(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn skew(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 3 {
         return Err(anyhow!("Invalid number of arguments to `skew` function."));
     }
@@ -1297,7 +1286,7 @@ pub fn skew(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skewx(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn skewx(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `skewx` function."));
     }
@@ -1317,7 +1306,7 @@ pub fn skewx(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skewy(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn skewy(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `skewy` function."));
     }
@@ -1337,7 +1326,7 @@ pub fn skewy(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn skewb(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn skewb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `skewb` function."));
     }
@@ -1357,7 +1346,7 @@ pub fn skewb(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn flip(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn flip(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `flip` function."));
     }
@@ -1377,7 +1366,7 @@ pub fn flip(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn fliph(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn fliph(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `fliph` function."));
     }
@@ -1391,7 +1380,7 @@ pub fn fliph(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn flipv(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn flipv(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `flipv` function."));
     }
@@ -1405,7 +1394,7 @@ pub fn flipv(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn flipd(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn flipd(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 1 {
         return Err(anyhow!("Invalid number of arguments to `flipd` function."));
     }
@@ -1419,7 +1408,7 @@ pub fn flipd(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn zindex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn zindex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `zindex` function."));
     }
@@ -1439,7 +1428,7 @@ pub fn zindex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hsl(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn hsl(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 4 {
         return Err(anyhow!("Invalid number of arguments to `hsl` function."));
     }
@@ -1471,7 +1460,7 @@ pub fn hsl(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hsla(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn hsla(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 5 {
         return Err(anyhow!("Invalid number of arguments to `hsla` function."));
     }
@@ -1509,7 +1498,7 @@ pub fn hsla(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hue(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn hue(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hue` function."));
     }
@@ -1529,7 +1518,7 @@ pub fn hue(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn saturation(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn saturation(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `saturation` function."
@@ -1551,7 +1540,7 @@ pub fn saturation(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn lightness(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn lightness(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `lightness` function."
@@ -1573,7 +1562,7 @@ pub fn lightness(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn alpha(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn alpha(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `alpha` function."));
     }
@@ -1593,7 +1582,7 @@ pub fn alpha(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hshift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn hshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hshift` function."));
     }
@@ -1613,7 +1602,7 @@ pub fn hshift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn sshift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn sshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `sshift` function."));
     }
@@ -1633,7 +1622,7 @@ pub fn sshift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn lshift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn lshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `lshift` function."));
     }
@@ -1653,7 +1642,7 @@ pub fn lshift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn ashift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn ashift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `ashift` function."));
     }
@@ -1673,7 +1662,7 @@ pub fn ashift(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn hex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn hex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!("Invalid number of arguments to `hex` function."));
     }
@@ -1692,7 +1681,7 @@ pub fn hex(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(shape))
 }
 
-pub fn move_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn move_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `move_to` function."
@@ -1721,7 +1710,7 @@ pub fn move_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
 }
 
-pub fn line_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn line_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 2 {
         return Err(anyhow!(
             "Invalid number of arguments to `line_to` function."
@@ -1750,7 +1739,7 @@ pub fn line_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
 }
 
-pub fn quad_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn quad_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 4 {
         return Err(anyhow!(
             "Invalid number of arguments to `quad_to` function."
@@ -1791,7 +1780,7 @@ pub fn quad_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
 }
 
-pub fn cubic_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn cubic_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 6 {
         return Err(anyhow!(
             "Invalid number of arguments to `cubic_to` function."
@@ -1844,7 +1833,7 @@ pub fn cubic_to(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
     Ok(Value::Shape(Rc::new(RefCell::new(shape))))
 }
 
-pub fn close(_cache: &mut Cache, args: &[Value]) -> Result<Value> {
+pub fn close(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     if args.len() != 0 {
         return Err(anyhow!("Invalid number of arguments to `close` function."));
     }

@@ -6,7 +6,6 @@ use alloc::{rc::Rc, vec::Vec};
 
 use core::cell::RefCell;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
-use serde::Serialize;
 use tiny_skia::Transform;
 
 pub static IDENTITY: Transform = Transform {
@@ -55,7 +54,7 @@ pub static FILL: BasicShape = BasicShape::Fill {
 
 pub static EMPTY: BasicShape = BasicShape::Empty;
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy)]
 pub enum PathSegment {
     MoveTo(f32, f32),
     LineTo(f32, f32),

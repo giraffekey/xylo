@@ -20,8 +20,6 @@ png = "0.17"
 tiny-skia = { version = "0.11", default-features = false }
 rand = { version = "0.9", default-features = false }
 hashbrown = "0.15"
-bincode = "1.3"
-serde = { version = "1.0", default-features = false, features = ["derive"] }
 ahash = { version = "0.8", default-features = false }
 rand_chacha = { version = "0.9", default-features = false }
 
@@ -36,9 +34,16 @@ std = [
 	"rand/std",
 	"rand/thread_rng",
 	"rand_chacha/std",
-	"serde/std",
 	"tiny-skia/std",
 	"tiny-skia/png-format",
 ]
-no-std = ["base64/alloc", "hashbrown/alloc", "nom/alloc", "palette/alloc", "palette/libm", "rand/alloc", "serde/alloc", "tiny-skia/no-std-float"]
+no-std = [
+	"base64/alloc",
+	"hashbrown/alloc",
+	"nom/alloc",
+	"palette/alloc",
+	"palette/libm",
+	"rand/alloc", 
+	"tiny-skia/no-std-float"
+]
 simd = ["tiny-skia/simd"]
