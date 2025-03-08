@@ -16,7 +16,7 @@ use rand_chacha::ChaCha8Rng;
 macro_rules! define_builtins {
     (
         $(
-            $name:literal => $func:ident
+            $name:literal => $func:ident $param_count:literal
         ),* $(,)?
     ) => {
         // Generate the static BUILTIN_FUNCTIONS array
@@ -33,157 +33,163 @@ macro_rules! define_builtins {
                 _ => Err(anyhow!("Unknown function: {}", name)),
             }
         }
+
+        // Generate the builtin_param_count function with match statements
+        pub fn builtin_param_count(name: &str) -> usize {
+            match name {
+                $(
+                    $name => $param_count,
+                )*
+                _ => unreachable!(),
+            }
+        }
     };
 }
 
 define_builtins! {
-    "+" => add,
-    "add" => add,
-    "-" => sub,
-    "sub" => sub,
-    "*" => mul,
-    "mul" => mul,
-    "/" => div,
-    "div" => div,
-    "%" => modulo,
-    "mod" => modulo,
-    "**" => pow,
-    "pow" => pow,
-    "&" => bitand,
-    "bitand" => bitand,
-    "|" => bitor,
-    "bitor" => bitor,
-    "^" => bitxor,
-    "bitxor" => bitxor,
-    "<<" => bitleft,
-    "bitleft" => bitleft,
-    ">>" => bitright,
-    "bitright" => bitright,
-    "==" => eq,
-    "eq" => eq,
-    "!=" => neq,
-    "neq" => neq,
-    "<" => lt,
-    "lt" => lt,
-    "<=" => lte,
-    "lte" => lte,
-    ">" => gt,
-    "gt" => gt,
-    ">=" => gte,
-    "gte" => gte,
-    "&&" => and,
-    "and" => and,
-    "||" => or,
-    "or" => or,
-    ":" => compose,
-    "compose" => compose,
-    "collect" => collect,
-    ".." => range,
-    "range" => range,
-    "..=" => rangei,
-    "rangei" => rangei,
-    "|>" => pipe,
-    "pipe" => pipe,
-    // "." => compose_fn,
-    // "compose_fn" => compose_fn,
-    "pi" => pi,
-    "π" => pi,
-    "sin" => sin,
-    "cos" => cos,
-    "tan" => tan,
-    "asin" => asin,
-    "acos" => acos,
-    "atan" => atan,
-    "atan2" => atan2,
-    "sinh" => sinh,
-    "cosh" => cosh,
-    "tanh" => tanh,
-    "asinh" => asinh,
-    "acosh" => acosh,
-    "atanh" => atanh,
-    "ln" => ln,
-    "log10" => log10,
-    "log" => log,
-    "floor" => floor,
-    "ceil" => ceil,
-    "abs" => abs,
-    "sqrt" => sqrt,
-    "min" => min,
-    "max" => max,
-    "rand" => rand,
-    "randi" => randi,
-    "rand_range" => rand_range,
-    "randi_range" => randi_range,
-    "rand_rangei" => rand_rangei,
-    "randi_rangei" => randi_rangei,
-    "shuffle" => shuffle,
-    "choose" => choose,
-    "t" => translate,
-    "translate" => translate,
-    "tx" => translatex,
-    "translatex" => translatex,
-    "ty" => translatey,
-    "translatey" => translatey,
-    "tt" => translateb,
-    "translateb" => translateb,
-    "r" => rotate,
-    "rotate" => rotate,
-    "ra" => rotate_at,
-    "rotate_at" => rotate_at,
-    "s" => scale,
-    "scale" => scale,
-    "sx" => scalex,
-    "scalex" => scalex,
-    "sy" => scaley,
-    "scaley" => scaley,
-    "ss" => scaleb,
-    "scaleb" => scaleb,
-    "k" => skew,
-    "skew" => skew,
-    "kx" => skewx,
-    "skewx" => skewx,
-    "ky" => skewy,
-    "skewy" => skewy,
-    "kk" => skewb,
-    "skewb" => skewb,
-    "f" => flip,
-    "flip" => flip,
-    "fh" => fliph,
-    "fliph" => fliph,
-    "fv" => flipv,
-    "flipv" => flipv,
-    "fd" => flipd,
-    "flipd" => flipd,
-    "z" => zindex,
-    "zindex" => zindex,
-    "hsl" => hsl,
-    "hsla" => hsla,
-    "h" => hue,
-    "hue" => hue,
-    "sat" => saturation,
-    "saturation" => saturation,
-    "l" => lightness,
-    "lightness" => lightness,
-    "a" => alpha,
-    "alpha" => alpha,
-    "hshift" => hshift,
-    "sshift" => sshift,
-    "lshift" => lshift,
-    "ashift" => ashift,
-    "hex" => hex,
-    // "blend" => blend,
-    "move_to" => move_to,
-    "line_to" => line_to,
-    "quad_to" => quad_to,
-    "cubic_to" => cubic_to,
-    "close" => close,
+    "+" => add 2,
+    "add" => add 2,
+    "-" => sub 2,
+    "sub" => sub 2,
+    "*" => mul 2,
+    "mul" => mul 2,
+    "/" => div 2,
+    "div" => div 2,
+    "%" => modulo 2,
+    "mod" => modulo 2,
+    "**" => pow 2,
+    "pow" => pow 2,
+    "&" => bitand 2,
+    "bitand" => bitand 2,
+    "|" => bitor 2,
+    "bitor" => bitor 2,
+    "^" => bitxor 2,
+    "bitxor" => bitxor 2,
+    "<<" => bitleft 2,
+    "bitleft" => bitleft 2,
+    ">>" => bitright 2,
+    "bitright" => bitright 2,
+    "==" => eq 2,
+    "eq" => eq 2,
+    "!=" => neq 2,
+    "neq" => neq 2,
+    "<" => lt 2,
+    "lt" => lt 2,
+    "<=" => lte 2,
+    "lte" => lte 2,
+    ">" => gt 2,
+    "gt" => gt 2,
+    ">=" => gte 2,
+    "gte" => gte 2,
+    "&&" => and 2,
+    "and" => and 2,
+    "||" => or 2,
+    "or" => or 2,
+    ":" => compose 2,
+    "compose" => compose 2,
+    "collect" => collect 1,
+    ".." => range 2,
+    "range" => range 2,
+    "..=" => rangei 2,
+    "rangei" => rangei 2,
+    "|>" => pipe 2,
+    "pipe" => pipe 2,
+    // "." => compose_fn 2,
+    // "compose_fn" => compose_fn 2,
+    "pi" => pi 0,
+    "π" => pi 0,
+    "sin" => sin 1,
+    "cos" => cos 1,
+    "tan" => tan 1,
+    "asin" => asin 1,
+    "acos" => acos 1,
+    "atan" => atan 1,
+    "atan2" => atan2 2,
+    "sinh" => sinh 1,
+    "cosh" => cosh 1,
+    "tanh" => tanh 1,
+    "asinh" => asinh 1,
+    "acosh" => acosh 1,
+    "atanh" => atanh 1,
+    "ln" => ln 1,
+    "log10" => log10 1,
+    "log" => log 2,
+    "floor" => floor 1,
+    "ceil" => ceil 1,
+    "abs" => abs 1,
+    "sqrt" => sqrt 1,
+    "min" => min 2,
+    "max" => max 2,
+    "rand" => rand 0,
+    "randi" => randi 0,
+    "rand_range" => rand_range 2,
+    "randi_range" => randi_range 2,
+    "rand_rangei" => rand_rangei 2,
+    "randi_rangei" => randi_rangei 2,
+    "shuffle" => shuffle 1,
+    "choose" => choose 1,
+    "t" => translate 3,
+    "translate" => translate 3,
+    "tx" => translatex 2,
+    "translatex" => translatex 2,
+    "ty" => translatey 2,
+    "translatey" => translatey 2,
+    "tt" => translateb 2,
+    "translateb" => translateb 2,
+    "r" => rotate 2,
+    "rotate" => rotate 2,
+    "ra" => rotate_at 4,
+    "rotate_at" => rotate_at 4,
+    "s" => scale 3,
+    "scale" => scale 3,
+    "sx" => scalex 2,
+    "scalex" => scalex 2,
+    "sy" => scaley 2,
+    "scaley" => scaley 2,
+    "ss" => scaleb 2,
+    "scaleb" => scaleb 2,
+    "k" => skew 3,
+    "skew" => skew 3,
+    "kx" => skewx 2,
+    "skewx" => skewx 2,
+    "ky" => skewy 2,
+    "skewy" => skewy 2,
+    "kk" => skewb 2,
+    "skewb" => skewb 2,
+    "f" => flip 2,
+    "flip" => flip 2,
+    "fh" => fliph 1,
+    "fliph" => fliph 1,
+    "fv" => flipv 1,
+    "flipv" => flipv 1,
+    "fd" => flipd 1,
+    "flipd" => flipd 1,
+    "z" => zindex 2,
+    "zindex" => zindex 2,
+    "hsl" => hsl 4,
+    "hsla" => hsla 5,
+    "h" => hue 2,
+    "hue" => hue 2,
+    "sat" => saturation 2,
+    "saturation" => saturation 2,
+    "l" => lightness 2,
+    "lightness" => lightness 2,
+    "a" => alpha 2,
+    "alpha" => alpha 2,
+    "hshift" => hshift 2,
+    "sshift" => sshift 2,
+    "lshift" => lshift 2,
+    "ashift" => ashift 2,
+    "hex" => hex 2,
+    // "blend" => blend 2,
+    "move_to" => move_to 2,
+    "line_to" => line_to 2,
+    "quad_to" => quad_to 4,
+    "cubic_to" => cubic_to 6,
+    "close" => close 0,
 }
 
 pub fn add(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `add` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a + b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
@@ -195,10 +201,6 @@ pub fn add(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn sub(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `sub` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a - b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
@@ -209,10 +211,6 @@ pub fn sub(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn mul(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `mul` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a * b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
@@ -224,10 +222,6 @@ pub fn mul(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn div(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `div` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a / b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
@@ -238,10 +232,6 @@ pub fn div(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn modulo(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `mod` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a % b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a % b)),
@@ -252,10 +242,6 @@ pub fn modulo(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn pow(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `pow` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Float((*a as f32).powf(*b as f32))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.powf(*b))),
@@ -266,10 +252,6 @@ pub fn pow(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn bitand(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `bitand` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a & b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 & *b as i32)),
@@ -280,10 +262,6 @@ pub fn bitand(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn bitor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `bitor` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a | b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 | *b as i32)),
@@ -294,10 +272,6 @@ pub fn bitor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn bitxor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `bitxor` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a ^ b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 ^ *b as i32)),
@@ -308,12 +282,6 @@ pub fn bitxor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn bitleft(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `bitleft` function."
-        ));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a << b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Integer((*a as i32) << *b as i32)),
@@ -324,12 +292,6 @@ pub fn bitleft(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn bitright(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `bitright` function."
-        ));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a >> b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Integer(*a as i32 >> *b as i32)),
@@ -340,10 +302,6 @@ pub fn bitright(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn eq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `eq` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a == b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a == b)),
@@ -357,10 +315,6 @@ pub fn eq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn neq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `neq` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a != b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a != b)),
@@ -373,10 +327,6 @@ pub fn neq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn lt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `lt` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a < b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a < b)),
@@ -387,10 +337,6 @@ pub fn lt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn lte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `lte` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a <= b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a <= b)),
@@ -401,10 +347,6 @@ pub fn lte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn gt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `gt` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a > b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a > b)),
@@ -415,10 +357,6 @@ pub fn gt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn gte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `gte` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a >= b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a >= b)),
@@ -429,10 +367,6 @@ pub fn gte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn and(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `and` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(*a && *b)),
         _ => Err(anyhow!("Invalid type passed to `and` function.")),
@@ -440,10 +374,6 @@ pub fn and(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn or(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `or` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(*a || *b)),
         _ => Err(anyhow!("Invalid type passed to `or` function.")),
@@ -451,12 +381,6 @@ pub fn or(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn compose(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `compose` function."
-        ));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Shape(a), Value::Shape(b)) => {
             let shape = match (&*a.borrow(), &*b.borrow()) {
@@ -498,12 +422,6 @@ pub fn compose(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn collect(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `collect` function."
-        ));
-    }
-
     match &args[0] {
         Value::List(list) => {
             let shapes: Result<Vec<Rc<RefCell<Shape>>>> = list
@@ -563,10 +481,6 @@ pub fn collect(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn range(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `range` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(from), Value::Integer(to)) => {
             Ok(Value::List((*from..*to).map(Value::Integer).collect()))
@@ -581,10 +495,6 @@ pub fn range(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn rangei(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `rangei` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(from), Value::Integer(to)) => {
             Ok(Value::List((*from..=*to).map(Value::Integer).collect()))
@@ -599,10 +509,6 @@ pub fn rangei(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn pipe(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `pipe` function."));
-    }
-
     let arg = args[0].clone();
 
     match args[1].clone() {
@@ -614,19 +520,11 @@ pub fn pipe(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn pi(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 0 {
-        return Err(anyhow!("Invalid number of arguments to `pi` function."));
-    }
-
+pub fn pi(_rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
     Ok(Value::Float(PI))
 }
 
 pub fn sin(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `sin` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).sin())),
         Value::Float(n) => Ok(Value::Float(n.sin())),
@@ -635,10 +533,6 @@ pub fn sin(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn cos(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `cos` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).cos())),
         Value::Float(n) => Ok(Value::Float(n.cos())),
@@ -647,10 +541,6 @@ pub fn cos(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn tan(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `tan` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).tan())),
         Value::Float(n) => Ok(Value::Float(n.tan())),
@@ -659,10 +549,6 @@ pub fn tan(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn asin(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `asin` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).asin())),
         Value::Float(n) => Ok(Value::Float(n.asin())),
@@ -671,10 +557,6 @@ pub fn asin(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn acos(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `acos` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).acos())),
         Value::Float(n) => Ok(Value::Float(n.acos())),
@@ -683,10 +565,6 @@ pub fn acos(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn atan(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `atan` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).atan())),
         Value::Float(n) => Ok(Value::Float(n.atan())),
@@ -695,10 +573,6 @@ pub fn atan(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn atan2(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `atan2` function."));
-    }
-
     let y = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -715,10 +589,6 @@ pub fn atan2(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn sinh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `sinh` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).sinh())),
         Value::Float(n) => Ok(Value::Float(n.sinh())),
@@ -727,10 +597,6 @@ pub fn sinh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn cosh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `cosh` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).cosh())),
         Value::Float(n) => Ok(Value::Float(n.cosh())),
@@ -739,10 +605,6 @@ pub fn cosh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn tanh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `tanh` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).tanh())),
         Value::Float(n) => Ok(Value::Float(n.tanh())),
@@ -751,10 +613,6 @@ pub fn tanh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn asinh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `asinh` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).asinh())),
         Value::Float(n) => Ok(Value::Float(n.asinh())),
@@ -763,10 +621,6 @@ pub fn asinh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn acosh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `acosh` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).acosh())),
         Value::Float(n) => Ok(Value::Float(n.acosh())),
@@ -775,10 +629,6 @@ pub fn acosh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn atanh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `atanh` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).atanh())),
         Value::Float(n) => Ok(Value::Float(n.atanh())),
@@ -787,10 +637,6 @@ pub fn atanh(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn ln(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `ln` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).ln())),
         Value::Float(n) => Ok(Value::Float(n.ln())),
@@ -799,10 +645,6 @@ pub fn ln(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn log10(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `log10` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).log10())),
         Value::Float(n) => Ok(Value::Float(n.log10())),
@@ -811,10 +653,6 @@ pub fn log10(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn log(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `log` function."));
-    }
-
     let n = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -831,10 +669,6 @@ pub fn log(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn abs(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `abs` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Integer(n.abs())),
         Value::Float(n) => Ok(Value::Float(n.abs())),
@@ -843,10 +677,6 @@ pub fn abs(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn floor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `floor` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Integer(n)),
         Value::Float(n) => Ok(Value::Integer(n.floor() as i32)),
@@ -855,10 +685,6 @@ pub fn floor(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn ceil(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `ceil` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Integer(n)),
         Value::Float(n) => Ok(Value::Integer(n.ceil() as i32)),
@@ -867,10 +693,6 @@ pub fn ceil(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn sqrt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `sqrt` function."));
-    }
-
     match args[0] {
         Value::Integer(n) => Ok(Value::Float((n as f32).sqrt())),
         Value::Float(n) => Ok(Value::Float(n.sqrt())),
@@ -879,10 +701,6 @@ pub fn sqrt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn min(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `min` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.min(b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.min(*b))),
@@ -894,10 +712,6 @@ pub fn min(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn max(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `max` function."));
-    }
-
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(*a.max(b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
@@ -908,19 +722,11 @@ pub fn max(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn rand(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 0 {
-        return Err(anyhow!("Invalid number of arguments to `rand` function."));
-    }
-
+pub fn rand(rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
     Ok(Value::Float(rng.random()))
 }
 
-pub fn randi(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 0 {
-        return Err(anyhow!("Invalid number of arguments to `randi` function."));
-    }
-
+pub fn randi(rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
     if rng.random() {
         Ok(Value::Integer(1))
     } else {
@@ -929,12 +735,6 @@ pub fn randi(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn rand_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `rand_range` function."
-        ));
-    }
-
     let a = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -951,12 +751,6 @@ pub fn rand_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn randi_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `randi_range` function."
-        ));
-    }
-
     let a = match args[0] {
         Value::Integer(n) => n,
         Value::Float(n) => n as i32,
@@ -973,12 +767,6 @@ pub fn randi_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn rand_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `rand_rangei` function."
-        ));
-    }
-
     let a = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -995,12 +783,6 @@ pub fn rand_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn randi_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `randi_rangei` function."
-        ));
-    }
-
     let a = match args[0] {
         Value::Integer(n) => n,
         Value::Float(n) => n as i32,
@@ -1017,12 +799,6 @@ pub fn randi_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn shuffle(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `shuffle` function."
-        ));
-    }
-
     let mut list = match &args[0] {
         Value::List(list) => list.clone(),
         _ => return Err(anyhow!("Invalid type passed to `shuffle` function.")),
@@ -1033,10 +809,6 @@ pub fn shuffle(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn choose(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `choose` function."));
-    }
-
     let list = match &args[0] {
         Value::List(list) => list,
         _ => return Err(anyhow!("Invalid type passed to `choose` function.")),
@@ -1046,12 +818,6 @@ pub fn choose(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn translate(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 3 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `translate` function."
-        ));
-    }
-
     let tx = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1075,12 +841,6 @@ pub fn translate(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn translatex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `translatex` function."
-        ));
-    }
-
     let tx = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1097,12 +857,6 @@ pub fn translatex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn translatey(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `translatey` function."
-        ));
-    }
-
     let ty = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1119,12 +873,6 @@ pub fn translatey(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn translateb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `translateb` function."
-        ));
-    }
-
     let t = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1141,10 +889,6 @@ pub fn translateb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn rotate(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `rotate` function."));
-    }
-
     let r = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1161,12 +905,6 @@ pub fn rotate(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn rotate_at(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 4 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `rotate_at` function."
-        ));
-    }
-
     let r = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1195,10 +933,6 @@ pub fn rotate_at(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn scale(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 3 {
-        return Err(anyhow!("Invalid number of arguments to `scale` function."));
-    }
-
     let sx = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1221,10 +955,6 @@ pub fn scale(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn scalex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `scalex` function."));
-    }
-
     let sx = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1241,10 +971,6 @@ pub fn scalex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn scaley(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `scaley` function."));
-    }
-
     let sy = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1261,10 +987,6 @@ pub fn scaley(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn scaleb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `scaleb` function."));
-    }
-
     let s = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1281,10 +1003,6 @@ pub fn scaleb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn skew(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 3 {
-        return Err(anyhow!("Invalid number of arguments to `skew` function."));
-    }
-
     let kx = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1307,10 +1025,6 @@ pub fn skew(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn skewx(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `skewx` function."));
-    }
-
     let kx = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1327,10 +1041,6 @@ pub fn skewx(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn skewy(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `skewy` function."));
-    }
-
     let ky = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1347,10 +1057,6 @@ pub fn skewy(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn skewb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `skewb` function."));
-    }
-
     let k = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1367,10 +1073,6 @@ pub fn skewb(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn flip(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `flip` function."));
-    }
-
     let f = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1387,10 +1089,6 @@ pub fn flip(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn fliph(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `fliph` function."));
-    }
-
     let shape = match &args[0] {
         Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `fliph` function.")),
@@ -1401,10 +1099,6 @@ pub fn fliph(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn flipv(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `flipv` function."));
-    }
-
     let shape = match &args[0] {
         Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `flipv` function.")),
@@ -1415,10 +1109,6 @@ pub fn flipv(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn flipd(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(anyhow!("Invalid number of arguments to `flipd` function."));
-    }
-
     let shape = match &args[0] {
         Value::Shape(shape) => shape.clone(),
         _ => return Err(anyhow!("Invalid type passed to `flipd` function.")),
@@ -1429,10 +1119,6 @@ pub fn flipd(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn zindex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `zindex` function."));
-    }
-
     let z = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1449,10 +1135,6 @@ pub fn zindex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn hsl(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 4 {
-        return Err(anyhow!("Invalid number of arguments to `hsl` function."));
-    }
-
     let h = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1481,10 +1163,6 @@ pub fn hsl(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn hsla(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 5 {
-        return Err(anyhow!("Invalid number of arguments to `hsla` function."));
-    }
-
     let h = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1519,10 +1197,6 @@ pub fn hsla(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn hue(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `hue` function."));
-    }
-
     let h = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1539,12 +1213,6 @@ pub fn hue(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn saturation(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `saturation` function."
-        ));
-    }
-
     let s = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1561,12 +1229,6 @@ pub fn saturation(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn lightness(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `lightness` function."
-        ));
-    }
-
     let l = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1583,10 +1245,6 @@ pub fn lightness(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn alpha(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `alpha` function."));
-    }
-
     let a = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1603,10 +1261,6 @@ pub fn alpha(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn hshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `hshift` function."));
-    }
-
     let h = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1623,10 +1277,6 @@ pub fn hshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn sshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `sshift` function."));
-    }
-
     let s = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1643,10 +1293,6 @@ pub fn sshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn lshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `lshift` function."));
-    }
-
     let l = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1663,10 +1309,6 @@ pub fn lshift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn ashift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `ashift` function."));
-    }
-
     let a = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1683,10 +1325,6 @@ pub fn ashift(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn hex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!("Invalid number of arguments to `hex` function."));
-    }
-
     let hex = match args[0] {
         Value::Hex(hex) => hex,
         _ => return Err(anyhow!("Invalid type passed to `hex` function.")),
@@ -1702,12 +1340,6 @@ pub fn hex(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn move_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `move_to` function."
-        ));
-    }
-
     let x = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1731,12 +1363,6 @@ pub fn move_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn line_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `line_to` function."
-        ));
-    }
-
     let x = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1760,12 +1386,6 @@ pub fn line_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn quad_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 4 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `quad_to` function."
-        ));
-    }
-
     let x1 = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1801,12 +1421,6 @@ pub fn quad_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn cubic_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 6 {
-        return Err(anyhow!(
-            "Invalid number of arguments to `cubic_to` function."
-        ));
-    }
-
     let x1 = match args[0] {
         Value::Integer(n) => n as f32,
         Value::Float(n) => n,
@@ -1854,10 +1468,6 @@ pub fn cubic_to(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 }
 
 pub fn close(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    if args.len() != 0 {
-        return Err(anyhow!("Invalid number of arguments to `close` function."));
-    }
-
     let shape = Shape::Path {
         segments: vec![PathSegment::Close],
         transform: IDENTITY,

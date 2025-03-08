@@ -4,7 +4,7 @@ use std::rc::Rc;
 #[cfg(feature = "no-std")]
 use alloc::{boxed::Box, format, rc::Rc, string::String, vec, vec::Vec};
 
-use crate::functions::{handle_builtin, BUILTIN_FUNCTIONS};
+use crate::functions::{builtin_param_count, handle_builtin, BUILTIN_FUNCTIONS};
 use crate::parser::*;
 use crate::shape::{Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
@@ -162,6 +162,18 @@ fn reduce_call(
     args: Vec<Value>,
 ) -> Result<FunctionBlock> {
     if BUILTIN_FUNCTIONS.contains(&name) {
+        let param_count = builtin_param_count(name);
+        if args.len() > param_count {
+            stack.operands.extend(args[param_count..].to_vec());
+        } else if args.len() < param_count {
+            let argc = param_count - args.len();
+            return Ok(FunctionBlock::Value(Value::Function(
+                name.into(),
+                argc,
+                args,
+            )));
+        }
+
         let value = handle_builtin(name, rng, &args)?;
         Ok(FunctionBlock::Value(value))
     } else {
