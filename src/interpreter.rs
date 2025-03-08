@@ -63,14 +63,45 @@ impl Value {
     }
 }
 
+type Frame = HashMap<String, Function>;
+
 #[derive(Debug)]
-struct Stack {
-    frames: Vec<HashMap<String, Function>>,
-    operands: Vec<Value>,
-    scope: usize,
+struct ForStack<'a> {
+    start: usize,
+    var: &'a str,
+    items: Vec<Value>,
+    values: Vec<Value>,
 }
 
-impl Stack {
+#[derive(Debug)]
+struct LoopStack {
+    start: usize,
+    remaining: usize,
+    values: Vec<Value>,
+}
+
+#[derive(Debug)]
+struct Stack<'a> {
+    frames: Vec<Frame>,
+    operands: Vec<Value>,
+    scope: usize,
+    calls: Vec<usize>,
+    fors: Vec<ForStack<'a>>,
+    loops: Vec<LoopStack>,
+}
+
+impl Stack<'_> {
+    pub fn new(frame: Frame) -> Self {
+        Self {
+            frames: vec![frame],
+            operands: Vec::new(),
+            scope: 0,
+            calls: Vec::new(),
+            fors: Vec::new(),
+            loops: Vec::new(),
+        }
+    }
+
     pub fn get_function(&self, name: &str) -> Option<&Function> {
         match self.frames[0].get(name) {
             Some(function) => Some(function),
@@ -88,7 +119,7 @@ enum FunctionBlock {
     Block { start: usize },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Function {
     params: Vec<String>,
     weighted: bool,
@@ -215,16 +246,13 @@ fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
     }
 }
 
-fn execute_block(
-    stack: &mut Stack,
+fn execute_block<'a>(
+    stack: &mut Stack<'a>,
     rng: &mut ChaCha8Rng,
-    block: &[Token],
+    block: &[Token<'a>],
     start: usize,
 ) -> Result<Value> {
     let mut index = start;
-    let mut call_stack = Vec::new();
-    let mut for_stack = Vec::new();
-    let mut loop_stack = Vec::new();
 
     while index < block.len() {
         match &block[index] {
@@ -247,7 +275,7 @@ fn execute_block(
                         index += 1;
                     }
                     FunctionBlock::Block { start } => {
-                        call_stack.push(index + 1);
+                        stack.calls.push(index + 1);
                         index = start;
                     }
                 }
@@ -257,7 +285,7 @@ fn execute_block(
                 stack.frames.pop().unwrap();
                 index += 1;
             }
-            Token::Return => match call_stack.pop() {
+            Token::Return => match stack.calls.pop() {
                 Some(last_index) => {
                     stack.frames.pop().unwrap();
                     stack.scope = stack.frames.len() - 1;
@@ -353,32 +381,40 @@ fn execute_block(
                     .into(),
                 );
 
-                for_stack.push((index, *var, items, Vec::with_capacity(len)));
+                stack.fors.push(ForStack {
+                    start: index + 1,
+                    var: *var,
+                    items,
+                    values: Vec::with_capacity(len),
+                });
                 index += 1;
             }
             Token::ForEnd => {
-                if let Some((start, var, items, values)) = for_stack.last_mut() {
-                    values.push(stack.operands.pop().unwrap());
+                if let Some(for_stack) = stack.fors.last_mut() {
+                    for_stack.values.push(stack.operands.pop().unwrap());
 
-                    if items.len() > 0 {
+                    if for_stack.items.len() > 0 {
                         stack.frames.push(
                             [(
-                                (*var).into(),
+                                for_stack.var.into(),
                                 Function {
                                     params: vec![],
                                     weighted: false,
-                                    blocks: vec![(FunctionBlock::Value(items.pop().unwrap()), 0.0)],
+                                    blocks: vec![(
+                                        FunctionBlock::Value(for_stack.items.pop().unwrap()),
+                                        0.0,
+                                    )],
                                 },
                             )]
                             .into(),
                         );
-                        index = *start + 1; // Jump back to ForStart
+                        index = for_stack.start; // Jump back to ForStart
                     } else {
-                        let list = Value::List(values.to_vec());
+                        let list = Value::List(for_stack.values.to_vec());
                         list.kind()?;
                         stack.operands.push(list);
 
-                        for_stack.pop().unwrap(); // Exit for loop
+                        stack.fors.pop().unwrap(); // Exit for loop
                         index += 1;
                     }
                 }
@@ -394,22 +430,26 @@ fn execute_block(
                     return Err(anyhow!("Cannot iterate over negative number."));
                 }
 
-                loop_stack.push((index, count, Vec::with_capacity(count as usize)));
+                stack.loops.push(LoopStack {
+                    start: index + 1,
+                    remaining: count as usize,
+                    values: Vec::with_capacity(count as usize),
+                });
                 index += 1;
             }
             Token::LoopEnd => {
-                if let Some((start, remaining, values)) = loop_stack.last_mut() {
-                    *remaining -= 1;
-                    values.push(stack.operands.pop().unwrap());
+                if let Some(loop_stack) = stack.loops.last_mut() {
+                    loop_stack.remaining -= 1;
+                    loop_stack.values.push(stack.operands.pop().unwrap());
 
-                    if *remaining > 0 {
-                        index = *start + 1; // Jump back to LoopStart
+                    if loop_stack.remaining > 0 {
+                        index = loop_stack.start; // Jump back to LoopStart
                     } else {
-                        let list = Value::List(values.to_vec());
+                        let list = Value::List(loop_stack.values.to_vec());
                         list.kind()?;
                         stack.operands.push(list);
 
-                        loop_stack.pop().unwrap(); // Exit loop
+                        stack.loops.pop().unwrap(); // Exit loop
                         index += 1;
                     }
                 }
@@ -465,11 +505,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
         }
     }
 
-    let mut stack = Stack {
-        frames: vec![functions],
-        operands: Vec::new(),
-        scope: 0,
-    };
+    let mut stack = Stack::new(functions);
     let shape = match reduce_call(&mut stack, &mut rng, "root", 0)? {
         FunctionBlock::Block { start } => {
             match execute_block(&mut stack, &mut rng, &block, start)? {
