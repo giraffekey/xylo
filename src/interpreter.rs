@@ -159,12 +159,12 @@ fn reduce_call(
     stack: &mut Stack,
     rng: &mut ChaCha8Rng,
     name: &str,
-    args: Vec<Value>,
+    mut args: Vec<Value>,
 ) -> Result<FunctionBlock> {
     if BUILTIN_FUNCTIONS.contains(&name) {
         let param_count = builtin_param_count(name);
         if args.len() > param_count {
-            stack.operands.extend(args[param_count..].to_vec());
+            stack.operands.extend(args.drain(param_count..));
         } else if args.len() < param_count {
             let argc = param_count - args.len();
             return Ok(FunctionBlock::Value(Value::Function(
@@ -180,9 +180,7 @@ fn reduce_call(
         match stack.get_function(name) {
             Some(function) => {
                 if args.len() > function.params.len() {
-                    stack
-                        .operands
-                        .extend(args[function.params.len()..].to_vec());
+                    stack.operands.extend(args.drain(function.params.len()..));
                 } else if args.len() < function.params.len() {
                     let argc = function.params.len() - args.len();
                     return Ok(FunctionBlock::Value(Value::Function(
@@ -312,10 +310,14 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::BinaryOperator(op) => {
-                let b = match next_operand(stack, rng, &mut index)? {
-                    Operand::Value(value) => value.unwrap(),
-                    Operand::Function => continue 'a,
+                let b = match op {
+                    BinaryOperator::Pipe => stack.operands.pop().unwrap(),
+                    _ => match next_operand(stack, rng, &mut index)? {
+                        Operand::Value(value) => value.unwrap(),
+                        Operand::Function => continue 'a,
+                    },
                 };
+
                 let a = match next_operand(stack, rng, &mut index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => {
@@ -329,17 +331,6 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::Call(name, argc) => {
-                match block.get(index + 1) {
-                    Some(Token::BinaryOperator(_)) => {
-                        stack
-                            .operands
-                            .push(Value::Function((*name).into(), *argc, Vec::new()));
-                        index += 1;
-                        continue 'a;
-                    }
-                    _ => (),
-                }
-
                 let mut args = Vec::with_capacity(*argc);
                 for _ in 0..*argc {
                     let arg = match next_operand(stack, rng, &mut index)? {
