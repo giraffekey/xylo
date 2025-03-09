@@ -387,13 +387,13 @@ fn execute_block<'a>(
                     }
                     FunctionBlock::HigherOrder => match *name {
                         "map" => match (&args[0], &args[1]) {
-                            (Value::Function(name, argc, pre_args), Value::List(list)) => {
+                            (Value::Function(name, _argc, pre_args), Value::List(list)) => {
                                 index += 1;
 
                                 let mut frames = Vec::new();
                                 let mut values = Vec::new();
                                 for value in list.clone() {
-                                    let mut args = Vec::with_capacity(pre_args.len() + argc);
+                                    let mut args = Vec::with_capacity(pre_args.len() + 1);
                                     args.extend(pre_args.clone());
                                     args.push(value);
                                     args.reverse();
