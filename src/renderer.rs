@@ -7,6 +7,7 @@ use alloc::{rc::Rc, vec::Vec};
 use crate::shape::{BasicShape, HslaChange, PathSegment, Shape, IDENTITY};
 
 use anyhow::Result;
+use core::ops::Add;
 use palette::{rgb::Rgba, FromColor, Hsla};
 use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, Rect, Shader, Transform};
 
@@ -76,6 +77,10 @@ fn overwrite_color(
     Hsla::new(hue, saturation, lightness, alpha)
 }
 
+fn combine_shift<T: Add<Output = T> + Copy>(shift: Option<T>, curr: Option<T>) -> Option<T> {
+    shift.map(|s| curr.map_or(s, |c| c + s)).or(curr)
+}
+
 fn resolve_zindex_overwrites(
     zindex_overwrite: Option<f32>,
     zindex_shift: Option<f32>,
@@ -83,9 +88,7 @@ fn resolve_zindex_overwrites(
     curr_zindex_shift: Option<f32>,
 ) -> (Option<f32>, Option<f32>) {
     let zindex_overwrite = zindex_overwrite.or(curr_zindex_overwrite);
-    let zindex_shift = zindex_shift
-        .map(|shift| curr_zindex_shift.map_or(shift, |curr| curr + shift))
-        .or(curr_zindex_shift);
+    let zindex_shift = combine_shift(zindex_shift, curr_zindex_shift);
     (zindex_overwrite, zindex_shift)
 }
 
@@ -104,30 +107,10 @@ fn resolve_color_overwrites(
         alpha: color_overwrite.alpha.or(curr_color_overwrite.alpha),
     };
     let color_shift = HslaChange {
-        hue: color_shift
-            .hue
-            .map(|shift| curr_color_shift.hue.map_or(shift, |curr| curr + shift))
-            .or(curr_color_shift.hue),
-        saturation: color_shift
-            .saturation
-            .map(|shift| {
-                curr_color_shift
-                    .saturation
-                    .map_or(shift, |curr| curr + shift)
-            })
-            .or(curr_color_shift.saturation),
-        lightness: color_shift
-            .lightness
-            .map(|shift| {
-                curr_color_shift
-                    .lightness
-                    .map_or(shift, |curr| curr + shift)
-            })
-            .or(curr_color_shift.lightness),
-        alpha: color_shift
-            .alpha
-            .map(|shift| curr_color_shift.alpha.map_or(shift, |curr| curr + shift))
-            .or(curr_color_shift.alpha),
+        hue: combine_shift(color_shift.hue, curr_color_shift.hue),
+        saturation: combine_shift(color_shift.saturation, curr_color_shift.saturation),
+        lightness: combine_shift(color_shift.lightness, curr_color_shift.lightness),
+        alpha: combine_shift(color_shift.alpha, curr_color_shift.alpha),
     };
     (color_overwrite, color_shift)
 }

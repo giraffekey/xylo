@@ -309,6 +309,16 @@ fn execute_block<'a>(
                 stack.operands.push(reduce_literal(literal)?);
                 index += 1;
             }
+            Token::UnaryOperator(op) => {
+                let arg = match next_operand(stack, rng, &mut index)? {
+                    Operand::Value(value) => value.unwrap(),
+                    Operand::Function => continue 'a,
+                };
+
+                let value = handle_builtin(op.as_str(), rng, &[arg])?;
+                stack.operands.push(value);
+                index += 1;
+            }
             Token::BinaryOperator(op) => {
                 let b = match op {
                     BinaryOperator::Pipe => stack.operands.pop().unwrap(),

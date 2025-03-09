@@ -35,6 +35,23 @@ pub enum Literal {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Negation,
+    Not,
+    BitNot,
+}
+
+impl UnaryOperator {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Negation => "neg",
+            Self::Not => "!",
+            Self::BitNot => "~",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
     Addition,
     Subtraction,
@@ -119,6 +136,7 @@ pub enum Pattern {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'a> {
     Literal(Literal),
+    UnaryOperator(UnaryOperator),
     BinaryOperator(BinaryOperator),
     Call(&'a str, usize),
     Jump(usize),
@@ -262,6 +280,15 @@ fn _binary_operator_tag(input: &str) -> IResult<&str, &str> {
         )),
         tag(".."),
         tag("^"),
+    ))
+    .parse(input)
+}
+
+fn unary_operator(input: &str) -> IResult<&str, UnaryOperator> {
+    alt((
+        value(UnaryOperator::Negation, (tag("-"), peek(not(tag(">"))))),
+        value(UnaryOperator::Not, tag("!")),
+        value(UnaryOperator::BitNot, tag("~")),
     ))
     .parse(input)
 }
@@ -530,6 +557,8 @@ fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
 fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, Block> {
     let (input, indent) = indentation(input, indent)?;
 
+    let (input, unary_operator) = opt(unary_operator).parse(input)?;
+
     let (mut input, mut lhs) = alt((
         map(literal, |literal| vec![Token::Literal(literal)]),
         let_statement(indent),
@@ -546,19 +575,20 @@ fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, B
     ))
     .parse(input)?;
 
+    if let Some(unary_operator) = unary_operator {
+        lhs.push(Token::UnaryOperator(unary_operator));
+    }
+
     while let Ok((next_input, op)) = preceded(multispace0, binary_operator).parse(input) {
         if op.precedence() < precedence {
             break;
         }
+
         let (next_input, rhs) = expr_recursive(next_input, indent + 1, op.precedence() + 1)?;
         input = next_input;
 
-        let mut block = Vec::with_capacity(lhs.len() + rhs.len() + 1);
-        block.extend(lhs);
-        block.extend(rhs);
-        block.push(Token::BinaryOperator(op));
-
-        lhs = block;
+        lhs.extend(rhs);
+        lhs.push(Token::BinaryOperator(op));
     }
 
     Ok((input, lhs))

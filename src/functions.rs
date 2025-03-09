@@ -47,6 +47,11 @@ macro_rules! define_builtins {
 }
 
 define_builtins! {
+    "neg" => neg 1,
+    "!" => not 1,
+    "not" => not 1,
+    "~" => bitnot 1,
+    "bitnot" => bitnot 1,
     "+" => add 2,
     "add" => add 2,
     "-" => sub 2,
@@ -187,6 +192,29 @@ define_builtins! {
     "quad_to" => quad_to 4,
     "cubic_to" => cubic_to 6,
     "close" => close 0,
+}
+
+pub fn neg(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match &args[0] {
+        Value::Integer(n) => Ok(Value::Integer(-n)),
+        Value::Float(n) => Ok(Value::Float(-n)),
+        _ => Err(anyhow!("Invalid type passed to `neg` function.")),
+    }
+}
+
+pub fn not(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match &args[0] {
+        Value::Boolean(b) => Ok(Value::Boolean(!b)),
+        _ => Err(anyhow!("Invalid type passed to `not` function.")),
+    }
+}
+
+pub fn bitnot(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match &args[0] {
+        Value::Integer(n) => Ok(Value::Integer(!n)),
+        Value::Float(n) => Ok(Value::Float(!(*n as i32) as f32)),
+        _ => Err(anyhow!("Invalid type passed to `neg` function.")),
+    }
 }
 
 pub fn add(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
