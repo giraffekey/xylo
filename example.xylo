@@ -8,15 +8,15 @@ bouquet =
     : r 15 flower6
 
 flower6 =
-    collect (demiflower6 12)
-    : flip 90 (collect (demiflower6 12))
+    collect demiflower6
+    : flip 90 (collect demiflower6)
 
 flower5 =
     collect demiflower5
     : flip 90 (collect demiflower5)
 
-demiflower6 n =
-    for i in 0..n
+demiflower6 =
+    for i in 0..12
     	r (i * 30) (petal6 quality)
 
 demiflower5 =
