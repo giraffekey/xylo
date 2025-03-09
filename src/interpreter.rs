@@ -11,6 +11,7 @@ use crate::shape::{Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 use anyhow::{anyhow, Result};
 use core::cell::RefCell;
 use hashbrown::HashMap;
+use num::Complex;
 use rand::distr::{weighted::WeightedIndex, Distribution};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -19,6 +20,7 @@ use rand_chacha::ChaCha8Rng;
 pub enum ValueKind {
     Integer,
     Float,
+    Complex,
     Boolean,
     Hex,
     Shape,
@@ -31,6 +33,7 @@ pub enum ValueKind {
 pub enum Value {
     Integer(i32),
     Float(f32),
+    Complex(Complex<f32>),
     Boolean(bool),
     Hex([u8; 3]),
     Shape(Rc<RefCell<Shape>>),
@@ -43,6 +46,7 @@ impl Value {
         match self {
             Self::Integer(_) => Ok(ValueKind::Integer),
             Self::Float(_) => Ok(ValueKind::Float),
+            Self::Complex(_) => Ok(ValueKind::Complex),
             Self::Boolean(_) => Ok(ValueKind::Boolean),
             Self::Hex(_) => Ok(ValueKind::Hex),
             Self::Shape(_) => Ok(ValueKind::Shape),
@@ -134,6 +138,7 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
     match literal {
         Literal::Integer(n) => Ok(Value::Integer(*n)),
         Literal::Float(n) => Ok(Value::Float(*n)),
+        Literal::Complex(n) => Ok(Value::Complex(*n)),
         Literal::Boolean(b) => Ok(Value::Boolean(*b)),
         Literal::Hex(hex) => Ok(Value::Hex(*hex)),
         Literal::Shape(kind) => {

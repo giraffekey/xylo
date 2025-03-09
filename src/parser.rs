@@ -2,6 +2,7 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 
 use core::iter;
+use core::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::{
@@ -12,6 +13,7 @@ use nom::error::{Error, ErrorKind};
 use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{Err, IResult, Parser};
+use num::Complex;
 
 const KEYWORDS: &[&str] = &["let", "if", "else", "match", "for", "loop"];
 
@@ -28,6 +30,7 @@ pub enum ShapeKind {
 pub enum Literal {
     Integer(i32),
     Float(f32),
+    Complex(Complex<f32>),
     Boolean(bool),
     Hex([u8; 3]),
     Shape(ShapeKind),
@@ -171,8 +174,7 @@ pub type Block<'a> = Vec<Token<'a>>;
 pub type Tree<'a> = Vec<Definition<'a>>;
 
 fn integer(input: &str) -> IResult<&str, Literal> {
-    i32.parse(input)
-        .map(|(input, value)| (input, Literal::Integer(value)))
+    map(i32, Literal::Integer).parse(input)
 }
 
 fn float_value(input: &str) -> IResult<&str, f32> {
@@ -181,7 +183,34 @@ fn float_value(input: &str) -> IResult<&str, f32> {
 }
 
 fn float(input: &str) -> IResult<&str, Literal> {
-    float_value(input).map(|(input, value)| (input, Literal::Float(value)))
+    map(float_value, Literal::Float).parse(input)
+}
+
+fn complex_value(input: &str) -> IResult<&str, Complex<f32>> {
+    map_res(
+        alt((
+            recognize((
+                opt(char('-')),
+                alt((float_value, map(i32, |n| n as f32))),
+                opt(alt((char('+'), char('-')))),
+                opt(alt((float_value, map(i32, |n| n as f32)))),
+                alt((char('i'), char('𝑖'), char('j'), char('𝑗'))),
+            )),
+            recognize((
+                opt(char('-')),
+                alt((float_value, map(i32, |n| n as f32))),
+                alt((char('i'), char('𝑖'), char('j'), char('𝑗'))),
+                alt((char('+'), char('-'))),
+                alt((float_value, map(i32, |n| n as f32))),
+            )),
+        )),
+        |s: &str| Complex::from_str(&s.replace("𝑖", "i").replace("𝑗", "j")),
+    )
+    .parse(input)
+}
+
+fn complex(input: &str) -> IResult<&str, Literal> {
+    map(complex_value, Literal::Complex).parse(input)
 }
 
 fn boolean(input: &str) -> IResult<&str, Literal> {
@@ -273,7 +302,7 @@ fn list(input: &str) -> IResult<&str, Literal> {
 }
 
 fn literal(input: &str) -> IResult<&str, Literal> {
-    alt((float, integer, boolean, hex, shape, list)).parse(input)
+    alt((complex, float, integer, boolean, hex, shape, list)).parse(input)
 }
 
 fn end(input: &str) -> IResult<&str, &str> {
@@ -290,7 +319,10 @@ fn unary_operator_tag(input: &str) -> IResult<&str, &str> {
 
 fn unary_operator(input: &str) -> IResult<&str, UnaryOperator> {
     alt((
-        value(UnaryOperator::Negation, (tag("-"), peek(not(tag(">"))))),
+        value(
+            UnaryOperator::Negation,
+            (tag("-"), peek(not(alt((tag(">"), digit1))))),
+        ),
         value(UnaryOperator::Not, tag("!")),
         value(UnaryOperator::BitNot, tag("~")),
     ))
