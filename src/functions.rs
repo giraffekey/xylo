@@ -10,6 +10,7 @@ use core::cell::RefCell;
 
 use anyhow::{anyhow, Result};
 use core::f32::consts::{E, PI, TAU};
+use factorial::{DoubleFactorial, Factorial};
 use num::complex::{Complex, ComplexFloat};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -139,6 +140,9 @@ define_builtins! {
     "ceil" => ceil 1,
     "abs" => abs 1,
     "sqrt" => sqrt 1,
+    "cbrt" => cbrt 1,
+    "fact" => fact 1,
+    "fact2" => fact2 1,
     "min" => min 2,
     "max" => max 2,
     "complex" => complex 2,
@@ -863,6 +867,51 @@ pub fn sqrt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
         Value::Float(n) => Ok(Value::Float(n.sqrt())),
         Value::Complex(n) => Ok(Value::Complex(n.sqrt())),
         _ => Err(anyhow!("Invalid type passed to `sqrt` function.")),
+    }
+}
+
+pub fn cbrt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match args[0] {
+        Value::Integer(n) => Ok(Value::Float((n as f32).cbrt())),
+        Value::Float(n) => Ok(Value::Float(n.cbrt())),
+        Value::Complex(n) => Ok(Value::Complex(n.cbrt())),
+        _ => Err(anyhow!("Invalid type passed to `cbrt` function.")),
+    }
+}
+
+pub fn fact(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match args[0] {
+        Value::Integer(n) => {
+            if n < 0 {
+                return Err(anyhow!("Cannot get factorial of negative number."));
+            }
+            Ok(Value::Integer((n as u32).factorial() as i32))
+        }
+        Value::Float(n) => {
+            if n < 0.0 {
+                return Err(anyhow!("Cannot get factorial of negative number."));
+            }
+            Ok(Value::Integer((n as u32).factorial() as i32))
+        }
+        _ => Err(anyhow!("Invalid type passed to `fact` function.")),
+    }
+}
+
+pub fn fact2(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match args[0] {
+        Value::Integer(n) => {
+            if n < 0 {
+                return Err(anyhow!("Cannot get factorial of negative number."));
+            }
+            Ok(Value::Integer((n as u32).double_factorial() as i32))
+        }
+        Value::Float(n) => {
+            if n < 0.0 {
+                return Err(anyhow!("Cannot get factorial of negative number."));
+            }
+            Ok(Value::Integer((n as u32).double_factorial() as i32))
+        }
+        _ => Err(anyhow!("Invalid type passed to `fact2` function.")),
     }
 }
 

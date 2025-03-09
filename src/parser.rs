@@ -178,21 +178,23 @@ fn integer(input: &str) -> IResult<&str, Literal> {
 }
 
 fn float_value(input: &str) -> IResult<&str, f32> {
-    let (input, s) = recognize((
-        opt(char('-')),
-        alt((
-            recognize((opt(digit1), char('.'), digit1)),
-            recognize((
-                digit1,
-                opt((char('.'), digit1)),
-                alt((char('e'), char('E'))),
-                opt(alt((char('+'), char('-')))),
-                digit1,
+    map_res(
+        recognize((
+            opt(char('-')),
+            alt((
+                recognize((opt(digit1), char('.'), digit1)),
+                recognize((
+                    digit1,
+                    opt((char('.'), digit1)),
+                    alt((char('e'), char('E'))),
+                    opt(alt((char('+'), char('-')))),
+                    digit1,
+                )),
             )),
         )),
-    ))
-    .parse(input)?;
-    Ok((input, s.parse().unwrap()))
+        |s: &str| s.parse(),
+    )
+    .parse(input)
 }
 
 fn float(input: &str) -> IResult<&str, Literal> {

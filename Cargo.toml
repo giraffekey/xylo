@@ -22,6 +22,8 @@ rand = { version = "0.9", default-features = false }
 hashbrown = "0.15"
 ahash = { version = "0.8", default-features = false }
 rand_chacha = { version = "0.9", default-features = false }
+num = "0.4.3"
+factorial = "0.4.0"
 
 [features]
 default = ["std", "simd"]
