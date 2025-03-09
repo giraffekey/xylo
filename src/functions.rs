@@ -9,9 +9,12 @@ use crate::shape::{HslaChange, PathSegment, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
 use anyhow::{anyhow, Result};
-use core::f32::consts::PI;
+use core::f32::consts::{E, PI, TAU};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+
+// Defined manually until more_float_constants is stable
+pub const PHI: f32 = 1.618033988749894848204586834365638118_f32;
 
 macro_rules! define_builtins {
     (
@@ -109,6 +112,12 @@ define_builtins! {
     // "compose_fn" => compose_fn 2,
     "pi" => pi 0,
     "π" => pi 0,
+    "tau" => tau 0,
+    "τ" => tau 0,
+    "e" => e 0,
+    "ℯ" => e 0,
+    "phi" => phi 0,
+    "φ" => phi 0,
     "sin" => sin 1,
     "cos" => cos 1,
     "tan" => tan 1,
@@ -609,6 +618,18 @@ pub fn pipe(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
 
 pub fn pi(_rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
     Ok(Value::Float(PI))
+}
+
+pub fn tau(_rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
+    Ok(Value::Float(TAU))
+}
+
+pub fn e(_rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
+    Ok(Value::Float(E))
+}
+
+pub fn phi(_rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
+    Ok(Value::Float(PHI))
 }
 
 pub fn sin(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {

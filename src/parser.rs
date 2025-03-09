@@ -228,9 +228,33 @@ fn hex(input: &str) -> IResult<&str, Literal> {
 
 fn shape(input: &str) -> IResult<&str, Literal> {
     let (input, shape) = alt((
-        value(ShapeKind::Triangle, tag("TRIANGLE")),
-        value(ShapeKind::Square, tag("SQUARE")),
-        value(ShapeKind::Circle, tag("CIRCLE")),
+        value(
+            ShapeKind::Square,
+            alt((
+                tag("SQUARE"),
+                tag("⬛"),
+                tag("⬜"),
+                tag("■"),
+                tag("□"),
+                tag("▪"),
+                tag("▫"),
+            )),
+        ),
+        value(
+            ShapeKind::Circle,
+            alt((
+                tag("CIRCLE"),
+                tag("⬤"),
+                tag("◯"),
+                tag("●"),
+                tag("○"),
+                tag("🞄"),
+            )),
+        ),
+        value(
+            ShapeKind::Triangle,
+            alt((tag("TRIANGLE"), tag("▲"), tag("△"), tag("▴"), tag("▵"))),
+        ),
         value(ShapeKind::Fill, tag("FILL")),
         value(ShapeKind::Empty, tag("EMPTY")),
     ))
@@ -345,6 +369,9 @@ fn identifier(input: &str) -> IResult<&str, &str> {
     verify(
         alt((
             tag("π"),
+            tag("τ"),
+            tag("ℯ"),
+            tag("φ"),
             recognize((
                 alt((alpha1, tag("_"))),
                 many0(alt((alphanumeric1, tag("_")))),
