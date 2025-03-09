@@ -87,6 +87,11 @@ struct LoopStack {
     values: Vec<Value>,
 }
 
+#[derive(Debug, Clone)]
+enum HigherOrder {
+    Map(usize, usize, Vec<Value>),
+}
+
 #[derive(Debug)]
 struct Stack<'a> {
     frames: Vec<Frame>,
@@ -95,6 +100,7 @@ struct Stack<'a> {
     calls: Vec<usize>,
     fors: Vec<ForStack<'a>>,
     loops: Vec<LoopStack>,
+    higher_order: Option<HigherOrder>,
 }
 
 impl Stack<'_> {
@@ -106,6 +112,7 @@ impl Stack<'_> {
             calls: Vec::new(),
             fors: Vec::new(),
             loops: Vec::new(),
+            higher_order: None,
         }
     }
 
@@ -124,7 +131,8 @@ impl Stack<'_> {
 #[derive(Debug, Clone)]
 enum FunctionBlock {
     Value(Value),
-    Block { start: usize },
+    Start(usize),
+    HigherOrder,
 }
 
 #[derive(Debug, Clone)]
@@ -179,8 +187,13 @@ fn reduce_call(
             )));
         }
 
-        let value = handle_builtin(name, rng, &args)?;
-        Ok(FunctionBlock::Value(value))
+        match name {
+            "map" => return Ok(FunctionBlock::HigherOrder),
+            _ => {
+                let value = handle_builtin(name, rng, &args)?;
+                Ok(FunctionBlock::Value(value))
+            }
+        }
     } else {
         match stack.get_function(name) {
             Some(function) => {
@@ -210,7 +223,7 @@ fn reduce_call(
 
                 match block {
                     FunctionBlock::Value(_) => Ok(block.clone()),
-                    FunctionBlock::Block { start } => {
+                    FunctionBlock::Start(start) => {
                         let functions = function
                             .params
                             .clone()
@@ -231,8 +244,9 @@ fn reduce_call(
                         stack.scope = stack.frames.len();
                         stack.frames.push(functions);
 
-                        Ok(FunctionBlock::Block { start: *start })
+                        Ok(FunctionBlock::Start(*start))
                     }
+                    _ => unreachable!(),
                 }
             }
             None => Err(anyhow!(format!("Function `{}` not found", name))),
@@ -289,11 +303,12 @@ fn next_operand(stack: &mut Stack, rng: &mut ChaCha8Rng, index: &mut usize) -> R
             let function_block = reduce_call(stack, rng, &name, args)?;
             match function_block {
                 FunctionBlock::Value(value) => Ok(Operand::Value(Some(value))),
-                FunctionBlock::Block { start } => {
+                FunctionBlock::Start(start) => {
                     stack.calls.push(*index);
                     *index = start;
                     Ok(Operand::Function)
                 }
+                FunctionBlock::HigherOrder => todo!(),
             }
         }
         value => Ok(Operand::Value(value)),
@@ -348,27 +363,71 @@ fn execute_block<'a>(
             Token::Call(name, argc) => {
                 let mut args = Vec::with_capacity(*argc);
                 for _ in 0..*argc {
-                    let arg = match next_operand(stack, rng, &mut index)? {
-                        Operand::Value(value) => value.unwrap(),
-                        Operand::Function => {
-                            stack.operands.extend(args);
-                            continue 'a;
-                        }
-                    };
-                    args.push(arg);
+                    // let arg = match next_operand(stack, rng, &mut index)? {
+                    //     Operand::Value(value) => value.unwrap(),
+                    //     Operand::Function => {
+                    //         stack.operands.extend(args);
+                    //         continue 'a;
+                    //     }
+                    // };
+                    // args.push(arg);
+                    args.push(stack.operands.pop().unwrap());
                 }
                 args.reverse();
 
-                let function_block = reduce_call(stack, rng, name, args)?;
+                let function_block = reduce_call(stack, rng, name, args.clone())?;
                 match function_block {
                     FunctionBlock::Value(value) => {
                         stack.operands.push(value);
                         index += 1;
                     }
-                    FunctionBlock::Block { start } => {
+                    FunctionBlock::Start(start) => {
                         stack.calls.push(index + 1);
                         index = start;
                     }
+                    FunctionBlock::HigherOrder => match *name {
+                        "map" => match (&args[0], &args[1]) {
+                            (Value::Function(name, argc, pre_args), Value::List(list)) => {
+                                index += 1;
+
+                                let mut frames = Vec::new();
+                                let mut values = Vec::new();
+                                for value in list.clone() {
+                                    let mut args = Vec::with_capacity(pre_args.len() + argc);
+                                    args.extend(pre_args.clone());
+                                    args.push(value);
+                                    args.reverse();
+
+                                    let function_block = reduce_call(stack, rng, &name, args)?;
+                                    match function_block {
+                                        FunctionBlock::Value(value) => values.push(value),
+                                        FunctionBlock::Start(start) => {
+                                            frames.push(stack.frames.pop().unwrap());
+                                            stack.calls.push(index);
+                                            index = start;
+                                        }
+                                        FunctionBlock::HigherOrder => todo!(),
+                                    }
+                                }
+
+                                if frames.len() == 0 {
+                                    let list = Value::List(values);
+                                    list.kind()?;
+                                    stack.operands.push(list);
+                                } else {
+                                    stack.higher_order = Some(HigherOrder::Map(
+                                        index,
+                                        frames.len() - values.len(),
+                                        values,
+                                    ));
+                                    frames.reverse();
+                                    stack.frames.extend(frames);
+                                }
+                            }
+                            _ => return Err(anyhow!("Invalid type passed to `map` function.")),
+                        },
+                        _ => unreachable!(),
+                    },
                 }
             }
             Token::Jump(skip) => index += skip + 1,
@@ -376,15 +435,34 @@ fn execute_block<'a>(
                 stack.frames.pop().unwrap();
                 index += 1;
             }
-            Token::Return => {
+            Token::Return(start) => {
                 let value = match next_operand(stack, rng, &mut index)? {
                     Operand::Value(value) => value,
                     Operand::Function => continue 'a,
                 };
+
                 match stack.calls.pop() {
                     Some(last_index) => {
-                        if let Some(value) = value {
-                            stack.operands.push(value);
+                        match &mut stack.higher_order {
+                            Some(higher_order) => match higher_order {
+                                HigherOrder::Map(other_start, count, values)
+                                    if *start == Some(*other_start) =>
+                                {
+                                    *count -= 1;
+                                    values.push(value.unwrap());
+
+                                    if *count == 0 {
+                                        let list = Value::List(values.clone());
+                                        list.kind()?;
+                                        stack.operands.push(list);
+                                        stack.higher_order = None;
+                                    }
+                                }
+                                _ => (),
+                            },
+                            _ => {
+                                stack.operands.push(value.unwrap());
+                            }
                         }
 
                         stack.frames.pop().unwrap();
@@ -401,7 +479,7 @@ fn execute_block<'a>(
                         Function {
                             params: params.iter().map(|s| (*s).into()).collect(),
                             weighted: false,
-                            blocks: vec![(FunctionBlock::Block { start: index + 1 }, 0.0)],
+                            blocks: vec![(FunctionBlock::Start(index + 1), 0.0)],
                         },
                     )]
                     .into(),
@@ -608,7 +686,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
     for definition in tree {
         let start = block.len();
         block.extend(definition.block);
-        block.push(Token::Return);
+        block.push(Token::Return(Some(start)));
 
         match functions.get_mut(definition.name) {
             Some(function) => {
@@ -619,7 +697,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                 function.weighted = true;
                 function
                     .blocks
-                    .push((FunctionBlock::Block { start }, definition.weight));
+                    .push((FunctionBlock::Start(start), definition.weight));
             }
             None => {
                 functions.insert(
@@ -627,7 +705,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                     Function {
                         params: definition.params.iter().map(|s| (*s).into()).collect(),
                         weighted: false,
-                        blocks: vec![(FunctionBlock::Block { start }, definition.weight)],
+                        blocks: vec![(FunctionBlock::Start(start), definition.weight)],
                     },
                 );
             }
@@ -636,12 +714,10 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
 
     let mut stack = Stack::new(functions);
     let shape = match reduce_call(&mut stack, &mut rng, "root", Vec::new())? {
-        FunctionBlock::Block { start } => {
-            match execute_block(&mut stack, &mut rng, &block, start)? {
-                Value::Shape(shape) => shape,
-                _ => return Err(anyhow!("The `root` function must return a shape.")),
-            }
-        }
+        FunctionBlock::Start(start) => match execute_block(&mut stack, &mut rng, &block, start)? {
+            Value::Shape(shape) => shape,
+            _ => return Err(anyhow!("The `root` function must return a shape.")),
+        },
         _ => unreachable!(),
     };
     Ok(Rc::try_unwrap(shape).unwrap().into_inner())

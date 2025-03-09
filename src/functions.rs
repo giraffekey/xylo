@@ -26,6 +26,7 @@ macro_rules! define_builtins {
     ) => {
         // Generate the static BUILTIN_FUNCTIONS array
         pub static BUILTIN_FUNCTIONS: &[&str] = &[
+            "map",
             $($name),*
         ];
 
@@ -42,6 +43,7 @@ macro_rules! define_builtins {
         // Generate the builtin_param_count function with match statements
         pub fn builtin_param_count(name: &str) -> usize {
             match name {
+                "map" => 2,
                 $(
                     $name => $param_count,
                 )*

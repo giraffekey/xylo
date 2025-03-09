@@ -151,7 +151,7 @@ pub enum Token<'a> {
     Call(&'a str, usize),
     Jump(usize),
     Pop,
-    Return,
+    Return(Option<usize>),
     Let(&'a str, Vec<&'a str>, usize),
     If(usize),
     Match(Vec<(Pattern, usize)>),
@@ -480,7 +480,7 @@ fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let mut block = Vec::with_capacity(expr.len() + 2);
         block.push(Token::Let(name, params, expr.len() + 1));
         block.extend(expr);
-        block.push(Token::Return);
+        block.push(Token::Return(None));
 
         Ok((input, block))
     }
