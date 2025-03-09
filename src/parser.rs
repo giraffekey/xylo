@@ -253,7 +253,24 @@ fn block(input: &str, indent: usize) -> IResult<&str, Block> {
     terminated(expr(indent), end).parse(input)
 }
 
-fn _binary_operator_tag(input: &str) -> IResult<&str, &str> {
+fn unary_operator_tag(input: &str) -> IResult<&str, &str> {
+    alt((
+        tag("!"),
+        tag("~"),
+    ))
+    .parse(input)
+}
+
+fn unary_operator(input: &str) -> IResult<&str, UnaryOperator> {
+    alt((
+        value(UnaryOperator::Negation, (tag("-"), peek(not(tag(">"))))),
+        value(UnaryOperator::Not, tag("!")),
+        value(UnaryOperator::BitNot, tag("~")),
+    ))
+    .parse(input)
+}
+
+fn binary_operator_tag(input: &str) -> IResult<&str, &str> {
     alt((
         alt((
             tag("+"),
@@ -280,15 +297,6 @@ fn _binary_operator_tag(input: &str) -> IResult<&str, &str> {
         )),
         tag(".."),
         tag("^"),
-    ))
-    .parse(input)
-}
-
-fn unary_operator(input: &str) -> IResult<&str, UnaryOperator> {
-    alt((
-        value(UnaryOperator::Negation, (tag("-"), peek(not(tag(">"))))),
-        value(UnaryOperator::Not, tag("!")),
-        value(UnaryOperator::BitNot, tag("~")),
     ))
     .parse(input)
 }
@@ -332,6 +340,8 @@ fn identifier(input: &str) -> IResult<&str, &str> {
                 alt((alpha1, tag("_"))),
                 many0(alt((alphanumeric1, tag("_")))),
             )),
+            delimited(tag("("), unary_operator_tag, tag(")")),
+            delimited(tag("("), binary_operator_tag, tag(")")),
         )),
         |ident: &str| !KEYWORDS.contains(&ident),
     )
