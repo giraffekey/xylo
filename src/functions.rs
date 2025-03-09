@@ -5,7 +5,7 @@ use std::rc::Rc;
 use alloc::{rc::Rc, vec, vec::Vec};
 
 use crate::interpreter::Value;
-use crate::shape::{PathSegment, Shape, IDENTITY, WHITE};
+use crate::shape::{HslaChange, PathSegment, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
 use anyhow::{anyhow, Result};
@@ -407,63 +407,14 @@ pub fn compose(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
                         color: *color,
                     }
                 }
-                (Shape::Composite { a: aa, b: ab }, Shape::Composite { a: ba, b: bb }) => {
-                    let mut shapes = Vec::with_capacity(4);
-                    shapes.push(aa.clone());
-                    shapes.push(ab.clone());
-                    shapes.push(ba.clone());
-                    shapes.push(bb.clone());
-                    Shape::Collection { shapes }
-                }
-                (Shape::Collection { shapes: a }, Shape::Collection { shapes: b }) => {
-                    let mut shapes = Vec::with_capacity(a.len() + b.len());
-                    shapes.extend(a.iter().cloned());
-                    shapes.extend(b.iter().cloned());
-                    Shape::Collection { shapes }
-                }
-                (Shape::Composite { a: aa, b: ab }, Shape::Collection { shapes: b }) => {
-                    let mut shapes = Vec::with_capacity(b.len() + 2);
-                    shapes.push(aa.clone());
-                    shapes.push(ab.clone());
-                    shapes.extend(b.iter().cloned());
-                    Shape::Collection { shapes }
-                }
-                (Shape::Collection { shapes: a }, Shape::Composite { a: ba, b: bb }) => {
-                    let mut shapes = Vec::with_capacity(a.len() + 2);
-                    shapes.extend(a.iter().cloned());
-                    shapes.push(ba.clone());
-                    shapes.push(bb.clone());
-                    Shape::Collection { shapes }
-                }
-                (_, Shape::Composite { a: ba, b: bb }) => {
-                    let mut shapes = Vec::with_capacity(3);
-                    shapes.push(a.clone());
-                    shapes.push(ba.clone());
-                    shapes.push(bb.clone());
-                    Shape::Collection { shapes }
-                }
-                (Shape::Composite { a: aa, b: ab }, _) => {
-                    let mut shapes = Vec::with_capacity(3);
-                    shapes.push(aa.clone());
-                    shapes.push(ab.clone());
-                    shapes.push(b.clone());
-                    Shape::Collection { shapes }
-                }
-                (_, Shape::Collection { shapes: b }) => {
-                    let mut shapes = Vec::with_capacity(b.len() + 1);
-                    shapes.push(a.clone());
-                    shapes.extend(b.iter().cloned());
-                    Shape::Collection { shapes }
-                }
-                (Shape::Collection { shapes: a }, _) => {
-                    let mut shapes = Vec::with_capacity(a.len() + 1);
-                    shapes.extend(a.iter().cloned());
-                    shapes.push(b.clone());
-                    Shape::Collection { shapes }
-                }
                 _ => Shape::Composite {
                     a: a.clone(),
                     b: b.clone(),
+                    transform: IDENTITY,
+                    zindex_overwrite: None,
+                    zindex_shift: None,
+                    color_overwrite: HslaChange::default(),
+                    color_shift: HslaChange::default(),
                 },
             };
             Ok(Value::Shape(Rc::new(RefCell::new(shape))))
@@ -522,7 +473,14 @@ pub fn collect(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
                     color,
                 }
             } else {
-                Shape::Collection { shapes }
+                Shape::Collection {
+                    shapes,
+                    transform: IDENTITY,
+                    zindex_overwrite: None,
+                    zindex_shift: None,
+                    color_overwrite: HslaChange::default(),
+                    color_shift: HslaChange::default(),
+                }
             };
             Ok(Value::Shape(Rc::new(RefCell::new(shape))))
         }
