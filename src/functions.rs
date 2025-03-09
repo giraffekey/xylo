@@ -90,13 +90,19 @@ define_builtins! {
     "and" => and 2,
     "||" => or 2,
     "or" => or 2,
-    ":" => compose 2,
-    "compose" => compose 2,
-    "collect" => collect 1,
     ".." => range 2,
     "range" => range 2,
     "..=" => rangei 2,
     "rangei" => rangei 2,
+    "++" => concat 2,
+    "concat" => concat 2,
+    "+>" => prepend 2,
+    "prepend" => prepend 2,
+    "<+" => append 2,
+    "append" => append 2,
+    ":" => compose 2,
+    "compose" => compose 2,
+    "collect" => collect 1,
     "|>" => pipe 2,
     "pipe" => pipe 2,
     // "." => compose_fn 2,
@@ -408,6 +414,33 @@ pub fn or(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     }
 }
 
+pub fn range(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match (&args[0], &args[1]) {
+        (Value::Integer(from), Value::Integer(to)) => {
+            Ok(Value::List((*from..*to).map(Value::Integer).collect()))
+        }
+        (Value::Float(from), Value::Float(to)) => Ok(Value::List(
+            (*from as i32..*to as i32)
+                .map(|i| Value::Float(i as f32))
+                .collect(),
+        )),
+        _ => Err(anyhow!("Invalid type passed to `range` function.")),
+    }
+}
+
+pub fn rangei(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match (&args[0], &args[1]) {
+        (Value::Integer(from), Value::Integer(to)) => {
+            Ok(Value::List((*from..=*to).map(Value::Integer).collect()))
+        }
+        (Value::Float(from), Value::Float(to)) => Ok(Value::List(
+            (*from as i32..=*to as i32)
+                .map(|i| Value::Float(i as f32))
+                .collect(),
+        )),
+        _ => Err(anyhow!("Invalid type passed to `rangei` function.")),
+    }
+}
 pub fn compose(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     match (&args[0], &args[1]) {
         (Value::Shape(a), Value::Shape(b)) => {
@@ -516,31 +549,48 @@ pub fn collect(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     }
 }
 
-pub fn range(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+pub fn concat(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     match (&args[0], &args[1]) {
-        (Value::Integer(from), Value::Integer(to)) => {
-            Ok(Value::List((*from..*to).map(Value::Integer).collect()))
+        (Value::List(a), Value::List(b)) => {
+            let mut list = Vec::with_capacity(a.len() + b.len());
+            list.extend(a.clone());
+            list.extend(b.clone());
+
+            let value = Value::List(list);
+            value.kind()?;
+            Ok(value)
         }
-        (Value::Float(from), Value::Float(to)) => Ok(Value::List(
-            (*from as i32..*to as i32)
-                .map(|i| Value::Float(i as f32))
-                .collect(),
-        )),
-        _ => Err(anyhow!("Invalid type passed to `range` function.")),
+        _ => Err(anyhow!("Invalid type passed to `concat` function.")),
     }
 }
 
-pub fn rangei(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+pub fn prepend(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
     match (&args[0], &args[1]) {
-        (Value::Integer(from), Value::Integer(to)) => {
-            Ok(Value::List((*from..=*to).map(Value::Integer).collect()))
+        (a, Value::List(b)) => {
+            let mut list = Vec::with_capacity(b.len() + 1);
+            list.push(a.clone());
+            list.extend(b.clone());
+
+            let value = Value::List(list);
+            value.kind()?;
+            Ok(value)
         }
-        (Value::Float(from), Value::Float(to)) => Ok(Value::List(
-            (*from as i32..=*to as i32)
-                .map(|i| Value::Float(i as f32))
-                .collect(),
-        )),
-        _ => Err(anyhow!("Invalid type passed to `rangei` function.")),
+        _ => Err(anyhow!("Invalid type passed to `prepend` function.")),
+    }
+}
+
+pub fn append(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+    match (&args[0], &args[1]) {
+        (Value::List(a), b) => {
+            let mut list = Vec::with_capacity(a.len() + 1);
+            list.extend(a.clone());
+            list.push(b.clone());
+
+            let value = Value::List(list);
+            value.kind()?;
+            Ok(value)
+        }
+        _ => Err(anyhow!("Invalid type passed to `append` function.")),
     }
 }
 

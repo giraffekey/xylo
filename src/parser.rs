@@ -9,7 +9,7 @@ use nom::character::complete::{
 };
 use nom::combinator::{eof, map, map_res, not, opt, peek, recognize, value, verify};
 use nom::error::{Error, ErrorKind};
-use nom::multi::{many0, many1, separated_list1};
+use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{Err, IResult, Parser};
 
@@ -72,27 +72,31 @@ pub enum BinaryOperator {
     GreaterThanOrEqualTo,
     And,
     Or,
-    Composition,
     RangeExclusive,
     RangeInclusive,
+    Concatenation,
+    Prepend,
+    Append,
+    Composition,
     Pipe,
 }
 
 impl BinaryOperator {
     pub fn precedence(&self) -> u8 {
         match self {
-            Self::Addition | Self::Subtraction => 6,
-            Self::Multiplication | Self::Division | Self::Modulo => 7,
-            Self::Exponentiation => 8,
+            Self::Addition | Self::Subtraction => 7,
+            Self::Multiplication | Self::Division | Self::Modulo => 8,
+            Self::Exponentiation => 9,
             Self::EqualTo
             | Self::NotEqualTo
             | Self::LessThan
             | Self::LessThanOrEqualTo
             | Self::GreaterThan
-            | Self::GreaterThanOrEqualTo => 2,
-            Self::BitAnd | Self::And => 4,
-            Self::BitOr | Self::BitXor | Self::Or => 3,
-            Self::BitLeft | Self::BitRight | Self::RangeExclusive | Self::RangeInclusive => 5,
+            | Self::GreaterThanOrEqualTo => 3,
+            Self::BitAnd | Self::And => 5,
+            Self::BitOr | Self::BitXor | Self::Or => 4,
+            Self::BitLeft | Self::BitRight | Self::RangeExclusive | Self::RangeInclusive => 6,
+            Self::Concatenation | Self::Prepend | Self::Append => 2,
             Self::Composition => 0,
             Self::Pipe => 1,
         }
@@ -119,9 +123,12 @@ impl BinaryOperator {
             Self::GreaterThanOrEqualTo => ">=",
             Self::And => "&&",
             Self::Or => "||",
-            Self::Composition => ":",
             Self::RangeExclusive => "..",
             Self::RangeInclusive => "..=",
+            Self::Concatenation => "++",
+            Self::Prepend => "+>",
+            Self::Append => "<+",
+            Self::Composition => ":",
             Self::Pipe => "|>",
         }
     }
@@ -234,7 +241,7 @@ fn shape(input: &str) -> IResult<&str, Literal> {
 fn list(input: &str) -> IResult<&str, Literal> {
     let (input, list) = delimited(
         (char('['), multispace0),
-        separated_list1((multispace0, char(','), multispace0), literal),
+        separated_list0((multispace0, char(','), multispace0), literal),
         (multispace0, char(']')),
     )
     .parse(input)?;
@@ -254,11 +261,7 @@ fn block(input: &str, indent: usize) -> IResult<&str, Block> {
 }
 
 fn unary_operator_tag(input: &str) -> IResult<&str, &str> {
-    alt((
-        tag("!"),
-        tag("~"),
-    ))
-    .parse(input)
+    alt((tag("!"), tag("~"))).parse(input)
 }
 
 fn unary_operator(input: &str) -> IResult<&str, UnaryOperator> {
@@ -273,6 +276,8 @@ fn unary_operator(input: &str) -> IResult<&str, UnaryOperator> {
 fn binary_operator_tag(input: &str) -> IResult<&str, &str> {
     alt((
         alt((
+            tag("++"),
+            tag("+>"),
             tag("+"),
             recognize((tag("-"), peek(not(tag(">"))))),
             tag("**"),
@@ -284,6 +289,7 @@ fn binary_operator_tag(input: &str) -> IResult<&str, &str> {
             tag("!="),
             tag("<<"),
             tag("<="),
+            tag("<+"),
             tag("<"),
             tag(">>"),
             tag(">="),
@@ -291,10 +297,10 @@ fn binary_operator_tag(input: &str) -> IResult<&str, &str> {
             tag("&&"),
             tag("&"),
             tag("||"),
-            tag("|>"),
-            tag("|"),
-            tag("..="),
         )),
+        tag("|>"),
+        tag("|"),
+        tag("..="),
         tag(".."),
         tag("^"),
     ))
@@ -304,6 +310,8 @@ fn binary_operator_tag(input: &str) -> IResult<&str, &str> {
 fn binary_operator(input: &str) -> IResult<&str, BinaryOperator> {
     alt((
         alt((
+            value(BinaryOperator::Concatenation, tag("++")),
+            value(BinaryOperator::Prepend, tag("+>")),
             value(BinaryOperator::Addition, tag("+")),
             value(BinaryOperator::Subtraction, (tag("-"), peek(not(tag(">"))))),
             value(BinaryOperator::Exponentiation, tag("**")),
@@ -315,6 +323,7 @@ fn binary_operator(input: &str) -> IResult<&str, BinaryOperator> {
             value(BinaryOperator::NotEqualTo, tag("!=")),
             value(BinaryOperator::BitLeft, tag("<<")),
             value(BinaryOperator::LessThanOrEqualTo, tag("<=")),
+            value(BinaryOperator::Append, tag("<+")),
             value(BinaryOperator::LessThan, tag("<")),
             value(BinaryOperator::BitRight, tag(">>")),
             value(BinaryOperator::GreaterThanOrEqualTo, tag(">=")),
@@ -322,10 +331,10 @@ fn binary_operator(input: &str) -> IResult<&str, BinaryOperator> {
             value(BinaryOperator::And, tag("&&")),
             value(BinaryOperator::BitAnd, tag("&")),
             value(BinaryOperator::Or, tag("||")),
-            value(BinaryOperator::Pipe, tag("|>")),
-            value(BinaryOperator::BitOr, tag("|")),
-            value(BinaryOperator::RangeInclusive, tag("..=")),
         )),
+        value(BinaryOperator::Pipe, tag("|>")),
+        value(BinaryOperator::BitOr, tag("|")),
+        value(BinaryOperator::RangeInclusive, tag("..=")),
         value(BinaryOperator::RangeExclusive, tag("..")),
         value(BinaryOperator::BitXor, tag("^")),
     ))
