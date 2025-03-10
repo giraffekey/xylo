@@ -52,7 +52,7 @@ pub static FILL: BasicShape = BasicShape::Fill {
 
 pub static EMPTY: BasicShape = BasicShape::Empty;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HslaChange {
     pub hue: Option<RgbHue<f32>>,
     pub saturation: Option<f32>,
@@ -71,7 +71,7 @@ impl Default for HslaChange {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathSegment {
     MoveTo(f32, f32),
     LineTo(f32, f32),
@@ -80,7 +80,7 @@ pub enum PathSegment {
     Close,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BasicShape {
     Square {
         x: f32,
@@ -112,7 +112,7 @@ pub enum BasicShape {
     Empty,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Shape {
     Basic(BasicShape),
     Path {

@@ -12,18 +12,11 @@ builtin_function!(not => {
 });
 
 builtin_function!(eq => {
-    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a == b),
-    [Value::Float(a), Value::Float(b)] => Value::Boolean(a == b),
-    [Value::Complex(a), Value::Complex(b)] => Value::Boolean(a == b),
-    [Value::Integer(a), Value::Float(b)] | [Value::Float(b), Value::Integer(a)] => Value::Boolean((*a as f32) == *b),
-    [Value::Boolean(a), Value::Boolean(b)] => Value::Boolean(a == b),
+    [a, b] => Value::Boolean(a == b),
 });
 
 builtin_function!(neq => {
-    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a != b),
-    [Value::Float(a), Value::Float(b)] => Value::Boolean(a != b),
-    [Value::Complex(a), Value::Complex(b)] => Value::Boolean(a != b),
-    [Value::Integer(a), Value::Float(b)] | [Value::Float(b), Value::Integer(a)] => Value::Boolean((*a as f32) != *b),
+    [a, b] => Value::Boolean(a != b),
 });
 
 builtin_function!(lt => {

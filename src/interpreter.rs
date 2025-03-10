@@ -70,6 +70,27 @@ impl Value {
     }
 }
 
+impl PartialEq for Value {
+    fn eq(&self, other: &Value) -> bool {
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
+                (*a as f32) == *b
+            }
+            (Value::Complex(a), Value::Complex(b)) => a == b,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Hex(a), Value::Hex(b)) => a == b,
+            (Value::Shape(a), Value::Shape(b)) => *a.borrow() == *b.borrow(),
+            (Value::Function(a_name, a_argc, a_args), Value::Function(b_name, b_argc, b_args)) => {
+                a_name == b_name && a_argc == b_argc && a_args == b_args
+            }
+            (Value::List(a), Value::List(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
 type Frame = HashMap<String, Function>;
 
 #[derive(Debug)]

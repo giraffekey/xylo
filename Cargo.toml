@@ -24,6 +24,7 @@ ahash = { version = "0.8", default-features = false }
 rand_chacha = { version = "0.9", default-features = false }
 num = "0.4.3"
 factorial = "0.4.0"
+itertools = { version = "0.14", default-features = false }
 
 [features]
 default = ["std", "simd"]
@@ -31,6 +32,7 @@ std = [
 	"anyhow/std",
 	"ahash/std",
 	"base64/std",
+	"itertools/use_std",
 	"nom/std",
 	"palette/std",
 	"rand/std",
@@ -42,6 +44,7 @@ std = [
 no-std = [
 	"base64/alloc",
 	"hashbrown/alloc",
+	"itertools/use_alloc",
 	"nom/alloc",
 	"palette/alloc",
 	"palette/libm",
