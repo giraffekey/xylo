@@ -104,8 +104,24 @@ builtin_function!(bitright => {
     [Value::Integer(a), Value::Integer(b)] => Value::Integer(a >> b),
 });
 
+builtin_function!(int => {
+    [Value::Float(n)] => Value::Integer(*n as i32),
+});
+
+builtin_function!(float => {
+    [Value::Integer(n)] => Value::Float(*n as f32),
+});
+
 builtin_function!(complex => {
     [Value::Float(re), Value::Float(im)] => Value::Complex(Complex::new(*re, *im)),
+});
+
+builtin_function!(real => {
+    [Value::Complex(c)] => Value::Float(c.re),
+});
+
+builtin_function!(imag => {
+    [Value::Complex(c)] => Value::Float(c.im),
 });
 
 builtin_function!(pi => {
