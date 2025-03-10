@@ -14,6 +14,7 @@ use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{Err, IResult, Parser};
 use num::Complex;
+use tiny_skia::BlendMode;
 
 const KEYWORDS: &[&str] = &["let", "if", "else", "match", "for", "loop"];
 
@@ -34,6 +35,7 @@ pub enum Literal {
     Boolean(bool),
     Hex([u8; 3]),
     Shape(ShapeKind),
+    BlendMode(BlendMode),
     List(Vec<Literal>),
 }
 
@@ -260,7 +262,7 @@ fn hex_primary_single(input: &str) -> IResult<&str, u8> {
 }
 
 fn hex(input: &str) -> IResult<&str, Literal> {
-    let (input, _) = tag("#")(input)?;
+    let (input, _) = tag("0x")(input)?;
     let (input, (r, g, b)) = alt((
         (hex_primary, hex_primary, hex_primary),
         (hex_primary_single, hex_primary_single, hex_primary_single),
@@ -271,39 +273,81 @@ fn hex(input: &str) -> IResult<&str, Literal> {
 }
 
 fn shape(input: &str) -> IResult<&str, Literal> {
-    let (input, shape) = alt((
-        value(
-            ShapeKind::Square,
+    map(
+        alt((
+            value(
+                ShapeKind::Square,
+                alt((
+                    tag("SQUARE"),
+                    tag("⬛"),
+                    tag("⬜"),
+                    tag("■"),
+                    tag("□"),
+                    tag("▪"),
+                    tag("▫"),
+                )),
+            ),
+            value(
+                ShapeKind::Circle,
+                alt((
+                    tag("CIRCLE"),
+                    tag("⬤"),
+                    tag("◯"),
+                    tag("●"),
+                    tag("○"),
+                    tag("🞄"),
+                )),
+            ),
+            value(
+                ShapeKind::Triangle,
+                alt((tag("TRIANGLE"), tag("▲"), tag("△"), tag("▴"), tag("▵"))),
+            ),
+            value(ShapeKind::Fill, tag("FILL")),
+            value(ShapeKind::Empty, tag("EMPTY")),
+        )),
+        Literal::Shape,
+    )
+    .parse(input)
+}
+
+fn blend_mode(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
             alt((
-                tag("SQUARE"),
-                tag("⬛"),
-                tag("⬜"),
-                tag("■"),
-                tag("□"),
-                tag("▪"),
-                tag("▫"),
+                value(BlendMode::Clear, tag("BLEND_CLEAR")),
+                value(BlendMode::SourceOver, tag("BLEND_SOURCE_OVER")),
+                value(BlendMode::DestinationOver, tag("BLEND_DESTINATION_OVER")),
+                value(BlendMode::SourceIn, tag("BLEND_SOURCE_IN")),
+                value(BlendMode::DestinationIn, tag("BLEND_DESTINATION_IN")),
+                value(BlendMode::SourceOut, tag("BLEND_SOURCE_OUT")),
+                value(BlendMode::DestinationOut, tag("BLEND_DESTINATION_OUT")),
+                value(BlendMode::SourceAtop, tag("BLEND_SOURCE_ATOP")),
+                value(BlendMode::DestinationAtop, tag("BLEND_DESTINATION_ATOP")),
+                value(BlendMode::Source, tag("BLEND_SOURCE")),
+                value(BlendMode::Destination, tag("BLEND_DESTINATION")),
+                value(BlendMode::Xor, tag("BLEND_XOR")),
+                value(BlendMode::Plus, tag("BLEND_PLUS")),
+                value(BlendMode::Modulate, tag("BLEND_MODULATE")),
+                value(BlendMode::Screen, tag("BLEND_SCREEN")),
+                value(BlendMode::Overlay, tag("BLEND_OVERLAY")),
+                value(BlendMode::Darken, tag("BLEND_DARKEN")),
+                value(BlendMode::Lighten, tag("BLEND_LIGHTEN")),
+                value(BlendMode::ColorDodge, tag("BLEND_COLOR_DODGE")),
+                value(BlendMode::ColorBurn, tag("BLEND_COLOR_BURN")),
+                value(BlendMode::HardLight, tag("BLEND_HARD_LIGHT")),
             )),
-        ),
-        value(
-            ShapeKind::Circle,
-            alt((
-                tag("CIRCLE"),
-                tag("⬤"),
-                tag("◯"),
-                tag("●"),
-                tag("○"),
-                tag("🞄"),
-            )),
-        ),
-        value(
-            ShapeKind::Triangle,
-            alt((tag("TRIANGLE"), tag("▲"), tag("△"), tag("▴"), tag("▵"))),
-        ),
-        value(ShapeKind::Fill, tag("FILL")),
-        value(ShapeKind::Empty, tag("EMPTY")),
-    ))
-    .parse(input)?;
-    Ok((input, Literal::Shape(shape)))
+            value(BlendMode::SoftLight, tag("BLEND_SOFT_LIGHT")),
+            value(BlendMode::Difference, tag("BLEND_DIFFERENCE")),
+            value(BlendMode::Exclusion, tag("BLEND_EXCLUSION")),
+            value(BlendMode::Multiply, tag("BLEND_MULTIPLY")),
+            value(BlendMode::Hue, tag("BLEND_HUE")),
+            value(BlendMode::Saturation, tag("BLEND_SATURATION")),
+            value(BlendMode::Color, tag("BLEND_COLOR")),
+            value(BlendMode::Luminosity, tag("BLEND_LUMINOSITY")),
+        )),
+        Literal::BlendMode,
+    )
+    .parse(input)
 }
 
 fn list(input: &str) -> IResult<&str, Literal> {
@@ -317,7 +361,10 @@ fn list(input: &str) -> IResult<&str, Literal> {
 }
 
 fn literal(input: &str) -> IResult<&str, Literal> {
-    alt((complex, float, integer, boolean, hex, shape, list)).parse(input)
+    alt((
+        complex, float, integer, boolean, hex, shape, blend_mode, list,
+    ))
+    .parse(input)
 }
 
 fn end(input: &str) -> IResult<&str, &str> {

@@ -6,7 +6,7 @@ use alloc::{rc::Rc, vec::Vec};
 
 use core::cell::RefCell;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
-use tiny_skia::Transform;
+use tiny_skia::{BlendMode, Transform};
 
 pub static IDENTITY: Transform = Transform {
     sx: 1.0,
@@ -27,6 +27,7 @@ pub static SQUARE: BasicShape = BasicShape::Square {
     transform: IDENTITY,
     zindex: None,
     color: WHITE,
+    blend_mode: BlendMode::SourceOver,
 };
 
 pub static CIRCLE: BasicShape = BasicShape::Circle {
@@ -36,6 +37,7 @@ pub static CIRCLE: BasicShape = BasicShape::Circle {
     transform: IDENTITY,
     zindex: None,
     color: WHITE,
+    blend_mode: BlendMode::SourceOver,
 };
 
 pub static TRIANGLE: BasicShape = BasicShape::Triangle {
@@ -43,6 +45,7 @@ pub static TRIANGLE: BasicShape = BasicShape::Triangle {
     transform: IDENTITY,
     zindex: None,
     color: WHITE,
+    blend_mode: BlendMode::SourceOver,
 };
 
 pub static FILL: BasicShape = BasicShape::Fill {
@@ -90,6 +93,7 @@ pub enum BasicShape {
         transform: Transform,
         zindex: Option<f32>,
         color: Hsla<f32>,
+        blend_mode: BlendMode,
     },
     Circle {
         x: f32,
@@ -98,12 +102,14 @@ pub enum BasicShape {
         transform: Transform,
         zindex: Option<f32>,
         color: Hsla<f32>,
+        blend_mode: BlendMode,
     },
     Triangle {
         points: [f32; 6],
         transform: Transform,
         zindex: Option<f32>,
         color: Hsla<f32>,
+        blend_mode: BlendMode,
     },
     Fill {
         zindex: Option<f32>,
@@ -120,6 +126,7 @@ pub enum Shape {
         transform: Transform,
         zindex: Option<f32>,
         color: Hsla<f32>,
+        blend_mode: BlendMode,
     },
     Composite {
         a: Rc<RefCell<Shape>>,
@@ -129,6 +136,7 @@ pub enum Shape {
         zindex_shift: Option<f32>,
         color_overwrite: HslaChange,
         color_shift: HslaChange,
+        blend_mode_overwrite: Option<BlendMode>,
     },
     Collection {
         shapes: Vec<Rc<RefCell<Shape>>>,
@@ -137,6 +145,7 @@ pub enum Shape {
         zindex_shift: Option<f32>,
         color_overwrite: HslaChange,
         color_shift: HslaChange,
+        blend_mode_overwrite: Option<BlendMode>,
     },
 }
 
@@ -572,6 +581,28 @@ impl Shape {
                 *color_shift = HslaChange::default();
             }
             Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_blend_mode(&mut self, b: BlendMode) {
+        match self {
+            Self::Basic(BasicShape::Square { blend_mode, .. })
+            | Self::Basic(BasicShape::Circle { blend_mode, .. })
+            | Self::Basic(BasicShape::Triangle { blend_mode, .. })
+            | Self::Path { blend_mode, .. } => {
+                *blend_mode = b;
+            }
+            Self::Composite {
+                blend_mode_overwrite,
+                ..
+            }
+            | Self::Collection {
+                blend_mode_overwrite,
+                ..
+            } => {
+                *blend_mode_overwrite = Some(b);
+            }
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }
 }

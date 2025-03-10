@@ -11,6 +11,7 @@ use core::cell::RefCell;
 
 use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
+use tiny_skia::BlendMode;
 
 builtin_function!(move_to => {
     [x, y] => {
@@ -32,6 +33,7 @@ builtin_function!(move_to => {
             transform: IDENTITY,
             zindex: None,
             color: WHITE,
+            blend_mode: BlendMode::SourceOver,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -57,6 +59,7 @@ builtin_function!(line_to => {
             transform: IDENTITY,
             zindex: None,
             color: WHITE,
+            blend_mode: BlendMode::SourceOver,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -94,6 +97,7 @@ builtin_function!(quad_to => {
             transform: IDENTITY,
             zindex: None,
             color: WHITE,
+            blend_mode: BlendMode::SourceOver,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -143,6 +147,7 @@ builtin_function!(cubic_to => {
             transform: IDENTITY,
             zindex: None,
             color: WHITE,
+            blend_mode: BlendMode::SourceOver,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -156,6 +161,7 @@ builtin_function!(close => {
             transform: IDENTITY,
             zindex: None,
             color: WHITE,
+            blend_mode: BlendMode::SourceOver,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }

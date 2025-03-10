@@ -150,3 +150,10 @@ builtin_function!(hex => {
          Value::Shape(shape.clone())
     }
 });
+
+builtin_function!(blend => {
+    [Value::BlendMode(blend_mode), Value::Shape(shape)] => {
+         shape.borrow_mut().set_blend_mode(*blend_mode);
+         Value::Shape(shape.clone())
+    }
+});

@@ -11,6 +11,7 @@ use core::cell::RefCell;
 
 use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
+use tiny_skia::BlendMode;
 
 builtin_function!(compose => {
     [Value::Shape(a), Value::Shape(b)] => {
@@ -21,6 +22,7 @@ builtin_function!(compose => {
                     transform: a_transform,
                     zindex,
                     color,
+                    blend_mode,
                 },
                 Shape::Path {
                     segments: b,
@@ -36,6 +38,7 @@ builtin_function!(compose => {
                     transform: a_transform.post_concat(*b_transform),
                     zindex: *zindex,
                     color: *color,
+                    blend_mode: *blend_mode,
                 }
             }
             _ => Shape::Composite {
@@ -46,6 +49,7 @@ builtin_function!(compose => {
                 zindex_shift: None,
                 color_overwrite: HslaChange::default(),
                 color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
             },
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -76,6 +80,7 @@ builtin_function!(collect => {
             let mut transform = IDENTITY;
             let mut zindex = None;
             let mut color = WHITE;
+            let mut blend_mode = BlendMode::SourceOver;
 
             for path in shapes {
                 match &*path.borrow() {
@@ -84,11 +89,13 @@ builtin_function!(collect => {
                         transform: other_transform,
                         zindex: other_zindex,
                         color: other_color,
+                        blend_mode: other_blend_mode,
                     } => {
                         segments.extend(other_segments);
                         transform = transform.post_concat(*other_transform);
                         zindex = *other_zindex;
                         color = *other_color;
+                        blend_mode = *other_blend_mode;
                     }
                     _ => unreachable!(),
                 }
@@ -99,6 +106,7 @@ builtin_function!(collect => {
                 transform,
                 zindex,
                 color,
+                blend_mode,
             }
         } else {
             Shape::Collection {
@@ -108,6 +116,7 @@ builtin_function!(collect => {
                 zindex_shift: None,
                 color_overwrite: HslaChange::default(),
                 color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
             }
         };
         Value::Shape(Rc::new(RefCell::new(shape)))

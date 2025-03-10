@@ -15,6 +15,7 @@ use num::Complex;
 use rand::distr::{weighted::WeightedIndex, Distribution};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use tiny_skia::BlendMode;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueKind {
@@ -24,6 +25,7 @@ pub enum ValueKind {
     Boolean,
     Hex,
     Shape,
+    BlendMode,
     Function(usize),
     List(Box<ValueKind>),
     Unknown,
@@ -37,6 +39,7 @@ pub enum Value {
     Boolean(bool),
     Hex([u8; 3]),
     Shape(Rc<RefCell<Shape>>),
+    BlendMode(BlendMode),
     Function(String, usize, Vec<Value>),
     List(Vec<Value>),
 }
@@ -50,6 +53,7 @@ impl Value {
             Self::Boolean(_) => Ok(ValueKind::Boolean),
             Self::Hex(_) => Ok(ValueKind::Hex),
             Self::Shape(_) => Ok(ValueKind::Shape),
+            Self::BlendMode(_) => Ok(ValueKind::BlendMode),
             Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
             Self::List(list) => {
                 let kind = list
@@ -82,6 +86,7 @@ impl PartialEq for Value {
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Hex(a), Value::Hex(b)) => a == b,
             (Value::Shape(a), Value::Shape(b)) => *a.borrow() == *b.borrow(),
+            (Value::BlendMode(a), Value::BlendMode(b)) => a == b,
             (Value::Function(a_name, a_argc, a_args), Value::Function(b_name, b_argc, b_args)) => {
                 a_name == b_name && a_argc == b_argc && a_args == b_args
             }
@@ -180,6 +185,7 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
             };
             Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(shape)))))
         }
+        Literal::BlendMode(b) => Ok(Value::BlendMode(*b)),
         Literal::List(list) => {
             let list: Result<Vec<Value>> = list.iter().map(reduce_literal).collect();
             let list = Value::List(list?);

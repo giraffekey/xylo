@@ -232,7 +232,7 @@ define_builtins! {
     "lshift" => {color::lshift, 2},
     "ashift" => {color::ashift, 2},
     "hex" => {color::hex, 2},
-    // "blend" => {color::blend, 2},
+    "blend" => {color::blend, 2},
     "move_to" => {path::move_to, 2},
     "line_to" => {path::line_to, 2},
     "quad_to" => {path::quad_to, 4},
