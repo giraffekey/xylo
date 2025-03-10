@@ -1,100 +1,105 @@
+#[cfg(feature = "no-std")]
+use alloc::vec::Vec;
+
+use crate::builtin_function;
 use crate::interpreter::Value;
 
 use anyhow::{anyhow, Result};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-pub fn rand(rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
-    Ok(Value::Float(rng.random()))
-}
+builtin_function!(rand rng => {
+    [] => |rng: &mut ChaCha8Rng| Value::Float(rng.random()),
+});
 
-pub fn randi(rng: &mut ChaCha8Rng, _args: &[Value]) -> Result<Value> {
-    if rng.random() {
-        Ok(Value::Integer(1))
-    } else {
-        Ok(Value::Integer(0))
+builtin_function!(randi rng => {
+    [] => |rng: &mut ChaCha8Rng| {
+        if rng.random() {
+            Value::Integer(1)
+        } else {
+            Value::Integer(0)
+        }
+    },
+});
+
+builtin_function!(rand_range rng => {
+    [Value::Integer(from), Value::Integer(to)] => |rng: &mut ChaCha8Rng| {
+        let a = *from as f32;
+        let b = *to as f32;
+        Value::Float(rng.random_range(a..b))
+    },
+    [Value::Float(from), Value::Float(to)] => |rng: &mut ChaCha8Rng| {
+        Value::Float(rng.random_range(*from..*to))
+    },
+    [Value::Integer(from), Value::Float(to)] => |rng: &mut ChaCha8Rng| {
+        let a = *from as f32;
+        Value::Float(rng.random_range(a..*to))
+    },
+    [Value::Float(from), Value::Integer(to)] => |rng: &mut ChaCha8Rng| {
+        let b = *to as f32;
+        Value::Float(rng.random_range(*from..b))
     }
-}
+});
 
-pub fn rand_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    let a = match args[0] {
-        Value::Integer(n) => n as f32,
-        Value::Float(n) => n,
-        _ => return Err(anyhow!("Invalid type passed to `rand_range` function.")),
-    };
+builtin_function!(randi_range rng => {
+    [Value::Integer(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range(*a..*b))
+    },
+    [Value::Float(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range((*a as i32)..(*b as i32)))
+    },
+    [Value::Integer(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range(*a..(*b as i32)))
+    },
+    [Value::Float(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range((*a as i32)..*b))
+    }
+});
 
-    let b = match args[1] {
-        Value::Integer(b) => b as f32,
-        Value::Float(b) => b,
-        _ => return Err(anyhow!("Invalid type passed to `rand_range` function.")),
-    };
+builtin_function!(rand_rangei rng => {
+    [Value::Integer(from), Value::Integer(to)] => |rng: &mut ChaCha8Rng| {
+        let a = *from as f32;
+        let b = *to as f32;
+        Value::Float(rng.random_range(a..=b))
+    },
+    [Value::Float(from), Value::Float(to)] => |rng: &mut ChaCha8Rng| {
+        Value::Float(rng.random_range(*from..=*to))
+    },
+    [Value::Integer(from), Value::Float(to)] => |rng: &mut ChaCha8Rng| {
+        let a = *from as f32;
+        Value::Float(rng.random_range(a..=*to))
+    },
+    [Value::Float(from), Value::Integer(to)] => |rng: &mut ChaCha8Rng| {
+        let b = *to as f32;
+        Value::Float(rng.random_range(*from..=b))
+    }
+});
 
-    Ok(Value::Float(rng.random_range(a..b)))
-}
+builtin_function!(randi_rangei rng => {
+    [Value::Integer(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range(*a..=*b))
+    },
+    [Value::Float(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range((*a as i32)..=(*b as i32)))
+    },
+    [Value::Integer(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range(*a..=(*b as i32)))
+    },
+    [Value::Float(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
+        Value::Integer(rng.random_range((*a as i32)..=*b))
+    }
+});
 
-pub fn randi_range(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    let a = match args[0] {
-        Value::Integer(n) => n,
-        Value::Float(n) => n as i32,
-        _ => return Err(anyhow!("Invalid type passed to `randi_range` function.")),
-    };
+builtin_function!(shuffle rng => {
+    [Value::List(list)] => |rng: &mut ChaCha8Rng| {
+        let mut list = list.clone();
+        list.shuffle(rng);
+        Value::List(list)
+    }
+});
 
-    let b = match args[1] {
-        Value::Integer(b) => b,
-        Value::Float(b) => b as i32,
-        _ => return Err(anyhow!("Invalid type passed to `randi_range` function.")),
-    };
-
-    Ok(Value::Integer(rng.random_range(a..b)))
-}
-
-pub fn rand_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    let a = match args[0] {
-        Value::Integer(n) => n as f32,
-        Value::Float(n) => n,
-        _ => return Err(anyhow!("Invalid type passed to `rand_rangei` function.")),
-    };
-
-    let b = match args[1] {
-        Value::Integer(b) => b as f32,
-        Value::Float(b) => b,
-        _ => return Err(anyhow!("Invalid type passed to `rand_rangei` function.")),
-    };
-
-    Ok(Value::Float(rng.random_range(a..=b)))
-}
-
-pub fn randi_rangei(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    let a = match args[0] {
-        Value::Integer(n) => n,
-        Value::Float(n) => n as i32,
-        _ => return Err(anyhow!("Invalid type passed to `randi_rangei` function.")),
-    };
-
-    let b = match args[1] {
-        Value::Integer(b) => b,
-        Value::Float(b) => b as i32,
-        _ => return Err(anyhow!("Invalid type passed to `randi_rangei` function.")),
-    };
-
-    Ok(Value::Integer(rng.random_range(a..=b)))
-}
-
-pub fn shuffle(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    let mut list = match &args[0] {
-        Value::List(list) => list.clone(),
-        _ => return Err(anyhow!("Invalid type passed to `shuffle` function.")),
-    };
-
-    list.shuffle(rng);
-    Ok(Value::List(list))
-}
-
-pub fn choose(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    let list = match &args[0] {
-        Value::List(list) => list,
-        _ => return Err(anyhow!("Invalid type passed to `choose` function.")),
-    };
-
-    Ok(list.choose(rng).unwrap().clone())
-}
+builtin_function!(choose rng => {
+    [Value::List(list)] => |rng: &mut ChaCha8Rng| {
+        list.choose(rng).unwrap().clone()
+    }
+});

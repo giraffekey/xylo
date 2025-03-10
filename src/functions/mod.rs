@@ -3,12 +3,15 @@ use crate::interpreter::Value;
 use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
 
+mod color;
 mod compare;
 mod func;
 mod list;
 mod math;
+mod path;
 mod rand;
 mod shape;
+mod transform;
 
 macro_rules! define_builtins {
     (
@@ -148,63 +151,105 @@ define_builtins! {
     "shuffle" => {rand::shuffle, 1},
     "choose" => {rand::choose, 1},
     "compose" => {shape::compose, 2},
-    "t" => {shape::translate, 3},
-    "translate" => {shape::translate, 3},
-    "tx" => {shape::translatex, 2},
-    "translatex" => {shape::translatex, 2},
-    "ty" => {shape::translatey, 2},
-    "translatey" => {shape::translatey, 2},
-    "tt" => {shape::translateb, 2},
-    "translateb" => {shape::translateb, 2},
-    "r" => {shape::rotate, 2},
-    "rotate" => {shape::rotate, 2},
-    "ra" => {shape::rotate_at, 4},
-    "rotate_at" => {shape::rotate_at, 4},
-    "s" => {shape::scale, 3},
-    "scale" => {shape::scale, 3},
-    "sx" => {shape::scalex, 2},
-    "scalex" => {shape::scalex, 2},
-    "sy" => {shape::scaley, 2},
-    "scaley" => {shape::scaley, 2},
-    "ss" => {shape::scaleb, 2},
-    "scaleb" => {shape::scaleb, 2},
-    "k" => {shape::skew, 3},
-    "skew" => {shape::skew, 3},
-    "kx" => {shape::skewx, 2},
-    "skewx" => {shape::skewx, 2},
-    "ky" => {shape::skewy, 2},
-    "skewy" => {shape::skewy, 2},
-    "kk" => {shape::skewb, 2},
-    "skewb" => {shape::skewb, 2},
-    "f" => {shape::flip, 2},
-    "flip" => {shape::flip, 2},
-    "fh" => {shape::fliph, 1},
-    "fliph" => {shape::fliph, 1},
-    "fv" => {shape::flipv, 1},
-    "flipv" => {shape::flipv, 1},
-    "fd" => {shape::flipd, 1},
-    "flipd" => {shape::flipd, 1},
-    "z" => {shape::zindex, 2},
-    "zindex" => {shape::zindex, 2},
-    "hsl" => {shape::hsl, 4},
-    "hsla" => {shape::hsla, 5},
-    "h" => {shape::hue, 2},
-    "hue" => {shape::hue, 2},
-    "sat" => {shape::saturation, 2},
-    "saturation" => {shape::saturation, 2},
-    "l" => {shape::lightness, 2},
-    "lightness" => {shape::lightness, 2},
-    "a" => {shape::alpha, 2},
-    "alpha" => {shape::alpha, 2},
-    "hshift" => {shape::hshift, 2},
-    "sshift" => {shape::sshift, 2},
-    "lshift" => {shape::lshift, 2},
-    "ashift" => {shape::ashift, 2},
-    "hex" => {shape::hex, 2},
-    // "blend" => {::blend, 2},
-    "move_to" => {shape::move_to, 2},
-    "line_to" => {shape::line_to, 2},
-    "quad_to" => {shape::quad_to, 4},
-    "cubic_to" => {shape::cubic_to, 6},
-    "close" => {shape::close, 0},
+    "t" => {transform::translate, 3},
+    "translate" => {transform::translate, 3},
+    "tx" => {transform::translatex, 2},
+    "translatex" => {transform::translatex, 2},
+    "ty" => {transform::translatey, 2},
+    "translatey" => {transform::translatey, 2},
+    "tt" => {transform::translateb, 2},
+    "translateb" => {transform::translateb, 2},
+    "r" => {transform::rotate, 2},
+    "rotate" => {transform::rotate, 2},
+    "ra" => {transform::rotate_at, 4},
+    "rotate_at" => {transform::rotate_at, 4},
+    "s" => {transform::scale, 3},
+    "scale" => {transform::scale, 3},
+    "sx" => {transform::scalex, 2},
+    "scalex" => {transform::scalex, 2},
+    "sy" => {transform::scaley, 2},
+    "scaley" => {transform::scaley, 2},
+    "ss" => {transform::scaleb, 2},
+    "scaleb" => {transform::scaleb, 2},
+    "k" => {transform::skew, 3},
+    "skew" => {transform::skew, 3},
+    "kx" => {transform::skewx, 2},
+    "skewx" => {transform::skewx, 2},
+    "ky" => {transform::skewy, 2},
+    "skewy" => {transform::skewy, 2},
+    "kk" => {transform::skewb, 2},
+    "skewb" => {transform::skewb, 2},
+    "f" => {transform::flip, 2},
+    "flip" => {transform::flip, 2},
+    "fh" => {transform::fliph, 1},
+    "fliph" => {transform::fliph, 1},
+    "fv" => {transform::flipv, 1},
+    "flipv" => {transform::flipv, 1},
+    "fd" => {transform::flipd, 1},
+    "flipd" => {transform::flipd, 1},
+    "z" => {transform::zindex, 2},
+    "zindex" => {transform::zindex, 2},
+    "zshift" => {transform::zshift, 2},
+    "hsl" => {color::hsl, 4},
+    "hsla" => {color::hsla, 5},
+    "h" => {color::hue, 2},
+    "hue" => {color::hue, 2},
+    "sat" => {color::saturation, 2},
+    "saturation" => {color::saturation, 2},
+    "l" => {color::lightness, 2},
+    "lightness" => {color::lightness, 2},
+    "a" => {color::alpha, 2},
+    "alpha" => {color::alpha, 2},
+    "hshift" => {color::hshift, 2},
+    "sshift" => {color::sshift, 2},
+    "lshift" => {color::lshift, 2},
+    "ashift" => {color::ashift, 2},
+    "hex" => {color::hex, 2},
+    // "blend" => {color::blend, 2},
+    "move_to" => {path::move_to, 2},
+    "line_to" => {path::line_to, 2},
+    "quad_to" => {path::quad_to, 4},
+    "cubic_to" => {path::cubic_to, 6},
+    "close" => {path::close, 0},
+}
+
+#[macro_export]
+macro_rules! builtin_function {
+    ($name:ident => {
+        $(
+            $pattern:pat => $body:expr
+        ),* $(,)?
+    }) => {
+        pub fn $name(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+            match args {
+                $(
+                    $pattern => Ok($body),
+                )*
+                _ => Err(anyhow!(
+                    "Invalid types passed to `{}` function: {:?}",
+                    stringify!($name),
+                    args.iter().map(Value::kind).collect::<Vec<_>>()
+                )),
+            }
+        }
+    };
+
+    ($name:ident rng => {
+        $(
+            $pattern:pat => $body:expr
+        ),* $(,)?
+    }) => {
+        pub fn $name(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+            match args {
+                $(
+                    $pattern => Ok($body(rng)),
+                )*
+                _ => Err(anyhow!(
+                    "Invalid types passed to `{}` function: {:?}",
+                    stringify!($name),
+                    args.iter().map(Value::kind).collect::<Vec<_>>()
+                )),
+            }
+        }
+    };
 }

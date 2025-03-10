@@ -1,92 +1,63 @@
+#[cfg(feature = "no-std")]
+use alloc::vec::Vec;
+
+use crate::builtin_function;
 use crate::interpreter::Value;
 
 use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
 
-pub fn not(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match &args[0] {
-        Value::Boolean(b) => Ok(Value::Boolean(!b)),
-        _ => Err(anyhow!("Invalid type passed to `not` function.")),
-    }
-}
+builtin_function!(not => {
+    [Value::Boolean(b)] => Value::Boolean(!b)
+});
 
-pub fn eq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a == b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a == b)),
-        (Value::Complex(a), Value::Complex(b)) => Ok(Value::Boolean(a == b)),
-        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
-            Ok(Value::Boolean(*a as f32 == *b))
-        }
-        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
-        (Value::Shape(_a), Value::Shape(_b)) => todo!(),
-        _ => Err(anyhow!("Invalid type passed to `eq` function.")),
-    }
-}
+builtin_function!(eq => {
+    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a == b),
+    [Value::Float(a), Value::Float(b)] => Value::Boolean(a == b),
+    [Value::Complex(a), Value::Complex(b)] => Value::Boolean(a == b),
+    [Value::Integer(a), Value::Float(b)] | [Value::Float(b), Value::Integer(a)] => Value::Boolean((*a as f32) == *b),
+    [Value::Boolean(a), Value::Boolean(b)] => Value::Boolean(a == b),
+});
 
-pub fn neq(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a != b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a != b)),
-        (Value::Complex(a), Value::Complex(b)) => Ok(Value::Boolean(a != b)),
-        (Value::Integer(a), Value::Float(b)) | (Value::Float(b), Value::Integer(a)) => {
-            Ok(Value::Boolean(*a as f32 != *b))
-        }
-        (Value::Shape(_a), Value::Shape(_b)) => todo!(),
-        _ => Err(anyhow!("Invalid type passed to `neq` function.")),
-    }
-}
+builtin_function!(neq => {
+    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a != b),
+    [Value::Float(a), Value::Float(b)] => Value::Boolean(a != b),
+    [Value::Complex(a), Value::Complex(b)] => Value::Boolean(a != b),
+    [Value::Integer(a), Value::Float(b)] | [Value::Float(b), Value::Integer(a)] => Value::Boolean((*a as f32) != *b),
+});
 
-pub fn lt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a < b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a < b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Boolean((*a as f32) < *b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Boolean(*a < *b as f32)),
-        _ => Err(anyhow!("Invalid type passed to `lt` function.")),
-    }
-}
+builtin_function!(lt => {
+    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a < b),
+    [Value::Float(a), Value::Float(b)] => Value::Boolean(a < b),
+    [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) < *b),
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a < *b as f32)
+});
 
-pub fn lte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a <= b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a <= b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Boolean((*a as f32) <= *b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Boolean(*a <= *b as f32)),
-        _ => Err(anyhow!("Invalid type passed to `lte` function.")),
-    }
-}
+builtin_function!(lte => {
+    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a <= b),
+    [Value::Float(a), Value::Float(b)] => Value::Boolean(a <= b),
+    [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) <= *b),
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a <= *b as f32)
+});
 
-pub fn gt(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a > b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a > b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Boolean((*a as f32) > *b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Boolean(*a > *b as f32)),
-        _ => Err(anyhow!("Invalid type passed to `gt` function.")),
-    }
-}
+builtin_function!(gt => {
+    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a > b),
+    [Value::Float(a), Value::Float(b)] => Value::Boolean(a > b),
+    [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) > *b),
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a > *b as f32)
+});
 
-pub fn gte(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a >= b)),
-        (Value::Float(a), Value::Float(b)) => Ok(Value::Boolean(a >= b)),
-        (Value::Integer(a), Value::Float(b)) => Ok(Value::Boolean((*a as f32) >= *b)),
-        (Value::Float(a), Value::Integer(b)) => Ok(Value::Boolean(*a >= *b as f32)),
-        _ => Err(anyhow!("Invalid type passed to `gte` function.")),
-    }
-}
+builtin_function!(gte => {
+    [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a >= b),
+    [Value::Float(a), Value::Float(b)] => Value::Boolean(a >= b),
+    [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) >= *b),
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a >= *b as f32)
+});
 
-pub fn and(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(*a && *b)),
-        _ => Err(anyhow!("Invalid type passed to `and` function.")),
-    }
-}
+builtin_function!(and => {
+    [Value::Boolean(a), Value::Boolean(b)] => Value::Boolean(*a && *b)
+});
 
-pub fn or(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
-    match (&args[0], &args[1]) {
-        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(*a || *b)),
-        _ => Err(anyhow!("Invalid type passed to `or` function.")),
-    }
-}
+builtin_function!(or => {
+    [Value::Boolean(a), Value::Boolean(b)] => Value::Boolean(*a || *b)
+});

@@ -1,0 +1,152 @@
+#[cfg(feature = "no-std")]
+use alloc::vec::Vec;
+
+use crate::builtin_function;
+use crate::interpreter::Value;
+
+use anyhow::{anyhow, Result};
+use rand_chacha::ChaCha8Rng;
+
+builtin_function!(hsl => {
+    [h, s, l, Value::Shape(shape)] => {
+         let h = match h {
+             Value::Integer(h) => *h as f32,
+             Value::Float(h)   => *h,
+             _ => return Err(anyhow!("Invalid type passed to `hsl` function for hue.")),
+         };
+         let s = match s {
+             Value::Integer(s) => *s as f32,
+             Value::Float(s)   => *s,
+             _ => return Err(anyhow!("Invalid type passed to `hsl` function for saturation.")),
+         };
+         let l = match l {
+             Value::Integer(l) => *l as f32,
+             Value::Float(l)   => *l,
+             _ => return Err(anyhow!("Invalid type passed to `hsl` function for lightness.")),
+         };
+         shape.borrow_mut().set_hsl(h, s, l);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(hsla => {
+    [h, s, l, a, Value::Shape(shape)] => {
+         let h = match h {
+             Value::Integer(h) => *h as f32,
+             Value::Float(h)   => *h,
+             _ => return Err(anyhow!("Invalid type passed to `hsla` function for hue.")),
+         };
+         let s = match s {
+             Value::Integer(s) => *s as f32,
+             Value::Float(s)   => *s,
+             _ => return Err(anyhow!("Invalid type passed to `hsla` function for saturation.")),
+         };
+         let l = match l {
+             Value::Integer(l) => *l as f32,
+             Value::Float(l)   => *l,
+             _ => return Err(anyhow!("Invalid type passed to `hsla` function for lightness.")),
+         };
+         let a = match a {
+             Value::Integer(a) => *a as f32,
+             Value::Float(a)   => *a,
+             _ => return Err(anyhow!("Invalid type passed to `hsla` function for alpha.")),
+         };
+         shape.borrow_mut().set_hsla(h, s, l, a);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(hue => {
+    [Value::Integer(h), Value::Shape(shape)] => {
+         shape.borrow_mut().set_hue(*h as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(h), Value::Shape(shape)] => {
+         shape.borrow_mut().set_hue(*h);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(saturation => {
+    [Value::Integer(s), Value::Shape(shape)] => {
+         shape.borrow_mut().set_saturation(*s as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(s), Value::Shape(shape)] => {
+         shape.borrow_mut().set_saturation(*s);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(lightness => {
+    [Value::Integer(l), Value::Shape(shape)] => {
+         shape.borrow_mut().set_lightness(*l as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(l), Value::Shape(shape)] => {
+         shape.borrow_mut().set_lightness(*l);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(alpha => {
+    [Value::Integer(a), Value::Shape(shape)] => {
+         shape.borrow_mut().set_alpha(*a as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(a), Value::Shape(shape)] => {
+         shape.borrow_mut().set_alpha(*a);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(hshift => {
+    [Value::Integer(h), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_hue(*h as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(h), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_hue(*h);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(sshift => {
+    [Value::Integer(s), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_saturation(*s as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(s), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_saturation(*s);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(lshift => {
+    [Value::Integer(l), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_lightness(*l as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(l), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_lightness(*l);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(ashift => {
+    [Value::Integer(a), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_alpha(*a as f32);
+         Value::Shape(shape.clone())
+    },
+    [Value::Float(a), Value::Shape(shape)] => {
+         shape.borrow_mut().shift_alpha(*a);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(hex => {
+    [Value::Hex(hex), Value::Shape(shape)] => {
+         shape.borrow_mut().set_hex(*hex);
+         Value::Shape(shape.clone())
+    }
+});
