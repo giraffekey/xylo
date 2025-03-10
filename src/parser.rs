@@ -324,10 +324,6 @@ fn end(input: &str) -> IResult<&str, &str> {
     preceded(space0, alt((tag(";"), line_ending, eof))).parse(input)
 }
 
-fn block(input: &str, indent: usize) -> IResult<&str, Block> {
-    terminated(expr(indent), end).parse(input)
-}
-
 fn unary_operator_tag(input: &str) -> IResult<&str, &str> {
     alt((tag("!"), tag("~"))).parse(input)
 }
@@ -497,7 +493,7 @@ fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
             (space0, peek(line_ending)),
         ))
         .parse(input)?;
-        let (input, expr) = block(input, indent + 1)?;
+        let (input, expr) = expr(indent + 1)(input)?;
 
         let len = definitions.len();
         let mut block = Vec::new();
@@ -517,7 +513,7 @@ fn if_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let (input, condition) = preceded(space1, expr(indent + 1)).parse(input)?;
         let (input, _) =
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-        let (input, then_branch) = block(input, indent + 1)?;
+        let (input, then_branch) = expr(indent + 1)(input)?;
         let (input, _) = (multispace0, tag("else")).parse(input)?;
         let (input, else_if) = opt(peek((multispace1, tag("if")))).parse(input)?;
         let (input, else_branch) = if else_if.is_some() {
@@ -525,7 +521,7 @@ fn if_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         } else {
             let (input, _) =
                 alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-            block(input, indent + 1)?
+            expr(indent + 1)(input)?
         };
 
         let mut block =
@@ -554,7 +550,7 @@ fn pattern(indent: usize) -> impl FnMut(&str) -> IResult<&str, Pattern> {
 #[derive(Debug)]
 struct PatternBlock<'a> {
     pattern: Pattern,
-    block: Block<'a>,
+    expr: Block<'a>,
 }
 
 fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, PatternBlock> {
@@ -562,9 +558,9 @@ fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, PatternBloc
         let (input, pattern) = pattern(indent)(input)?;
         let (input, _) =
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-        let (input, block) = block(input, indent + 1)?;
+        let (input, expr) = expr(indent + 1)(input)?;
 
-        let pattern_block = PatternBlock { pattern, block };
+        let pattern_block = PatternBlock { pattern, expr };
         Ok((input, pattern_block))
     }
 }
@@ -579,7 +575,7 @@ fn match_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
 
         let total: usize = pattern_blocks
             .iter()
-            .map(|pattern_block| pattern_block.block.len() + 1)
+            .map(|pattern_block| pattern_block.expr.len() + 1)
             .sum();
         let mut skip = 0;
 
@@ -587,9 +583,9 @@ fn match_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let mut flattened_blocks = Vec::new();
 
         for pattern_block in pattern_blocks {
-            skip += pattern_block.block.len() + 1;
-            patterns.push((pattern_block.pattern, pattern_block.block.len() + 1));
-            flattened_blocks.extend(pattern_block.block);
+            skip += pattern_block.expr.len() + 1;
+            patterns.push((pattern_block.pattern, pattern_block.expr.len() + 1));
+            flattened_blocks.extend(pattern_block.expr);
             flattened_blocks.push(Token::Jump(total - skip));
         }
 
@@ -613,7 +609,7 @@ fn for_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))),
         )
         .parse(input)?;
-        let (input, expr) = block(input, indent + 1)?;
+        let (input, expr) = expr(indent + 1)(input)?;
 
         let mut block = Vec::with_capacity(iter.len() + expr.len() + 3);
         block.extend(iter);
@@ -635,7 +631,7 @@ fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
             alt(((multispace1, tag("->")), (space0, peek(line_ending)))),
         )
         .parse(input)?;
-        let (input, expr) = block(input, indent + 1)?;
+        let (input, expr) = expr(indent + 1)(input)?;
 
         let mut block = Vec::with_capacity(count.len() + expr.len() + 2);
         block.extend(count);
@@ -693,6 +689,10 @@ fn expr(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
 
 fn expr_with_precedence(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| expr_recursive(input, indent, precedence)
+}
+
+fn block(input: &str, indent: usize) -> IResult<&str, Block> {
+    terminated(expr(indent), end).parse(input)
 }
 
 fn definition(input: &str) -> IResult<&str, Definition> {
