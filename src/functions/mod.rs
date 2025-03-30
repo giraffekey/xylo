@@ -177,6 +177,10 @@ define_builtins! {
     "randi_rangei" => {rand::randi_rangei, 2},
     "shuffle" => {rand::shuffle, 1},
     "choose" => {rand::choose, 1},
+    "noise1" => {rand::noise1, 1},
+    "noise2" => {rand::noise2, 2},
+    "noise3" => {rand::noise3, 3},
+    "noise4" => {rand::noise4, 4},
     "compose" => {shape::compose, 2},
     "t" => {transform::translate, 3},
     "translate" => {transform::translate, 3},
@@ -270,7 +274,7 @@ macro_rules! builtin_function {
         pub fn $name(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
             match args {
                 $(
-                    $pattern => Ok($body(rng)),
+                    $pattern => $body(rng),
                 )*
                 _ => Err(anyhow!(
                     "Invalid types passed to `{}` function: {:?}",
