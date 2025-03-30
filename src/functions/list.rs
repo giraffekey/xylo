@@ -1,5 +1,5 @@
 #[cfg(feature = "no-std")]
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use crate::builtin_function;
 use crate::interpreter::Value;

@@ -157,3 +157,10 @@ builtin_function!(blend => {
          Value::Shape(shape.clone())
     }
 });
+
+builtin_function!(anti_alias => {
+    [Value::Boolean(anti_alias), Value::Shape(shape)] => {
+         shape.borrow_mut().set_anti_alias(*anti_alias);
+         Value::Shape(shape.clone())
+    }
+});

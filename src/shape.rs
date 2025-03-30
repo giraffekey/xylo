@@ -28,6 +28,7 @@ pub static SQUARE: BasicShape = BasicShape::Square {
     zindex: None,
     color: WHITE,
     blend_mode: BlendMode::SourceOver,
+    anti_alias: true,
 };
 
 pub static CIRCLE: BasicShape = BasicShape::Circle {
@@ -38,6 +39,7 @@ pub static CIRCLE: BasicShape = BasicShape::Circle {
     zindex: None,
     color: WHITE,
     blend_mode: BlendMode::SourceOver,
+    anti_alias: true,
 };
 
 pub static TRIANGLE: BasicShape = BasicShape::Triangle {
@@ -46,6 +48,7 @@ pub static TRIANGLE: BasicShape = BasicShape::Triangle {
     zindex: None,
     color: WHITE,
     blend_mode: BlendMode::SourceOver,
+    anti_alias: true,
 };
 
 pub static FILL: BasicShape = BasicShape::Fill {
@@ -94,6 +97,7 @@ pub enum BasicShape {
         zindex: Option<f32>,
         color: Hsla<f32>,
         blend_mode: BlendMode,
+        anti_alias: bool,
     },
     Circle {
         x: f32,
@@ -103,6 +107,7 @@ pub enum BasicShape {
         zindex: Option<f32>,
         color: Hsla<f32>,
         blend_mode: BlendMode,
+        anti_alias: bool,
     },
     Triangle {
         points: [f32; 6],
@@ -110,6 +115,7 @@ pub enum BasicShape {
         zindex: Option<f32>,
         color: Hsla<f32>,
         blend_mode: BlendMode,
+        anti_alias: bool,
     },
     Fill {
         zindex: Option<f32>,
@@ -127,6 +133,7 @@ pub enum Shape {
         zindex: Option<f32>,
         color: Hsla<f32>,
         blend_mode: BlendMode,
+        anti_alias: bool,
     },
     Composite {
         a: Rc<RefCell<Shape>>,
@@ -137,6 +144,7 @@ pub enum Shape {
         color_overwrite: HslaChange,
         color_shift: HslaChange,
         blend_mode_overwrite: Option<BlendMode>,
+        anti_alias_overwrite: Option<bool>,
     },
     Collection {
         shapes: Vec<Rc<RefCell<Shape>>>,
@@ -146,6 +154,7 @@ pub enum Shape {
         color_overwrite: HslaChange,
         color_shift: HslaChange,
         blend_mode_overwrite: Option<BlendMode>,
+        anti_alias_overwrite: Option<bool>,
     },
 }
 
@@ -601,6 +610,28 @@ impl Shape {
                 ..
             } => {
                 *blend_mode_overwrite = Some(b);
+            }
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_anti_alias(&mut self, a: bool) {
+        match self {
+            Self::Basic(BasicShape::Square { anti_alias, .. })
+            | Self::Basic(BasicShape::Circle { anti_alias, .. })
+            | Self::Basic(BasicShape::Triangle { anti_alias, .. })
+            | Self::Path { anti_alias, .. } => {
+                *anti_alias = a;
+            }
+            Self::Composite {
+                anti_alias_overwrite,
+                ..
+            }
+            | Self::Collection {
+                anti_alias_overwrite,
+                ..
+            } => {
+                *anti_alias_overwrite = Some(a);
             }
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }

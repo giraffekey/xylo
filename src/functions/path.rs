@@ -34,6 +34,7 @@ builtin_function!(move_to => {
             zindex: None,
             color: WHITE,
             blend_mode: BlendMode::SourceOver,
+            anti_alias: true,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -60,6 +61,7 @@ builtin_function!(line_to => {
             zindex: None,
             color: WHITE,
             blend_mode: BlendMode::SourceOver,
+            anti_alias: true,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -98,6 +100,7 @@ builtin_function!(quad_to => {
             zindex: None,
             color: WHITE,
             blend_mode: BlendMode::SourceOver,
+            anti_alias: true,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -148,6 +151,7 @@ builtin_function!(cubic_to => {
             zindex: None,
             color: WHITE,
             blend_mode: BlendMode::SourceOver,
+            anti_alias: true,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -162,6 +166,7 @@ builtin_function!(close => {
             zindex: None,
             color: WHITE,
             blend_mode: BlendMode::SourceOver,
+            anti_alias: true,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }

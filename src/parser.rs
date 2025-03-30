@@ -362,7 +362,7 @@ fn list(input: &str) -> IResult<&str, Literal> {
 
 fn literal(input: &str) -> IResult<&str, Literal> {
     alt((
-        complex, float, integer, boolean, hex, shape, blend_mode, list,
+        hex, complex, float, integer, boolean, shape, blend_mode, list,
     ))
     .parse(input)
 }

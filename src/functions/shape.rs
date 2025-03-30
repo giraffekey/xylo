@@ -23,6 +23,7 @@ builtin_function!(compose => {
                     zindex,
                     color,
                     blend_mode,
+                    anti_alias,
                 },
                 Shape::Path {
                     segments: b,
@@ -39,6 +40,7 @@ builtin_function!(compose => {
                     zindex: *zindex,
                     color: *color,
                     blend_mode: *blend_mode,
+                    anti_alias: *anti_alias,
                 }
             }
             _ => Shape::Composite {
@@ -50,6 +52,7 @@ builtin_function!(compose => {
                 color_overwrite: HslaChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
             },
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -81,6 +84,7 @@ builtin_function!(collect => {
             let mut zindex = None;
             let mut color = WHITE;
             let mut blend_mode = BlendMode::SourceOver;
+            let mut anti_alias = true;
 
             for path in shapes {
                 match &*path.borrow() {
@@ -90,12 +94,14 @@ builtin_function!(collect => {
                         zindex: other_zindex,
                         color: other_color,
                         blend_mode: other_blend_mode,
+                        anti_alias: other_anti_alias,
                     } => {
                         segments.extend(other_segments);
                         transform = transform.post_concat(*other_transform);
                         zindex = *other_zindex;
                         color = *other_color;
                         blend_mode = *other_blend_mode;
+                        anti_alias = *other_anti_alias;
                     }
                     _ => unreachable!(),
                 }
@@ -107,6 +113,7 @@ builtin_function!(collect => {
                 zindex,
                 color,
                 blend_mode,
+                anti_alias,
             }
         } else {
             Shape::Collection {
@@ -117,6 +124,7 @@ builtin_function!(collect => {
                 color_overwrite: HslaChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
             }
         };
         Value::Shape(Rc::new(RefCell::new(shape)))

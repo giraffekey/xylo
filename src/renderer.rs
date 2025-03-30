@@ -37,11 +37,11 @@ fn convert_color(color: Rgba<f32>) -> Color {
     .unwrap()
 }
 
-fn solid_color_paint<'a>(color: Rgba<f32>, blend_mode: BlendMode) -> Paint<'a> {
+fn solid_color_paint<'a>(color: Rgba<f32>, blend_mode: BlendMode, anti_alias: bool) -> Paint<'a> {
     Paint {
         shader: Shader::SolidColor(convert_color(color)),
         blend_mode,
-        anti_alias: true,
+        anti_alias,
         force_hq_pipeline: false,
     }
 }
@@ -74,6 +74,10 @@ fn overwrite_blend_mode(
     blend_mode_overwrite: Option<BlendMode>,
 ) -> BlendMode {
     blend_mode_overwrite.unwrap_or(blend_mode)
+}
+
+fn overwrite_anti_alias(anti_alias: bool, anti_alias_overwrite: Option<bool>) -> bool {
+    anti_alias_overwrite.unwrap_or(anti_alias)
 }
 
 fn combine_shift<T: Add<Output = T> + Copy>(shift: Option<T>, curr: Option<T>) -> Option<T> {
@@ -121,6 +125,13 @@ fn resolve_blend_mode_overwrite(
     blend_mode_overwrite.or(curr_blend_mode_overwrite)
 }
 
+fn resolve_anti_alias_overwrite(
+    anti_alias_overwrite: Option<bool>,
+    curr_anti_alias_overwrite: Option<bool>,
+) -> Option<bool> {
+    anti_alias_overwrite.or(curr_anti_alias_overwrite)
+}
+
 fn convert_shape(
     data: &mut Vec<ShapeData>,
     shape: Shape,
@@ -130,6 +141,7 @@ fn convert_shape(
     color_overwrite: HslaChange,
     color_shift: HslaChange,
     blend_mode_overwrite: Option<BlendMode>,
+    anti_alias_overwrite: Option<bool>,
 ) -> Result<()> {
     match shape {
         Shape::Basic(BasicShape::Square {
@@ -141,13 +153,15 @@ fn convert_shape(
             zindex,
             color,
             blend_mode,
+            anti_alias,
         }) => {
             let path = PathBuilder::from_rect(Rect::from_xywh(x, y, width, height).unwrap());
             let transform = transform.post_concat(parent_transform);
             let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
             let color = overwrite_color(color, color_overwrite, color_shift);
             let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-            let paint = solid_color_paint(Rgba::from_color(*color), blend_mode);
+            let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+            let paint = solid_color_paint(Rgba::from_color(*color), blend_mode, anti_alias);
             data.push(ShapeData::FillPath {
                 path,
                 transform,
@@ -163,13 +177,15 @@ fn convert_shape(
             zindex,
             color,
             blend_mode,
+            anti_alias,
         }) => {
             let path = PathBuilder::from_circle(x, y, radius).unwrap();
             let transform = transform.post_concat(parent_transform);
             let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
             let color = overwrite_color(color, color_overwrite, color_shift);
             let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-            let paint = solid_color_paint(Rgba::from_color(*color), blend_mode);
+            let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+            let paint = solid_color_paint(Rgba::from_color(*color), blend_mode, anti_alias);
             data.push(ShapeData::FillPath {
                 path,
                 transform,
@@ -183,6 +199,7 @@ fn convert_shape(
             zindex,
             color,
             blend_mode,
+            anti_alias,
         }) => {
             let mut pb = PathBuilder::new();
             pb.move_to(points[0], points[1]);
@@ -195,7 +212,8 @@ fn convert_shape(
             let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
             let color = overwrite_color(color, color_overwrite, color_shift);
             let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-            let paint = solid_color_paint(Rgba::from_color(*color), blend_mode);
+            let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+            let paint = solid_color_paint(Rgba::from_color(*color), blend_mode, anti_alias);
             data.push(ShapeData::FillPath {
                 path,
                 transform,
@@ -215,6 +233,7 @@ fn convert_shape(
             zindex,
             color,
             blend_mode,
+            anti_alias,
         } => {
             let mut pb = PathBuilder::new();
             for segment in segments {
@@ -233,7 +252,8 @@ fn convert_shape(
                 let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
                 let color = overwrite_color(color, color_overwrite, color_shift);
                 let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-                let paint = solid_color_paint(Rgba::from_color(*color), blend_mode);
+                let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+                let paint = solid_color_paint(Rgba::from_color(*color), blend_mode, anti_alias);
 
                 data.push(ShapeData::FillPath {
                     path,
@@ -252,6 +272,7 @@ fn convert_shape(
             color_overwrite: curr_color_overwrite,
             color_shift: curr_color_shift,
             blend_mode_overwrite: curr_blend_mode_overwrite,
+            anti_alias_overwrite: curr_anti_alias_overwrite,
         } => {
             let transform = transform.post_concat(parent_transform);
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
@@ -268,6 +289,8 @@ fn convert_shape(
             );
             let blend_mode_overwrite =
                 resolve_blend_mode_overwrite(blend_mode_overwrite, curr_blend_mode_overwrite);
+            let anti_alias_overwrite =
+                resolve_anti_alias_overwrite(anti_alias_overwrite, curr_anti_alias_overwrite);
 
             let a = Rc::try_unwrap(a).unwrap().into_inner();
             convert_shape(
@@ -279,6 +302,7 @@ fn convert_shape(
                 color_overwrite,
                 color_shift,
                 blend_mode_overwrite,
+                anti_alias_overwrite,
             )?;
             let b = Rc::try_unwrap(b).unwrap().into_inner();
             convert_shape(
@@ -290,6 +314,7 @@ fn convert_shape(
                 color_overwrite,
                 color_shift,
                 blend_mode_overwrite,
+                anti_alias_overwrite,
             )?;
         }
         Shape::Collection {
@@ -300,6 +325,7 @@ fn convert_shape(
             color_overwrite: curr_color_overwrite,
             color_shift: curr_color_shift,
             blend_mode_overwrite: curr_blend_mode_overwrite,
+            anti_alias_overwrite: curr_anti_alias_overwrite,
         } => {
             let transform = transform.post_concat(parent_transform);
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
@@ -316,6 +342,8 @@ fn convert_shape(
             );
             let blend_mode_overwrite =
                 resolve_blend_mode_overwrite(blend_mode_overwrite, curr_blend_mode_overwrite);
+            let anti_alias_overwrite =
+                resolve_anti_alias_overwrite(anti_alias_overwrite, curr_anti_alias_overwrite);
 
             for shape in shapes {
                 let shape = Rc::try_unwrap(shape).unwrap().into_inner();
@@ -328,6 +356,7 @@ fn convert_shape(
                     color_overwrite,
                     color_shift,
                     blend_mode_overwrite,
+                    anti_alias_overwrite,
                 )?;
             }
         }
@@ -345,6 +374,7 @@ pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
         None,
         HslaChange::default(),
         HslaChange::default(),
+        None,
         None,
     )?;
     data.sort_by(|a, b| match (a, b) {
