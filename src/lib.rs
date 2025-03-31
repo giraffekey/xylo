@@ -15,11 +15,11 @@ use std::{fs, path::Path};
 #[cfg(feature = "no-std")]
 use alloc::{borrow::ToOwned, format, string::String, vec::Vec};
 
-use anyhow::{anyhow, Result};
 use base64::prelude::*;
 use png::{ColorType, Encoder};
 use tiny_skia::Pixmap;
 
+mod error;
 mod format;
 mod functions;
 mod interpreter;
@@ -28,8 +28,10 @@ mod parser;
 mod renderer;
 mod shape;
 
+pub use error::{Error, Result};
+
 pub fn generate_pixmap(code: &str, width: u32, height: u32) -> Result<Pixmap> {
-    let (_remaining, tree) = parser::parse(code.to_owned().leak()).map_err(|e| anyhow!(e))?;
+    let tree = parser::parse(code.to_owned().leak())?;
     #[cfg(feature = "std")]
     let shape = interpreter::execute(tree, None)?;
     #[cfg(feature = "no-std")]
@@ -44,8 +46,10 @@ pub fn generate_png_data(code: &str, width: u32, height: u32) -> Result<Vec<u8>>
     {
         let mut encoder = Encoder::new(&mut buf, width, height);
         encoder.set_color(ColorType::Rgba);
-        let mut writer = encoder.write_header()?;
-        writer.write_image_data(pixmap.data())?;
+        let mut writer = encoder.write_header().map_err(|e| Error::PngError(e))?;
+        writer
+            .write_image_data(pixmap.data())
+            .map_err(|e| Error::PngError(e))?;
     }
     Ok(buf)
 }
@@ -62,7 +66,7 @@ pub fn generate_pixmap_from_file<P: AsRef<Path>>(
     width: u32,
     height: u32,
 ) -> Result<Pixmap> {
-    let code = fs::read_to_string(input_path)?;
+    let code = fs::read_to_string(input_path).map_err(|e| Error::FileError(e))?;
     generate_pixmap(&code, width, height)
 }
 
@@ -74,7 +78,9 @@ pub fn generate_file<P: AsRef<Path>>(
     height: u32,
 ) -> Result<()> {
     let pixmap = generate_pixmap_from_file(input_path, width, height)?;
-    pixmap.save_png(output_path)?;
+    pixmap
+        .save_png(output_path)
+        .map_err(|e| Error::PngError(e))?;
     Ok(())
 }
 

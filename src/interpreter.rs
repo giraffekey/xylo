@@ -2,13 +2,13 @@
 use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use alloc::{boxed::Box, format, rc::Rc, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, string::String, vec, vec::Vec};
 
+use crate::error::{Error, Result};
 use crate::functions::{builtin_param_count, handle_builtin, BUILTIN_FUNCTIONS};
 use crate::parser::*;
 use crate::shape::{Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
-use anyhow::{anyhow, Result};
 use core::cell::RefCell;
 use hashbrown::HashMap;
 use num::Complex;
@@ -67,7 +67,7 @@ impl Value {
                 {
                     Ok(ValueKind::List(Box::new(kind)))
                 } else {
-                    Err(anyhow!("Type mismatch in list."))
+                    Err(Error::InvalidList)
                 }
             }
         }
@@ -276,7 +276,7 @@ fn reduce_call(
                     _ => unreachable!(),
                 }
             }
-            None => Err(anyhow!(format!("Function `{}` not found", name))),
+            None => Err(Error::UnknownFunction(name.into())),
         }
     }
 }
@@ -299,7 +299,7 @@ fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
                 a.iter().zip(b).map(|(a, b)| pattern_match(a, b)).collect();
             Ok(matches?.iter().all(|does_match| *does_match))
         }
-        _ => return Err(anyhow!("Incorrect type comparison in match statement.")),
+        _ => return Err(Error::InvalidMatch),
     }
 }
 
@@ -451,7 +451,7 @@ fn execute_block<'a>(
                                     stack.frames.extend(frames);
                                 }
                             }
-                            _ => return Err(anyhow!("Invalid type passed to `map` function.")),
+                            _ => return Err(Error::UnknownFunction("map".into())),
                         },
                         _ => unreachable!(),
                     },
@@ -520,7 +520,7 @@ fn execute_block<'a>(
                 };
                 let is_true = match condition {
                     Value::Boolean(b) => b,
-                    _ => return Err(anyhow!("If condition must reduce to a boolean.")),
+                    _ => return Err(Error::InvalidCondition),
                 };
 
                 if is_true {
@@ -555,7 +555,7 @@ fn execute_block<'a>(
                 }
 
                 if !found {
-                    return Err(anyhow!("Not all possibilities covered in match statement"));
+                    return Err(Error::MatchNotFound);
                 }
 
                 index += 1;
@@ -569,17 +569,17 @@ fn execute_block<'a>(
                     Value::List(list) => list,
                     Value::Integer(n) => {
                         if n < 0 {
-                            return Err(anyhow!("Cannot iterate over negative number."));
+                            return Err(Error::NotIterable);
                         }
                         (0..n).map(Value::Integer).collect()
                     }
                     Value::Float(n) => {
                         if n < 0.0 {
-                            return Err(anyhow!("Cannot iterate over negative number."));
+                            return Err(Error::NotIterable);
                         }
                         (0..n as i32).map(Value::Integer).collect()
                     }
-                    _ => return Err(anyhow!("Value is not iterable.")),
+                    _ => return Err(Error::NotIterable),
                 };
                 items.reverse();
 
@@ -650,10 +650,10 @@ fn execute_block<'a>(
                 let count = match count {
                     Value::Integer(n) => n,
                     Value::Float(n) => n as i32,
-                    _ => return Err(anyhow!("Value must be a number.")),
+                    _ => return Err(Error::NotIterable),
                 };
                 if count < 0 {
-                    return Err(anyhow!("Cannot iterate over negative number."));
+                    return Err(Error::NotIterable);
                 }
 
                 stack.loops.push(LoopStack {
@@ -703,7 +703,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                 gen_seed()
             }
             #[cfg(feature = "no-std")]
-            return Err(anyhow!("Seed required for rng."));
+            return Err(Error::MissingSeed);
         }
     };
     let mut rng = ChaCha8Rng::from_seed(seed);
@@ -718,7 +718,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
         match functions.get_mut(definition.name) {
             Some(function) => {
                 if definition.params != function.params {
-                    return Err(anyhow!("Incorrect parameters in duplicate function."));
+                    return Err(Error::InvalidDefinition(definition.name.into()));
                 }
 
                 function.weighted = true;
@@ -743,7 +743,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
     let shape = match reduce_call(&mut stack, &mut rng, "root", Vec::new())? {
         FunctionBlock::Start(start) => match execute_block(&mut stack, &mut rng, &block, start)? {
             Value::Shape(shape) => shape,
-            _ => return Err(anyhow!("The `root` function must return a shape.")),
+            _ => return Err(Error::InvalidRoot),
         },
         _ => unreachable!(),
     };

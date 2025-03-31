@@ -1,10 +1,7 @@
-#[cfg(feature = "no-std")]
-use alloc::vec::Vec;
-
 use crate::builtin_function;
+use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
-use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
 
 builtin_function!(translate => {
@@ -75,17 +72,17 @@ builtin_function!(rotate_at => {
          let r = match r {
              Value::Integer(n) => *n as f32,
              Value::Float(n)   => *n,
-             _ => return Err(anyhow!("Invalid type passed to `rotate_at` function.")),
+            _ => return Err(Error::InvalidArgument("rotate_at".into())),
          };
          let tx = match tx {
              Value::Integer(n) => *n as f32,
              Value::Float(n)   => *n,
-             _ => return Err(anyhow!("Invalid type passed to `rotate_at` function.")),
+            _ => return Err(Error::InvalidArgument("rotate_at".into())),
          };
          let ty = match ty {
              Value::Integer(n) => *n as f32,
              Value::Float(n)   => *n,
-             _ => return Err(anyhow!("Invalid type passed to `rotate_at` function.")),
+            _ => return Err(Error::InvalidArgument("rotate_at".into())),
          };
          shape.borrow_mut().rotate_at(r, tx, ty);
          Value::Shape(shape.clone())

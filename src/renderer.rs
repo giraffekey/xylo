@@ -4,9 +4,9 @@ use std::rc::Rc;
 #[cfg(feature = "no-std")]
 use alloc::{rc::Rc, vec::Vec};
 
+use crate::error::Result;
 use crate::shape::{BasicShape, HslaChange, PathSegment, Shape, IDENTITY};
 
-use anyhow::Result;
 use core::ops::Add;
 use palette::{rgb::Rgba, FromColor, Hsla};
 use tiny_skia::{

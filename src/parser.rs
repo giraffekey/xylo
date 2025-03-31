@@ -761,11 +761,12 @@ fn definition(input: &str) -> IResult<&str, Definition> {
     Ok((input, definition))
 }
 
-pub fn parse(input: &str) -> IResult<&str, Tree> {
-    let tree = terminated(
+pub fn parse(input: &str) -> crate::Result<Tree> {
+    let (_input, tree) = terminated(
         many0(preceded(many0((space0, line_ending)), definition)),
         (multispace0, eof),
     )
-    .parse(input);
-    tree
+    .parse(input)
+    .map_err(|_| crate::Error::ParseError)?;
+    Ok(tree)
 }

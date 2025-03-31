@@ -5,11 +5,11 @@ use std::rc::Rc;
 use alloc::{rc::Rc, vec::Vec};
 
 use crate::builtin_function;
+use crate::error::{Error, Result};
 use crate::interpreter::Value;
-use crate::shape::{HslaChange, Shape, IDENTITY, WHITE};
+use crate::shape::{BasicShape, HslaChange, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
-use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
 use tiny_skia::BlendMode;
 
@@ -65,13 +65,13 @@ builtin_function!(collect => {
             .iter()
             .map(|item| match item {
                 Value::Shape(shape) => Ok(shape.clone()),
-                _ => Err(anyhow!("Invalid type passed to `collect` function.")),
+                 _ => return Err(Error::InvalidArgument("collect".into())),
             })
             .collect();
         let shapes = shapes?;
 
         if shapes.len() < 1 {
-            return Err(anyhow!("Cannot collect zero shapes."));
+            return Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(BasicShape::Empty)))));
         }
 
         let is_path = shapes.iter().all(|shape| match &*shape.borrow() {

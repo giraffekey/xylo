@@ -1,10 +1,7 @@
-#[cfg(feature = "no-std")]
-use alloc::vec::Vec;
-
 use crate::builtin_function;
+use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
-use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
 
 builtin_function!(pipe => {

@@ -1,10 +1,7 @@
-#[cfg(feature = "no-std")]
-use alloc::vec::Vec;
-
 use crate::builtin_function;
+use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
-use anyhow::{anyhow, Result};
 use core::f32::consts::{E, PI, TAU};
 use factorial::{DoubleFactorial, Factorial};
 use num::complex::{Complex, ComplexFloat};
@@ -271,13 +268,13 @@ builtin_function!(cbrt => {
 builtin_function!(fact => {
     [Value::Integer(n)] => {
         if *n < 0 {
-            return Err(anyhow!("Cannot get factorial of negative number."));
+            return Err(Error::NegativeFactorial);
         }
         Value::Integer(((*n) as u32).factorial() as i32)
     },
     [Value::Float(n)] => {
          if *n < 0.0 {
-            return Err(anyhow!("Cannot get factorial of negative number."));
+            return Err(Error::NegativeFactorial);
         }
         Value::Integer(((*n) as u32).factorial() as i32)
     },
@@ -286,13 +283,13 @@ builtin_function!(fact => {
 builtin_function!(fact2 => {
     [Value::Integer(n)] => {
         if *n < 0 {
-            return Err(anyhow!("Cannot get factorial of negative number."));
+            return Err(Error::NegativeFactorial);
         }
         Value::Integer(((*n) as u32).double_factorial() as i32)
     },
     [Value::Float(n)] => {
         if *n < 0.0 {
-            return Err(anyhow!("Cannot get factorial of negative number."));
+            return Err(Error::NegativeFactorial);
         }
         Value::Integer(((*n) as u32).double_factorial() as i32)
     },

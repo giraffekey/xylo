@@ -1,10 +1,7 @@
-#[cfg(feature = "no-std")]
-use alloc::vec::Vec;
-
 use crate::builtin_function;
+use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
-use anyhow::{anyhow, Result};
 use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -110,7 +107,7 @@ builtin_function!(noise1 rng => {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise1` function.")),
+            _ => return Err(Error::InvalidArgument("noise1".into())),
         };
 
         let perlin = Perlin::new(rng.random());
@@ -124,13 +121,13 @@ builtin_function!(noise2 rng => {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise2` function.")),
+            _ => return Err(Error::InvalidArgument("noise2".into())),
         };
 
         let b = match b {
             Value::Integer(b) => *b as f64,
             Value::Float(b) => *b as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise2` function.")),
+            _ => return Err(Error::InvalidArgument("noise2".into())),
         };
 
         let perlin = Perlin::new(rng.random());
@@ -144,19 +141,19 @@ builtin_function!(noise3 rng => {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise3` function.")),
+            _ => return Err(Error::InvalidArgument("noise3".into())),
         };
 
         let b = match b {
             Value::Integer(b) => *b as f64,
             Value::Float(b) => *b as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise3` function.")),
+            _ => return Err(Error::InvalidArgument("noise3".into())),
         };
 
         let c = match c {
             Value::Integer(c) => *c as f64,
             Value::Float(c) => *c as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise3` function.")),
+            _ => return Err(Error::InvalidArgument("noise3".into())),
         };
 
         let perlin = Perlin::new(rng.random());
@@ -170,25 +167,25 @@ builtin_function!(noise4 rng => {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise4` function.")),
+            _ => return Err(Error::InvalidArgument("noise4".into())),
         };
 
         let b = match b {
             Value::Integer(b) => *b as f64,
             Value::Float(b) => *b as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise4` function.")),
+            _ => return Err(Error::InvalidArgument("noise4".into())),
         };
 
         let c = match c {
             Value::Integer(c) => *c as f64,
             Value::Float(c) => *c as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise4` function.")),
+            _ => return Err(Error::InvalidArgument("noise4".into())),
         };
 
         let d = match d {
             Value::Integer(d) => *d as f64,
             Value::Float(d) => *d as f64,
-            _ => return Err(anyhow!("Invalid type passed to `noise4` function.")),
+            _ => return Err(Error::InvalidArgument("noise4".into())),
         };
 
         let perlin = Perlin::new(rng.random());

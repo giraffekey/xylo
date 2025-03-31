@@ -1,10 +1,7 @@
-#[cfg(feature = "no-std")]
-use alloc::vec::Vec;
-
 use crate::builtin_function;
 use crate::interpreter::Value;
 
-use anyhow::{anyhow, Result};
+use crate::error::{Error, Result};
 use rand_chacha::ChaCha8Rng;
 
 builtin_function!(hsl => {
@@ -12,17 +9,17 @@ builtin_function!(hsl => {
          let h = match h {
              Value::Integer(h) => *h as f32,
              Value::Float(h)   => *h,
-             _ => return Err(anyhow!("Invalid type passed to `hsl` function for hue.")),
+             _ => return Err(Error::InvalidArgument("hsl".into())),
          };
          let s = match s {
              Value::Integer(s) => *s as f32,
              Value::Float(s)   => *s,
-             _ => return Err(anyhow!("Invalid type passed to `hsl` function for saturation.")),
+             _ => return Err(Error::InvalidArgument("hsl".into())),
          };
          let l = match l {
              Value::Integer(l) => *l as f32,
              Value::Float(l)   => *l,
-             _ => return Err(anyhow!("Invalid type passed to `hsl` function for lightness.")),
+             _ => return Err(Error::InvalidArgument("hsl".into())),
          };
          shape.borrow_mut().set_hsl(h, s, l);
          Value::Shape(shape.clone())
@@ -34,22 +31,22 @@ builtin_function!(hsla => {
          let h = match h {
              Value::Integer(h) => *h as f32,
              Value::Float(h)   => *h,
-             _ => return Err(anyhow!("Invalid type passed to `hsla` function for hue.")),
+             _ => return Err(Error::InvalidArgument("hsla".into())),
          };
          let s = match s {
              Value::Integer(s) => *s as f32,
              Value::Float(s)   => *s,
-             _ => return Err(anyhow!("Invalid type passed to `hsla` function for saturation.")),
+             _ => return Err(Error::InvalidArgument("hsla".into())),
          };
          let l = match l {
              Value::Integer(l) => *l as f32,
              Value::Float(l)   => *l,
-             _ => return Err(anyhow!("Invalid type passed to `hsla` function for lightness.")),
+             _ => return Err(Error::InvalidArgument("hsla".into())),
          };
          let a = match a {
              Value::Integer(a) => *a as f32,
              Value::Float(a)   => *a,
-             _ => return Err(anyhow!("Invalid type passed to `hsla` function for alpha.")),
+             _ => return Err(Error::InvalidArgument("hsla".into())),
          };
          shape.borrow_mut().set_hsla(h, s, l, a);
          Value::Shape(shape.clone())

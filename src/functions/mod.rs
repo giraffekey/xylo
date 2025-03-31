@@ -1,6 +1,6 @@
+use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
-use anyhow::{anyhow, Result};
 use rand_chacha::ChaCha8Rng;
 
 mod color;
@@ -31,7 +31,7 @@ macro_rules! define_builtins {
                 $(
                     $name => $func(rng, args),
                 )*
-                _ => Err(anyhow!("Unknown function: {}", name)),
+                _ => Err(Error::UnknownFunction(name.into())),
             }
         }
 
@@ -257,11 +257,7 @@ macro_rules! builtin_function {
                 $(
                     $pattern => Ok($body),
                 )*
-                _ => Err(anyhow!(
-                    "Invalid types passed to `{}` function: {:?}",
-                    stringify!($name),
-                    args.iter().map(Value::kind).collect::<Vec<_>>()
-                )),
+                _ => Err(Error::InvalidArgument(stringify!($name).into())),
             }
         }
     };
@@ -276,10 +272,8 @@ macro_rules! builtin_function {
                 $(
                     $pattern => $body(rng),
                 )*
-                _ => Err(anyhow!(
-                    "Invalid types passed to `{}` function: {:?}",
-                    stringify!($name),
-                    args.iter().map(Value::kind).collect::<Vec<_>>()
+                _ => Err(Error::InvalidArgument(
+                    stringify!($name).into(),
                 )),
             }
         }

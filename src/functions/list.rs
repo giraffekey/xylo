@@ -2,9 +2,9 @@
 use alloc::{vec, vec::Vec};
 
 use crate::builtin_function;
+use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
-use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use rand_chacha::ChaCha8Rng;
 
@@ -67,7 +67,7 @@ builtin_function!(nth => {
         let len = list.len() as i32;
         let index = if *index >= 0 { *index } else { len + *index };
         if index < 0 || index >= len {
-            return Err(anyhow!("Index out of bounds in nth function."));
+            return Err(Error::OutOfBounds);
         }
         list.get(index as usize).unwrap().clone()
     }
@@ -78,7 +78,7 @@ builtin_function!(set => {
         let len = list.len() as i32;
         let i = if *index >= 0 { *index } else { len + *index };
         if i < 0 || i >= len {
-            return Err(anyhow!("Index out of bounds in set function."));
+            return Err(Error::OutOfBounds);
         }
         let mut list = list.clone();
         list[i as usize] = value.clone();
@@ -99,7 +99,7 @@ builtin_function!(is_empty => {
 builtin_function!(head => {
     [Value::List(list)] => {
         if list.is_empty() {
-            return Err(anyhow!("head: empty list"));
+            return Err(Error::OutOfBounds);
         }
         list[0].clone()
     }
@@ -108,7 +108,7 @@ builtin_function!(head => {
 builtin_function!(tail => {
     [Value::List(list)] => {
         if list.is_empty() {
-            return Err(anyhow!("tail: empty list"));
+            return Err(Error::OutOfBounds);
         }
         Value::List(list[1..].to_vec())
     }
@@ -117,7 +117,7 @@ builtin_function!(tail => {
 builtin_function!(init => {
     [Value::List(list)] => {
         if list.is_empty() {
-            return Err(anyhow!("init: empty list"));
+            return Err(Error::OutOfBounds);
         }
         Value::List(list[..list.len()-1].to_vec())
     }
@@ -126,7 +126,7 @@ builtin_function!(init => {
 builtin_function!(last => {
     [Value::List(list)] => {
         if list.is_empty() {
-            return Err(anyhow!("last: empty list"));
+            return Err(Error::OutOfBounds);
         }
         list[list.len()-1].clone()
     }
@@ -175,7 +175,7 @@ builtin_function!(index_of => {
         let i = list.iter().position(|v| v == value);
         match i {
             Some(i) => Value::Integer(i as i32),
-            None => return Err(anyhow!("index_of: value not found")),
+            None => return Err(Error::NotFound),
         }
     }
 });
@@ -190,7 +190,7 @@ builtin_function!(slice => {
         let start = if *start >= 0 { *start } else { len + *start };
         let end = if *end >= 0 { *end } else { len + *end };
         if start < 0 || start >= len || end < 0 || end >= len {
-            return Err(anyhow!("Index out of bounds in slice function."));
+            return Err(Error::OutOfBounds);
         }
         if start > end {
             Value::List(Vec::new())
@@ -205,7 +205,7 @@ builtin_function!(split => {
         let len = list.len() as i32;
         let index = if *index >= 0 { *index } else { len + *index };
         if index < 0 || index >= len {
-            return Err(anyhow!("Index out of bounds in split function."));
+            return Err(Error::OutOfBounds);
         }
         Value::List(vec![
             Value::List(list[..index as usize].to_vec()),
@@ -262,7 +262,7 @@ builtin_function!(min_of => {
                         .unwrap();
                     Value::Float(*sum)
                 }
-                _ => return Err(anyhow!("min_of: unsupported element type")),
+                _ => return Err(Error::InvalidList),
             }
         }
     }
@@ -302,7 +302,7 @@ builtin_function!(max_of => {
                         .unwrap();
                     Value::Float(*sum)
                 }
-                _ => return Err(anyhow!("max_of: unsupported element type")),
+                _ => return Err(Error::InvalidList),
             }
         }
     }
@@ -353,7 +353,7 @@ builtin_function!(sum => {
                         .sum();
                     Value::Complex(sum)
                 }
-                _ => return Err(anyhow!("sum: list contains non-numeric values")),
+                _ => return Err(Error::InvalidList),
             }
         }
     }
@@ -404,7 +404,7 @@ builtin_function!(product => {
                         .product();
                     Value::Complex(product)
                 }
-                _ => return Err(anyhow!("product: list contains non-numeric values")),
+                _ => return Err(Error::InvalidList),
             }
         }
     }
@@ -448,7 +448,7 @@ builtin_function!(sort => {
                         .collect();
                     Value::List(sorted)
                 }
-                _ => return Err(anyhow!("sort: unsupported element type")),
+                _ => return Err(Error::InvalidList),
             }
         }
     }
@@ -475,7 +475,7 @@ builtin_function!(flatten => {
                         .collect();
                     Value::List(flattened)
                 }
-                _ => return Err(anyhow!("flatten: unsupported element type")),
+                _ => return Err(Error::InvalidList),
             }
         }
     },
