@@ -564,7 +564,7 @@ fn if_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let (input, _) = (multispace0, tag("else")).parse(input)?;
         let (input, else_if) = opt(peek((multispace1, tag("if")))).parse(input)?;
         let (input, else_branch) = if else_if.is_some() {
-            expr(indent)(input)?
+            preceded(multispace0, if_statement(indent)).parse(input)?
         } else {
             let (input, _) =
                 alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
@@ -727,6 +727,8 @@ fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, B
         lhs.push(Token::BinaryOperator(op));
     }
 
+    let (input, _) = opt((space0, tag(";"))).parse(input)?;
+
     Ok((input, lhs))
 }
 
@@ -769,4 +771,502 @@ pub fn parse(input: &str) -> crate::Result<Tree> {
     .parse(input)
     .map_err(|_| crate::Error::ParseError)?;
     Ok(tree)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_literal() {
+        assert_eq!(literal("3"), Ok(("", Literal::Integer(3))));
+        assert_eq!(literal("5.0"), Ok(("", Literal::Float(5.0))));
+        assert_eq!(literal("0.5"), Ok(("", Literal::Float(0.5))));
+        assert_eq!(literal(".5"), Ok(("", Literal::Float(0.5))));
+        assert_eq!(
+            literal("5+3i"),
+            Ok(("", Literal::Complex(Complex::new(5.0, 3.0))))
+        );
+        assert_eq!(
+            literal("5-3i"),
+            Ok(("", Literal::Complex(Complex::new(5.0, -3.0))))
+        );
+        assert_eq!(
+            literal("3i"),
+            Ok(("", Literal::Complex(Complex::new(0.0, 3.0))))
+        );
+        assert_eq!(
+            literal("-3i"),
+            Ok(("", Literal::Complex(Complex::new(0.0, -3.0))))
+        );
+        assert_eq!(literal("true"), Ok(("", Literal::Boolean(true))));
+        assert_eq!(literal("false"), Ok(("", Literal::Boolean(false))));
+        assert_eq!(literal("0xf0ae13"), Ok(("", Literal::Hex([240, 174, 19]))));
+        assert_eq!(
+            literal("SQUARE"),
+            Ok(("", Literal::Shape(ShapeKind::Square)))
+        );
+        assert_eq!(
+            literal("CIRCLE"),
+            Ok(("", Literal::Shape(ShapeKind::Circle)))
+        );
+        assert_eq!(
+            literal("TRIANGLE"),
+            Ok(("", Literal::Shape(ShapeKind::Triangle)))
+        );
+        assert_eq!(literal("FILL"), Ok(("", Literal::Shape(ShapeKind::Fill))));
+        assert_eq!(literal("EMPTY"), Ok(("", Literal::Shape(ShapeKind::Empty))));
+        assert_eq!(
+            literal("BLEND_CLEAR"),
+            Ok(("", Literal::BlendMode(BlendMode::Clear)))
+        );
+        assert_eq!(
+            literal("BLEND_SOURCE_OVER"),
+            Ok(("", Literal::BlendMode(BlendMode::SourceOver)))
+        );
+        assert_eq!(
+            literal("BLEND_DESTINATION_OVER"),
+            Ok(("", Literal::BlendMode(BlendMode::DestinationOver)))
+        );
+        assert_eq!(
+            literal("[1, 2, 3]"),
+            Ok((
+                "",
+                Literal::List(vec![
+                    Literal::Integer(1),
+                    Literal::Integer(2),
+                    Literal::Integer(3)
+                ])
+            ))
+        );
+        assert_eq!(
+            literal("[1.0, 2.0, 3.0]"),
+            Ok((
+                "",
+                Literal::List(vec![
+                    Literal::Float(1.0),
+                    Literal::Float(2.0),
+                    Literal::Float(3.0)
+                ])
+            ))
+        );
+    }
+
+    #[test]
+    fn test_identifer() {
+        assert_eq!(identifier("snake_case"), Ok(("", "snake_case")));
+        assert_eq!(identifier("camelCase3"), Ok(("", "camelCase3")));
+        assert_eq!(identifier("π"), Ok(("", "π")));
+        assert_eq!(identifier("τ"), Ok(("", "τ")));
+        assert_eq!(identifier("ℯ"), Ok(("", "ℯ")));
+        assert_eq!(identifier("φ"), Ok(("", "φ")));
+        assert_eq!(identifier("(!)"), Ok(("", "!")));
+        assert_eq!(identifier("(+)"), Ok(("", "+")));
+        assert_eq!(identifier("(*)"), Ok(("", "*")));
+    }
+
+    #[test]
+    fn test_call() {
+        assert_eq!(
+            call(0, 0)("func arg1 (arg2 x) arg3"),
+            Ok((
+                "",
+                vec![
+                    Token::Call("arg1", 0),
+                    Token::Call("x", 0),
+                    Token::Call("arg2", 1),
+                    Token::Call("arg3", 0),
+                    Token::Call("func", 3)
+                ]
+            ))
+        );
+        assert_eq!(call(0, 0)("π"), Ok(("", vec![Token::Call("π", 0)])));
+        assert_eq!(
+            call(0, 0)("(+) 2 3"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Integer(2)),
+                    Token::Literal(Literal::Integer(3)),
+                    Token::Call("+", 2)
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_let_statement() {
+        assert_eq!(
+            let_statement(0)("let x = 3 -> x",),
+            Ok((
+                "",
+                vec![
+                    Token::Let("x", vec![], 2),
+                    Token::Literal(Literal::Integer(3)),
+                    Token::Return(None),
+                    Token::Call("x", 0),
+                    Token::Pop
+                ]
+            ))
+        );
+        assert_eq!(
+            let_statement(0)(
+                "\
+let x = 3
+    y = 5
+    x + y\
+                ",
+            ),
+            Ok((
+                "",
+                vec![
+                    Token::Let("x", vec![], 2),
+                    Token::Literal(Literal::Integer(3)),
+                    Token::Return(None),
+                    Token::Let("y", vec![], 2),
+                    Token::Literal(Literal::Integer(5)),
+                    Token::Return(None),
+                    Token::Call("x", 0),
+                    Token::Call("y", 0),
+                    Token::BinaryOperator(BinaryOperator::Addition),
+                    Token::Pop,
+                    Token::Pop
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_if_statement() {
+        assert_eq!(
+            if_statement(0)("if x == 0 -> 2; else -> 3"),
+            Ok((
+                "",
+                vec![
+                    Token::Call("x", 0),
+                    Token::Literal(Literal::Integer(0)),
+                    Token::BinaryOperator(BinaryOperator::EqualTo),
+                    Token::If(2),
+                    Token::Literal(Literal::Integer(2)),
+                    Token::Jump(1),
+                    Token::Literal(Literal::Integer(3)),
+                ]
+            ))
+        );
+        assert_eq!(
+            if_statement(0)(
+                "\
+if x > 0
+    1
+else if x < 0
+    (-1)
+else
+    0\
+                "
+            ),
+            Ok((
+                "",
+                vec![
+                    Token::Call("x", 0),
+                    Token::Literal(Literal::Integer(0)),
+                    Token::BinaryOperator(BinaryOperator::GreaterThan),
+                    Token::If(2),
+                    Token::Literal(Literal::Integer(1)),
+                    Token::Jump(7),
+                    Token::Call("x", 0),
+                    Token::Literal(Literal::Integer(0)),
+                    Token::BinaryOperator(BinaryOperator::LessThan),
+                    Token::If(2),
+                    Token::Literal(Literal::Integer(-1)),
+                    Token::Jump(1),
+                    Token::Literal(Literal::Integer(0))
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_match_statement() {
+        assert_eq!(
+            match_statement(0)("match n -> 3 -> 1; 2 -> 2; 1 -> 3"),
+            Ok((
+                "",
+                vec![
+                    Token::Call("n", 0),
+                    Token::Match(vec![
+                        (Pattern::Matches(vec![Literal::Integer(3)]), 2),
+                        (Pattern::Matches(vec![Literal::Integer(2)]), 2),
+                        (Pattern::Matches(vec![Literal::Integer(1)]), 2),
+                    ]),
+                    Token::Literal(Literal::Integer(1)),
+                    Token::Jump(4),
+                    Token::Literal(Literal::Integer(2)),
+                    Token::Jump(2),
+                    Token::Literal(Literal::Integer(3)),
+                    Token::Jump(0)
+                ]
+            ))
+        );
+        assert_eq!(
+            match_statement(0)(
+                "\
+match n
+    3.0 -> 3
+    2.0 -> 2
+    1.0 -> 1\
+                "
+            ),
+            Ok((
+                "",
+                vec![
+                    Token::Call("n", 0),
+                    Token::Match(vec![
+                        (Pattern::Matches(vec![Literal::Float(3.0)]), 2),
+                        (Pattern::Matches(vec![Literal::Float(2.0)]), 2),
+                        (Pattern::Matches(vec![Literal::Float(1.0)]), 2),
+                    ]),
+                    Token::Literal(Literal::Integer(3)),
+                    Token::Jump(4),
+                    Token::Literal(Literal::Integer(2)),
+                    Token::Jump(2),
+                    Token::Literal(Literal::Integer(1)),
+                    Token::Jump(0)
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_for_statement() {
+        assert_eq!(
+            for_statement(0)("for i in 0..3 -> i"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Integer(0)),
+                    Token::Literal(Literal::Integer(3)),
+                    Token::BinaryOperator(BinaryOperator::RangeExclusive),
+                    Token::ForStart("i"),
+                    Token::Call("i", 0),
+                    Token::Pop,
+                    Token::ForEnd
+                ]
+            ))
+        );
+        assert_eq!(
+            for_statement(0)(
+                "\
+for i in 0..5
+    i + 1\
+                "
+            ),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Integer(0)),
+                    Token::Literal(Literal::Integer(5)),
+                    Token::BinaryOperator(BinaryOperator::RangeExclusive),
+                    Token::ForStart("i"),
+                    Token::Call("i", 0),
+                    Token::Literal(Literal::Integer(1)),
+                    Token::BinaryOperator(BinaryOperator::Addition),
+                    Token::Pop,
+                    Token::ForEnd
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_loop_statement() {
+        assert_eq!(
+            loop_statement(0)("loop 3 -> 0"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Integer(3)),
+                    Token::LoopStart,
+                    Token::Literal(Literal::Integer(0)),
+                    Token::LoopEnd
+                ]
+            ))
+        );
+        assert_eq!(
+            loop_statement(0)(
+                "\
+loop 5
+    rand * 10\
+                "
+            ),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Integer(5)),
+                    Token::LoopStart,
+                    Token::Call("rand", 0),
+                    Token::Literal(Literal::Integer(10)),
+                    Token::BinaryOperator(BinaryOperator::Multiplication),
+                    Token::LoopEnd
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_unary_operation() {
+        assert_eq!(
+            expr(0)("-3.0"),
+            Ok(("", vec![Token::Literal(Literal::Float(-3.0)),]))
+        );
+        assert_eq!(
+            expr(0)("-(3.0)"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Float(3.0)),
+                    Token::UnaryOperator(UnaryOperator::Negation),
+                ]
+            ))
+        );
+        assert_eq!(
+            expr(0)("!true"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Boolean(true)),
+                    Token::UnaryOperator(UnaryOperator::Not),
+                ]
+            ))
+        );
+        assert_eq!(
+            expr(0)("~5"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Integer(5)),
+                    Token::UnaryOperator(UnaryOperator::BitNot),
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_binary_operation() {
+        assert_eq!(
+            expr(0)("5 - 3.0"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Integer(5)),
+                    Token::Literal(Literal::Float(3.0)),
+                    Token::BinaryOperator(BinaryOperator::Subtraction),
+                ]
+            ))
+        );
+        assert_eq!(
+            expr(0)("SQUARE : CIRCLE"),
+            Ok((
+                "",
+                vec![
+                    Token::Literal(Literal::Shape(ShapeKind::Square)),
+                    Token::Literal(Literal::Shape(ShapeKind::Circle)),
+                    Token::BinaryOperator(BinaryOperator::Composition),
+                ]
+            ))
+        );
+    }
+
+    #[test]
+    fn test_definition() {
+        assert_eq!(
+            definition("addition x y = x + y"),
+            Ok((
+                "",
+                Definition {
+                    name: "addition",
+                    params: vec!["x", "y"],
+                    block: vec![
+                        Token::Call("x", 0),
+                        Token::Call("y", 0),
+                        Token::BinaryOperator(BinaryOperator::Addition)
+                    ],
+                    weight: 1.0,
+                }
+            ))
+        );
+        assert_eq!(
+            definition(
+                "\
+draw@5 =
+    SQUARE\
+                "
+            ),
+            Ok((
+                "",
+                Definition {
+                    name: "draw",
+                    params: vec![],
+                    block: vec![Token::Literal(Literal::Shape(ShapeKind::Square))],
+                    weight: 5.0,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse() {
+        let tree = parse(
+            "\
+shapes@3 x =
+    loop x
+        SQUARE
+
+shapes@2 x =
+    for i in 0..x
+        if i % 2 == 0
+            CIRCLE
+        else
+            TRIANGLE
+            ",
+        );
+        assert!(tree.is_ok());
+        assert_eq!(
+            tree.unwrap(),
+            vec![
+                Definition {
+                    name: "shapes",
+                    params: vec!["x"],
+                    block: vec![
+                        Token::Call("x", 0),
+                        Token::LoopStart,
+                        Token::Literal(Literal::Shape(ShapeKind::Square)),
+                        Token::LoopEnd
+                    ],
+                    weight: 3.0,
+                },
+                Definition {
+                    name: "shapes",
+                    params: vec!["x"],
+                    block: vec![
+                        Token::Literal(Literal::Integer(0)),
+                        Token::Call("x", 0),
+                        Token::BinaryOperator(BinaryOperator::RangeExclusive),
+                        Token::ForStart("i"),
+                        Token::Call("i", 0),
+                        Token::Literal(Literal::Integer(2)),
+                        Token::BinaryOperator(BinaryOperator::Modulo),
+                        Token::Literal(Literal::Integer(0)),
+                        Token::BinaryOperator(BinaryOperator::EqualTo),
+                        Token::If(2),
+                        Token::Literal(Literal::Shape(ShapeKind::Circle)),
+                        Token::Jump(1),
+                        Token::Literal(Literal::Shape(ShapeKind::Triangle)),
+                        Token::Pop,
+                        Token::ForEnd
+                    ],
+                    weight: 2.0,
+                },
+            ]
+        );
+    }
 }
