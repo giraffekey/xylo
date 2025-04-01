@@ -1,7 +1,11 @@
 #[cfg(feature = "no-std")]
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
-use core::iter;
 use core::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
@@ -25,6 +29,18 @@ pub enum ShapeKind {
     Circle,
     Fill,
     Empty,
+}
+
+impl ToString for ShapeKind {
+    fn to_string(&self) -> String {
+        match self {
+            ShapeKind::Triangle => "TRIANGLE".into(),
+            ShapeKind::Square => "SQUARE".into(),
+            ShapeKind::Circle => "CIRCLE".into(),
+            ShapeKind::Fill => "FILL".into(),
+            ShapeKind::Empty => "EMPTY".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -518,7 +534,7 @@ fn let_definition(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let (input, name) = identifier(input)?;
         let (input, params) = many0(preceded(multispace1, identifier)).parse(input)?;
         let (input, _) = preceded(multispace0, char('=')).parse(input)?;
-        let (input, expr) = expr(indent + 1)(input)?;
+        let (input, expr) = expr(indent + 1, false)(input)?;
 
         let mut block = Vec::with_capacity(expr.len() + 2);
         block.push(Token::Let(name, params, expr.len() + 1));
@@ -535,20 +551,19 @@ fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let (input, definitions) =
             separated_list1((end, multispace0), let_definition(indent + 1)).parse(input)?;
         let (input, _) = alt((
-            (multispace1, tag("->")),
+            (multispace0, tag("->")),
             (space0, tag(";")),
             (space0, peek(line_ending)),
         ))
         .parse(input)?;
-        let (input, expr) = expr(indent + 1)(input)?;
+        let (input, expr) = expr(indent + 1, true)(input)?;
 
-        let len = definitions.len();
         let mut block = Vec::new();
         for expr in definitions {
             block.extend(expr);
         }
         block.extend(expr);
-        block.extend(iter::repeat(Token::Pop).take(len));
+        block.push(Token::Pop);
 
         Ok((input, block))
     }
@@ -557,18 +572,18 @@ fn let_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
 fn if_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, _) = tag("if")(input)?;
-        let (input, condition) = preceded(space1, expr(indent + 1)).parse(input)?;
+        let (input, condition) = preceded(space1, expr(indent + 1, true)).parse(input)?;
         let (input, _) =
-            alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-        let (input, then_branch) = expr(indent + 1)(input)?;
+            alt(((multispace0, tag("->")), (space0, peek(line_ending)))).parse(input)?;
+        let (input, then_branch) = expr(indent + 1, true)(input)?;
         let (input, _) = (multispace0, tag("else")).parse(input)?;
         let (input, else_if) = opt(peek((multispace1, tag("if")))).parse(input)?;
         let (input, else_branch) = if else_if.is_some() {
             preceded(multispace0, if_statement(indent)).parse(input)?
         } else {
             let (input, _) =
-                alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-            expr(indent + 1)(input)?
+                alt(((multispace0, tag("->")), (space0, peek(line_ending)))).parse(input)?;
+            expr(indent + 1, true)(input)?
         };
 
         let mut block =
@@ -604,8 +619,8 @@ fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, PatternBloc
     move |input| {
         let (input, pattern) = pattern(indent)(input)?;
         let (input, _) =
-            alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
-        let (input, expr) = expr(indent + 1)(input)?;
+            alt(((multispace0, tag("->")), (space0, peek(line_ending)))).parse(input)?;
+        let (input, expr) = expr(indent + 1, true)(input)?;
 
         let pattern_block = PatternBlock { pattern, expr };
         Ok((input, pattern_block))
@@ -615,9 +630,9 @@ fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, PatternBloc
 fn match_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     move |input| {
         let (input, _) = tag("match")(input)?;
-        let (input, condition) = preceded(space1, expr(indent + 1)).parse(input)?;
+        let (input, condition) = preceded(space1, expr(indent + 1, true)).parse(input)?;
         let (input, _) =
-            alt(((multispace1, tag("->")), (space0, peek(line_ending)))).parse(input)?;
+            alt(((multispace0, tag("->")), (space0, peek(line_ending)))).parse(input)?;
         let (input, pattern_blocks) = many1(pattern_block(indent + 1)).parse(input)?;
 
         let total: usize = pattern_blocks
@@ -652,11 +667,11 @@ fn for_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let (input, _) = (multispace1, tag("in")).parse(input)?;
         let (input, iter) = delimited(
             space1,
-            expr(indent + 1),
-            alt(((multispace1, tag("->")), (space0, peek(line_ending)))),
+            expr(indent + 1, true),
+            alt(((multispace0, tag("->")), (space0, peek(line_ending)))),
         )
         .parse(input)?;
-        let (input, expr) = expr(indent + 1)(input)?;
+        let (input, expr) = expr(indent + 1, true)(input)?;
 
         let mut block = Vec::with_capacity(iter.len() + expr.len() + 3);
         block.extend(iter);
@@ -674,11 +689,11 @@ fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let (input, _) = tag("loop")(input)?;
         let (input, count) = delimited(
             space1,
-            expr(indent + 1),
-            alt(((multispace1, tag("->")), (space0, peek(line_ending)))),
+            expr(indent + 1, true),
+            alt(((multispace0, tag("->")), (space0, peek(line_ending)))),
         )
         .parse(input)?;
-        let (input, expr) = expr(indent + 1)(input)?;
+        let (input, expr) = expr(indent + 1, true)(input)?;
 
         let mut block = Vec::with_capacity(count.len() + expr.len() + 2);
         block.extend(count);
@@ -690,7 +705,12 @@ fn loop_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
     }
 }
 
-fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, Block> {
+fn expr_recursive(
+    input: &str,
+    indent: usize,
+    consume_semicolon: bool,
+    precedence: u8,
+) -> IResult<&str, Block> {
     let (input, indent) = indentation(input, indent)?;
 
     let (input, unary_operator) = opt(unary_operator).parse(input)?;
@@ -705,7 +725,7 @@ fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, B
         call(indent, precedence),
         delimited(
             (char('('), multispace0),
-            |input| expr_recursive(input, 0, 0),
+            |input| expr_recursive(input, 0, true, 0),
             (multispace0, char(')')),
         ),
     ))
@@ -720,28 +740,32 @@ fn expr_recursive(input: &str, indent: usize, precedence: u8) -> IResult<&str, B
             break;
         }
 
-        let (next_input, rhs) = expr_recursive(next_input, indent + 1, op.precedence() + 1)?;
+        let (next_input, rhs) = expr_recursive(next_input, indent + 1, true, op.precedence() + 1)?;
         input = next_input;
 
         lhs.extend(rhs);
         lhs.push(Token::BinaryOperator(op));
     }
 
-    let (input, _) = opt((space0, tag(";"))).parse(input)?;
+    let (input, _) = if consume_semicolon {
+        opt((space0, tag(";"))).parse(input)?
+    } else {
+        peek(opt((space0, tag(";")))).parse(input)?
+    };
 
     Ok((input, lhs))
 }
 
-fn expr(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
-    move |input| expr_recursive(input, indent, 0)
+fn expr(indent: usize, consume_semicolon: bool) -> impl FnMut(&str) -> IResult<&str, Block> {
+    move |input| expr_recursive(input, indent, consume_semicolon, 0)
 }
 
 fn expr_with_precedence(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Block> {
-    move |input| expr_recursive(input, indent, precedence)
+    move |input| expr_recursive(input, indent, true, precedence)
 }
 
 fn block(input: &str, indent: usize) -> IResult<&str, Block> {
-    terminated(expr(indent), end).parse(input)
+    terminated(expr(indent, true), end).parse(input)
 }
 
 fn definition(input: &str) -> IResult<&str, Definition> {
@@ -930,7 +954,6 @@ let x = 3
                     Token::Call("y", 0),
                     Token::BinaryOperator(BinaryOperator::Addition),
                     Token::Pop,
-                    Token::Pop
                 ]
             ))
         );
@@ -1115,11 +1138,11 @@ loop 5
     #[test]
     fn test_unary_operation() {
         assert_eq!(
-            expr(0)("-3.0"),
+            expr(0, true)("-3.0"),
             Ok(("", vec![Token::Literal(Literal::Float(-3.0)),]))
         );
         assert_eq!(
-            expr(0)("-(3.0)"),
+            expr(0, true)("-(3.0)"),
             Ok((
                 "",
                 vec![
@@ -1129,7 +1152,7 @@ loop 5
             ))
         );
         assert_eq!(
-            expr(0)("!true"),
+            expr(0, true)("!true"),
             Ok((
                 "",
                 vec![
@@ -1139,7 +1162,7 @@ loop 5
             ))
         );
         assert_eq!(
-            expr(0)("~5"),
+            expr(0, true)("~5"),
             Ok((
                 "",
                 vec![
@@ -1153,7 +1176,7 @@ loop 5
     #[test]
     fn test_binary_operation() {
         assert_eq!(
-            expr(0)("5 - 3.0"),
+            expr(0, true)("5 - 3.0"),
             Ok((
                 "",
                 vec![
@@ -1164,7 +1187,7 @@ loop 5
             ))
         );
         assert_eq!(
-            expr(0)("SQUARE : CIRCLE"),
+            expr(0, true)("SQUARE : CIRCLE"),
             Ok((
                 "",
                 vec![
@@ -1217,6 +1240,8 @@ draw@5 =
     fn test_parse() {
         let tree = parse(
             "\
+root = collect (shapes 5)
+
 shapes@3 x =
     loop x
         SQUARE
@@ -1233,6 +1258,16 @@ shapes@2 x =
         assert_eq!(
             tree.unwrap(),
             vec![
+                Definition {
+                    name: "root",
+                    params: vec![],
+                    block: vec![
+                        Token::Literal(Literal::Integer(5)),
+                        Token::Call("shapes", 1),
+                        Token::Call("collect", 1)
+                    ],
+                    weight: 1.0,
+                },
                 Definition {
                     name: "shapes",
                     params: vec!["x"],

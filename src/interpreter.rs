@@ -124,6 +124,7 @@ struct Stack<'a> {
     operands: Vec<Value>,
     scope: usize,
     calls: Vec<usize>,
+    lets: Vec<bool>,
     fors: Vec<ForStack<'a>>,
     loops: Vec<LoopStack>,
     higher_order: Option<HigherOrder>,
@@ -136,6 +137,7 @@ impl Stack<'_> {
             operands: Vec::new(),
             scope: 0,
             calls: Vec::new(),
+            lets: vec![false],
             fors: Vec::new(),
             loops: Vec::new(),
             higher_order: None,
@@ -270,6 +272,7 @@ fn reduce_call(
 
                         stack.scope = stack.frames.len();
                         stack.frames.push(functions);
+                        stack.lets.push(false);
 
                         Ok(FunctionBlock::Start(*start))
                     }
@@ -418,6 +421,7 @@ fn execute_block<'a>(
                                 index += 1;
 
                                 let mut frames = Vec::new();
+                                let mut lets = Vec::new();
                                 let mut values = Vec::new();
                                 for value in list.clone() {
                                     let mut args = Vec::with_capacity(pre_args.len() + 1);
@@ -430,6 +434,7 @@ fn execute_block<'a>(
                                         FunctionBlock::Value(value) => values.push(value),
                                         FunctionBlock::Start(start) => {
                                             frames.push(stack.frames.pop().unwrap());
+                                            lets.push(false);
                                             stack.calls.push(index);
                                             index = start;
                                         }
@@ -449,6 +454,7 @@ fn execute_block<'a>(
                                     ));
                                     frames.reverse();
                                     stack.frames.extend(frames);
+                                    stack.lets.extend(lets);
                                 }
                             }
                             _ => return Err(Error::UnknownFunction("map".into())),
@@ -460,6 +466,7 @@ fn execute_block<'a>(
             Token::Jump(skip) => index += skip + 1,
             Token::Pop => {
                 stack.frames.pop().unwrap();
+                stack.lets.pop().unwrap();
                 index += 1;
             }
             Token::Return(start) => {
@@ -493,6 +500,7 @@ fn execute_block<'a>(
                         }
 
                         stack.frames.pop().unwrap();
+                        stack.lets.pop().unwrap();
                         stack.scope = stack.frames.len() - 1;
                         index = last_index;
                     }
@@ -500,17 +508,21 @@ fn execute_block<'a>(
                 }
             }
             Token::Let(name, params, skip) => {
-                stack.frames.push(
-                    [(
-                        (*name).into(),
-                        Function {
-                            params: params.iter().map(|s| (*s).into()).collect(),
-                            weighted: false,
-                            blocks: vec![(FunctionBlock::Start(index + 1), 0.0)],
-                        },
-                    )]
-                    .into(),
-                );
+                let func = Function {
+                    params: params.iter().map(|s| (*s).into()).collect(),
+                    weighted: false,
+                    blocks: vec![(FunctionBlock::Start(index + 1), 0.0)],
+                };
+                if *stack.lets.last().unwrap() {
+                    stack
+                        .frames
+                        .last_mut()
+                        .unwrap()
+                        .insert((*name).into(), func);
+                } else {
+                    stack.frames.push([((*name).into(), func)].into());
+                    stack.lets.push(true);
+                }
                 index += skip + 1;
             }
             Token::If(skip) => {
@@ -595,6 +607,7 @@ fn execute_block<'a>(
                     )]
                     .into(),
                 );
+                stack.lets.push(false);
 
                 stack.fors.push(ForStack {
                     start: index + 1,
@@ -627,6 +640,7 @@ fn execute_block<'a>(
                             )]
                             .into(),
                         );
+                        stack.lets.push(false);
                         index = for_stack.start; // Jump back to ForStart
                     } else {
                         let list = Value::List(for_stack.values.to_vec());
