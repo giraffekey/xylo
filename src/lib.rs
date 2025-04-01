@@ -20,5 +20,6 @@ mod renderer;
 mod shape;
 
 pub use error::{Error, Result};
+pub use format::format;
 pub use minify::minify;
 pub use out::*;

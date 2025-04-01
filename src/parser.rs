@@ -55,6 +55,57 @@ pub enum Literal {
     List(Vec<Literal>),
 }
 
+impl ToString for Literal {
+    fn to_string(&self) -> String {
+        match self {
+            Literal::Integer(n) => n.to_string(),
+            Literal::Float(n) => n.to_string(),
+            Literal::Complex(n) => n.to_string(),
+            Literal::Boolean(b) => b.to_string(),
+            Literal::Hex([r, g, b]) => format!("0x{}{}{}", r, g, b),
+            Literal::Shape(kind) => kind.to_string(),
+            Literal::BlendMode(b) => match b {
+                BlendMode::Clear => "BLEND_CLEAR".into(),
+                BlendMode::SourceOver => "BLEND_SOURCE_OVER".into(),
+                BlendMode::DestinationOver => "BLEND_DESTINATION_OVER".into(),
+                BlendMode::SourceIn => "BLEND_SOURCE_IN".into(),
+                BlendMode::DestinationIn => "BLEND_DESTINATION_IN".into(),
+                BlendMode::SourceOut => "BLEND_SOURCE_OUT".into(),
+                BlendMode::DestinationOut => "BLEND_DESTINATION_OUT".into(),
+                BlendMode::SourceAtop => "BLEND_SOURCE_ATOP".into(),
+                BlendMode::DestinationAtop => "BLEND_DESTINATION_ATOP".into(),
+                BlendMode::Source => "BLEND_SOURCE".into(),
+                BlendMode::Destination => "BLEND_DESTINATION".into(),
+                BlendMode::Xor => "BLEND_XOR".into(),
+                BlendMode::Plus => "BLEND_PLUS".into(),
+                BlendMode::Modulate => "BLEND_MODULATE".into(),
+                BlendMode::Screen => "BLEND_SCREEN".into(),
+                BlendMode::Overlay => "BLEND_OVERLAY".into(),
+                BlendMode::Darken => "BLEND_DARKEN".into(),
+                BlendMode::Lighten => "BLEND_LIGHTEN".into(),
+                BlendMode::ColorDodge => "BLEND_COLOR_DODGE".into(),
+                BlendMode::ColorBurn => "BLEND_COLOR_BURN".into(),
+                BlendMode::HardLight => "BLEND_HARD_LIGHT".into(),
+                BlendMode::SoftLight => "BLEND_SOFT_LIGHT".into(),
+                BlendMode::Difference => "BLEND_DIFFERENCE".into(),
+                BlendMode::Exclusion => "BLEND_EXCLUSION".into(),
+                BlendMode::Multiply => "BLEND_MULTIPLY".into(),
+                BlendMode::Hue => "BLEND_HUE".into(),
+                BlendMode::Saturation => "BLEND_SATURATION".into(),
+                BlendMode::Color => "BLEND_COLOR".into(),
+                BlendMode::Luminosity => "BLEND_LUMINOSITY".into(),
+            },
+            Literal::List(list) => format!(
+                "[{}]",
+                list.iter()
+                    .map(Literal::to_string)
+                    .collect::<Vec<String>>()
+                    .join(",")
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOperator {
     Negation,
