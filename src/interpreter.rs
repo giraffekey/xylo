@@ -771,3 +771,273 @@ fn gen_seed() -> [u8; 32] {
     rng.fill(&mut seed);
     seed
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shape::{BasicShape, HslaChange, IDENTITY, WHITE};
+    use tiny_skia::Transform;
+
+    #[test]
+    fn test_binary_operation() {
+        let res = execute(
+            parse(
+                "
+root = square
+
+square = ss (3 + 5) SQUARE
+                ",
+            )
+            .unwrap(),
+            Some([0; 32]),
+        );
+        assert!(res.is_ok());
+        assert_eq!(
+            res.unwrap(),
+            Shape::Basic(BasicShape::Square {
+                x: -1.0,
+                y: -1.0,
+                width: 2.0,
+                height: 2.0,
+                transform: Transform::from_scale(8.0, 8.0),
+                zindex: None,
+                color: WHITE,
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+            })
+        );
+    }
+
+    #[test]
+    fn test_let_statement() {
+        let res = execute(
+            parse(
+                "
+root = square
+
+square =
+    let n1 = 3
+        n2 = 5
+        n3 = 2
+        ss (n1 * n2 * n3) SQUARE
+                ",
+            )
+            .unwrap(),
+            Some([0; 32]),
+        );
+        assert!(res.is_ok());
+        assert_eq!(
+            res.unwrap(),
+            Shape::Basic(BasicShape::Square {
+                x: -1.0,
+                y: -1.0,
+                width: 2.0,
+                height: 2.0,
+                transform: Transform::from_scale(30.0, 30.0),
+                zindex: None,
+                color: WHITE,
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+            })
+        );
+    }
+
+    #[test]
+    fn test_if_statement() {
+        let res = execute(
+            parse(
+                "
+root = shape true : shape false
+
+shape is_square =
+    if is_square
+        SQUARE
+    else
+        EMPTY
+                ",
+            )
+            .unwrap(),
+            Some([0; 32]),
+        );
+        assert!(res.is_ok());
+        assert_eq!(
+            res.unwrap(),
+            Shape::Composite {
+                a: Rc::new(RefCell::new(Shape::Basic(SQUARE))),
+                b: Rc::new(RefCell::new(Shape::Basic(EMPTY))),
+                transform: IDENTITY,
+                zindex_overwrite: None,
+                zindex_shift: None,
+                color_overwrite: HslaChange::default(),
+                color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_match_statement() {
+        let res = execute(
+            parse(
+                "
+root = shape 1 : shape 2 : shape 3 : shape 4
+
+shape n =
+    match n
+        1 -> SQUARE
+        2 -> CIRCLE
+        3 -> TRIANGLE
+        _ -> EMPTY
+                ",
+            )
+            .unwrap(),
+            Some([0; 32]),
+        );
+        assert!(res.is_ok());
+        assert_eq!(
+            res.unwrap(),
+            Shape::Composite {
+                a: Rc::new(RefCell::new(Shape::Composite {
+                    a: Rc::new(RefCell::new(Shape::Composite {
+                        a: Rc::new(RefCell::new(Shape::Basic(SQUARE))),
+                        b: Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                        transform: IDENTITY,
+                        zindex_overwrite: None,
+                        zindex_shift: None,
+                        color_overwrite: HslaChange::default(),
+                        color_shift: HslaChange::default(),
+                        blend_mode_overwrite: None,
+                        anti_alias_overwrite: None,
+                    })),
+                    b: Rc::new(RefCell::new(Shape::Basic(TRIANGLE))),
+                    transform: IDENTITY,
+                    zindex_overwrite: None,
+                    zindex_shift: None,
+                    color_overwrite: HslaChange::default(),
+                    color_shift: HslaChange::default(),
+                    blend_mode_overwrite: None,
+                    anti_alias_overwrite: None,
+                })),
+                b: Rc::new(RefCell::new(Shape::Basic(EMPTY))),
+                transform: IDENTITY,
+                zindex_overwrite: None,
+                zindex_shift: None,
+                color_overwrite: HslaChange::default(),
+                color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_for_statement() {
+        let res = execute(
+            parse(
+                "
+root = collect shapes
+
+shapes =
+    for i in 0..10
+        if i % 2 == 0
+            SQUARE
+        else
+            CIRCLE
+                ",
+            )
+            .unwrap(),
+            Some([0; 32]),
+        );
+        assert!(res.is_ok());
+        assert_eq!(
+            res.unwrap(),
+            Shape::Collection {
+                shapes: vec![
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                ],
+                transform: IDENTITY,
+                zindex_overwrite: None,
+                zindex_shift: None,
+                color_overwrite: HslaChange::default(),
+                color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_loop_statement() {
+        let res = execute(
+            parse(
+                "
+root = collect shapes
+
+shapes =
+    loop 3
+        ss (rand * 100) SQUARE
+                ",
+            )
+            .unwrap(),
+            Some([0; 32]),
+        );
+        assert!(res.is_ok());
+        assert_eq!(
+            res.unwrap(),
+            Shape::Collection {
+                shapes: vec![
+                    Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
+                        x: -1.0,
+                        y: -1.0,
+                        width: 2.0,
+                        height: 2.0,
+                        transform: Transform::from_scale(18.72406, 18.72406),
+                        zindex: None,
+                        color: WHITE,
+                        blend_mode: BlendMode::SourceOver,
+                        anti_alias: true,
+                    }))),
+                    Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
+                        x: -1.0,
+                        y: -1.0,
+                        width: 2.0,
+                        height: 2.0,
+                        transform: Transform::from_scale(83.69197, 83.69197),
+                        zindex: None,
+                        color: WHITE,
+                        blend_mode: BlendMode::SourceOver,
+                        anti_alias: true,
+                    }))),
+                    Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
+                        x: -1.0,
+                        y: -1.0,
+                        width: 2.0,
+                        height: 2.0,
+                        transform: Transform::from_scale(90.9063, 90.9063),
+                        zindex: None,
+                        color: WHITE,
+                        blend_mode: BlendMode::SourceOver,
+                        anti_alias: true,
+                    }))),
+                ],
+                transform: IDENTITY,
+                zindex_overwrite: None,
+                zindex_shift: None,
+                color_overwrite: HslaChange::default(),
+                color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
+            }
+        );
+    }
+}
