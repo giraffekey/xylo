@@ -14,16 +14,18 @@ strip = true
 [dependencies]
 ahash = { version = "0.8", default-features = false }
 base64 = { version = "0.22", default-features = false }
-factorial = "0.4.0"
+clap = { version = "4.5", features = ["derive"] }
+factorial = "0.4"
 hashbrown = "0.15"
 itertools = { version = "0.14", default-features = false }
-noise = "0.9.0"
+noise = "0.9"
 nom = { version = "8.0", default-features = false }
-num = "0.4.3"
+num = "0.4"
 palette = { version = "0.7", default-features = false }
 png = "0.17"
 rand = { version = "0.9", default-features = false }
 rand_chacha = { version = "0.9", default-features = false }
+sha2 = "0.10.8"
 tiny-skia = { version = "0.11", default-features = false, optional = true }
 
 [features]

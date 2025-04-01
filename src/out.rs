@@ -5,7 +5,9 @@ use std::{fs, path::Path};
 use alloc::{format, string::String, vec::Vec};
 
 use crate::error::{Error, Result};
+use crate::format::format;
 use crate::interpreter::execute;
+use crate::minify::minify;
 use crate::parser::parse;
 use crate::renderer::render;
 
@@ -31,14 +33,14 @@ impl Default for Config {
     }
 }
 
-pub fn generate_pixmap(code: &str, config: Config) -> Result<Pixmap> {
-    let tree = parse(code)?;
+pub fn generate_pixmap(input: &str, config: Config) -> Result<Pixmap> {
+    let tree = parse(input)?;
     let shape = execute(tree, config.seed)?;
     Ok(render(shape, config.dimensions.0, config.dimensions.1)?)
 }
 
-pub fn generate_png_data(code: &str, config: Config) -> Result<Vec<u8>> {
-    let pixmap = generate_pixmap(code, config)?;
+pub fn generate_png_data(input: &str, config: Config) -> Result<Vec<u8>> {
+    let pixmap = generate_pixmap(input, config)?;
 
     let mut buf = Vec::new();
     {
@@ -52,24 +54,42 @@ pub fn generate_png_data(code: &str, config: Config) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-pub fn generate_data_uri(code: &str, config: Config) -> Result<String> {
-    let data = generate_png_data(code, config)?;
+pub fn generate_data_uri(input: &str, config: Config) -> Result<String> {
+    let data = generate_png_data(input, config)?;
     let uri = format!("data:image/png;base64,{}", BASE64_STANDARD.encode(data));
     Ok(uri)
 }
 
 #[cfg(feature = "std")]
-pub fn generate_pixmap_from_file<P: AsRef<Path>>(input_path: P, config: Config) -> Result<Pixmap> {
+pub fn generate_pixmap_from_file<I: AsRef<Path>>(input_path: I, config: Config) -> Result<Pixmap> {
     let code = fs::read_to_string(input_path).map_err(|e| Error::FileError(e))?;
     generate_pixmap(&code, config)
 }
 
 #[cfg(feature = "std")]
-pub fn generate_file<P: AsRef<Path>>(input_path: P, output_path: P, config: Config) -> Result<()> {
+pub fn generate_file<I: AsRef<Path>, O: AsRef<Path>>(
+    input_path: I,
+    output_path: O,
+    config: Config,
+) -> Result<()> {
     let pixmap = generate_pixmap_from_file(input_path, config)?;
     pixmap
         .save_png(output_path)
         .map_err(|e| Error::PngError(e))?;
+    Ok(())
+}
+
+#[cfg(feature = "std")]
+pub fn minify_file<I: AsRef<Path>, O: AsRef<Path>>(input_path: I, output_path: O) -> Result<()> {
+    let input = fs::read_to_string(input_path).map_err(|e| Error::FileError(e))?;
+    fs::write(output_path, minify(&input)?).map_err(|e| Error::FileError(e))?;
+    Ok(())
+}
+
+#[cfg(feature = "std")]
+pub fn format_file<I: AsRef<Path>, O: AsRef<Path>>(input_path: I, output_path: O) -> Result<()> {
+    let input = fs::read_to_string(input_path).map_err(|e| Error::FileError(e))?;
+    fs::write(output_path, format(&input)?).map_err(|e| Error::FileError(e))?;
     Ok(())
 }
 
