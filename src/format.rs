@@ -22,6 +22,17 @@ fn block_to_string(block: &[Token]) -> String {
                 stack[depth].push(literal.to_string());
                 index += 1;
             }
+            Token::List(blocks) => {
+                stack[depth].push(format!(
+                    "[{}]",
+                    blocks
+                        .iter()
+                        .map(|block| block_to_string(block))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+                index += 1;
+            }
             Token::UnaryOperator(op) => {
                 let a = stack[depth].pop().unwrap();
                 stack[depth].push(format!("{}({})", op.as_str(), a));

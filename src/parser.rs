@@ -53,7 +53,6 @@ pub enum Literal {
     Hex([u8; 3]),
     Shape(ShapeKind),
     BlendMode(BlendMode),
-    List(Vec<Literal>),
 }
 
 impl ToString for Literal {
@@ -96,13 +95,6 @@ impl ToString for Literal {
                 BlendMode::Color => "BLEND_COLOR".into(),
                 BlendMode::Luminosity => "BLEND_LUMINOSITY".into(),
             },
-            Literal::List(list) => format!(
-                "[{}]",
-                list.iter()
-                    .map(Literal::to_string)
-                    .collect::<Vec<String>>()
-                    .join(",")
-            ),
         }
     }
 }
@@ -216,6 +208,7 @@ pub enum Pattern {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'a> {
     Literal(Literal),
+    List(Vec<Block<'a>>),
     UnaryOperator(UnaryOperator),
     BinaryOperator(BinaryOperator),
     Call(&'a str, usize),
@@ -418,21 +411,8 @@ fn blend_mode(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
-fn list(input: &str) -> IResult<&str, Literal> {
-    let (input, list) = delimited(
-        (char('['), multispace0),
-        separated_list0((multispace0, char(','), multispace0), literal),
-        (multispace0, char(']')),
-    )
-    .parse(input)?;
-    Ok((input, Literal::List(*Box::new(list))))
-}
-
 fn literal(input: &str) -> IResult<&str, Literal> {
-    alt((
-        hex, complex, float, integer, boolean, shape, blend_mode, list,
-    ))
-    .parse(input)
+    alt((hex, complex, float, integer, boolean, shape, blend_mode)).parse(input)
 }
 
 fn end(input: &str) -> IResult<&str, &str> {
@@ -553,6 +533,16 @@ fn indentation(input: &str, indent: usize) -> IResult<&str, usize> {
     } else {
         Ok((input, indent))
     }
+}
+
+fn list(input: &str) -> IResult<&str, Block> {
+    let (input, list) = delimited(
+        (char('['), multispace0),
+        separated_list0((multispace0, char(','), multispace0), expr(0, false)),
+        (multispace0, char(']')),
+    )
+    .parse(input)?;
+    Ok((input, vec![Token::List(list)]))
 }
 
 fn call(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Block> {
@@ -769,6 +759,7 @@ fn expr_recursive(
 
     let (mut input, mut lhs) = alt((
         map(literal, |literal| vec![Token::Literal(literal)]),
+        list,
         let_statement(indent),
         if_statement(indent),
         match_statement(indent),

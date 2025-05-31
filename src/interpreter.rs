@@ -188,12 +188,6 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
             Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(shape)))))
         }
         Literal::BlendMode(b) => Ok(Value::BlendMode(*b)),
-        Literal::List(list) => {
-            let list: Result<Vec<Value>> = list.iter().map(reduce_literal).collect();
-            let list = Value::List(list?);
-            list.kind()?;
-            Ok(list)
-        }
     }
 }
 
@@ -294,14 +288,6 @@ fn pattern_match(a: &Value, b: &Literal) -> Result<bool> {
         (Value::Boolean(a), Literal::Boolean(b)) => Ok(a == b),
         (Value::Hex(a), Literal::Hex(b)) => Ok(a == b),
         (Value::Shape(_a), Literal::Shape(_b)) => todo!(),
-        (Value::List(a), Literal::List(b)) => {
-            if a.len() != b.len() {
-                return Ok(false);
-            }
-            let matches: Result<Vec<bool>> =
-                a.iter().zip(b).map(|(a, b)| pattern_match(a, b)).collect();
-            Ok(matches?.iter().all(|does_match| *does_match))
-        }
         _ => return Err(Error::InvalidMatch),
     }
 }
@@ -357,6 +343,14 @@ fn execute_block<'a>(
         match &block[index] {
             Token::Literal(literal) => {
                 stack.operands.push(reduce_literal(literal)?);
+                index += 1;
+            }
+            Token::List(blocks) => {
+                let values: Result<Vec<_>> = blocks
+                    .iter()
+                    .map(|block| execute_block(stack, rng, block, 0))
+                    .collect();
+                stack.operands.push(Value::List(values?));
                 index += 1;
             }
             Token::UnaryOperator(op) => {

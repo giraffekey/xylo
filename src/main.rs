@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+use std::time::SystemTime;
 use xylo_lang::{format_file, generate_file, minify_file, Config, Result};
 
 #[derive(Parser)]
@@ -32,7 +33,14 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
+fn main() {
+    match run_cli() {
+        Ok(()) => (),
+        Err(e) => eprintln!("{}", e.to_string()),
+    }
+}
+
+fn run_cli() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -78,15 +86,34 @@ fn main() -> Result<()> {
                 seed,
             };
 
-            generate_file(source, dest, config).unwrap();
+            let now = SystemTime::now();
+            generate_file(source, &dest, config)?;
+
+            println!(
+                "Output to {:?} in {:?}",
+                dest,
+                SystemTime::now().duration_since(now).unwrap()
+            );
         }
         Some(Commands::Minify { source, dest }) => {
             let dest = dest.unwrap_or(source.clone());
-            minify_file(source, dest).unwrap();
+            let now = SystemTime::now();
+            minify_file(source, &dest)?;
+            println!(
+                "Output to {:?} in {:?}",
+                dest,
+                SystemTime::now().duration_since(now).unwrap()
+            );
         }
         Some(Commands::Format { source, dest }) => {
             let dest = dest.unwrap_or(source.clone());
-            format_file(source, dest).unwrap();
+            let now = SystemTime::now();
+            format_file(source, &dest)?;
+            println!(
+                "Output to {:?} in {:?}",
+                dest,
+                SystemTime::now().duration_since(now).unwrap()
+            );
         }
         None => (),
     }
