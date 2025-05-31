@@ -83,4 +83,4 @@ Then, generate an image from that code:
 xylo generate art.xylo --width 800 --height 800
 ```
 
-If you code is valid, you should see an image output to `art.png`!
+If your code is valid, you should see an image output to `art.png`!
