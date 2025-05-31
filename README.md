@@ -4,6 +4,8 @@ A functional programming language for generative art.
 
 ![example](example.png)
 
+## Example
+
 ```ocaml
 root =
     l 0 FILL : ss 400 bouquet
@@ -48,3 +50,37 @@ petal6 i =
         : tx -0.5 (ss 0.01 (l 0 CIRCLE))
         : tx 0.5 (r 120.21 (ss 0.996 (tx 0.5 (lshift (1 / quality) (petal6 (i - 1))))))
 ```
+
+## Installation
+
+Clone the repo:
+
+```sh
+git clone https://github.com/giraffekey/xylo
+```
+
+Build the repo:
+
+```sh
+cargo build --release
+```
+
+Copy the CLI:
+
+```sh
+sudo cp target/release/xylo-lang /usr/bin/xylo
+```
+
+You should now be able to use the `xylo` command!
+
+## Usage
+
+Write some Xylo code in a `.xylo` file e.g. `art.xylo`.
+
+Then, generate an image from that code:
+
+```sh
+xylo generate art.xylo --width 800 --height 800
+```
+
+If you code is valid, you should see an image output to `art.png`!
