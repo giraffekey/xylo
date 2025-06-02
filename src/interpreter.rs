@@ -169,6 +169,7 @@ enum FunctionBlock {
 struct Function {
     params: Vec<String>,
     weighted: bool,
+    base: bool,
     blocks: Vec<(FunctionBlock, f32)>,
 }
 
@@ -260,13 +261,17 @@ fn reduce_call(
                                     Function {
                                         params: vec![],
                                         weighted: false,
+                                        base: false,
                                         blocks: vec![(FunctionBlock::Value(arg), 0.0)],
                                     },
                                 )
                             })
                             .collect();
 
-                        stack.scope = stack.frames.len();
+                        if function.base {
+                            stack.scope = stack.frames.len();
+                        }
+
                         stack.frames.push(functions);
                         stack.lets.push(false);
 
@@ -509,6 +514,7 @@ fn execute_block<'a>(
                 let func = Function {
                     params: params.iter().map(|s| (*s).into()).collect(),
                     weighted: false,
+                    base: false,
                     blocks: vec![(FunctionBlock::Start(index + 1), 0.0)],
                 };
                 if *stack.lets.last().unwrap() {
@@ -600,6 +606,7 @@ fn execute_block<'a>(
                         Function {
                             params: vec![],
                             weighted: false,
+                            base: false,
                             blocks: vec![(FunctionBlock::Value(items.pop().unwrap()), 0.0)],
                         },
                     )]
@@ -630,6 +637,7 @@ fn execute_block<'a>(
                                 Function {
                                     params: vec![],
                                     weighted: false,
+                                    base: false,
                                     blocks: vec![(
                                         FunctionBlock::Value(for_stack.items.pop().unwrap()),
                                         0.0,
@@ -744,6 +752,7 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
                     Function {
                         params: definition.params.iter().map(|s| (*s).into()).collect(),
                         weighted: false,
+                        base: true,
                         blocks: vec![(FunctionBlock::Start(start), definition.weight)],
                     },
                 );
