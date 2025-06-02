@@ -560,8 +560,8 @@ fn execute_block<'a>(
                                     found = true;
                                     break 'b;
                                 }
-                                index += skip;
                             }
+                            index += skip;
                         }
                         Pattern::Wildcard => {
                             found = true;
