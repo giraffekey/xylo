@@ -124,6 +124,7 @@ struct Stack<'a> {
     operands: Vec<Value>,
     scope: usize,
     calls: Vec<usize>,
+    scopes: Vec<usize>,
     lets: Vec<bool>,
     fors: Vec<ForStack<'a>>,
     loops: Vec<LoopStack>,
@@ -137,6 +138,7 @@ impl Stack<'_> {
             operands: Vec::new(),
             scope: 0,
             calls: Vec::new(),
+            scopes: Vec::new(),
             lets: vec![false],
             fors: Vec::new(),
             loops: Vec::new(),
@@ -399,10 +401,12 @@ fn execute_block<'a>(
                 }
                 args.reverse();
 
+                stack.scopes.push(stack.scope);
                 let function_block = reduce_call(stack, rng, name, args.clone())?;
                 match function_block {
                     FunctionBlock::Value(value) => {
                         stack.operands.push(value);
+                        stack.scopes.pop().unwrap();
                         index += 1;
                     }
                     FunctionBlock::Start(start) => {
@@ -495,7 +499,7 @@ fn execute_block<'a>(
 
                         stack.frames.pop().unwrap();
                         stack.lets.pop().unwrap();
-                        stack.scope = stack.frames.len() - 1;
+                        stack.scope = stack.scopes.pop().unwrap();
                         index = last_index;
                     }
                     None => return Ok(value.unwrap()),

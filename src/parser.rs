@@ -336,11 +336,15 @@ fn shape(input: &str) -> IResult<&str, Literal> {
     map(
         alt((
             value(
+                ShapeKind::Triangle,
+                alt((tag("TRIANGLE"), tag("▲"), tag("△"), tag("▴"), tag("▵"))),
+            ),
+            value(
                 ShapeKind::Square,
                 alt((
                     tag("SQUARE"),
-                    tag("⬛"),
                     tag("⬜"),
+                    tag("⬛"),
                     tag("■"),
                     tag("□"),
                     tag("▪"),
@@ -357,10 +361,6 @@ fn shape(input: &str) -> IResult<&str, Literal> {
                     tag("○"),
                     tag("🞄"),
                 )),
-            ),
-            value(
-                ShapeKind::Triangle,
-                alt((tag("TRIANGLE"), tag("▲"), tag("△"), tag("▴"), tag("▵"))),
             ),
             value(ShapeKind::Fill, tag("FILL")),
             value(ShapeKind::Empty, tag("EMPTY")),
