@@ -4,10 +4,11 @@ use std::{fs, path::Path};
 #[cfg(feature = "no-std")]
 use alloc::{format, string::String, vec::Vec};
 
+#[cfg(feature = "std")]
+use crate::{format::format, minify::minify};
+
 use crate::error::{Error, Result};
-use crate::format::format;
 use crate::interpreter::execute;
-use crate::minify::minify;
 use crate::parser::parse;
 use crate::renderer::render;
 

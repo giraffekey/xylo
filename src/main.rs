@@ -1,9 +1,13 @@
-use clap::{Parser, Subcommand};
-use sha2::{Digest, Sha256};
-use std::path::PathBuf;
-use std::time::SystemTime;
-use xylo_lang::{format_file, generate_file, minify_file, Config, Result};
+#[cfg(feature = "std")]
+use {
+    clap::{Parser, Subcommand},
+    sha2::{Digest, Sha256},
+    std::path::PathBuf,
+    std::time::SystemTime,
+    xylo_lang::{format_file, generate_file, minify_file, Config, Result},
+};
 
+#[cfg(feature = "std")]
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
@@ -11,6 +15,7 @@ struct Cli {
     command: Option<Commands>,
 }
 
+#[cfg(feature = "std")]
 #[derive(Subcommand)]
 enum Commands {
     Generate {
@@ -33,6 +38,7 @@ enum Commands {
     },
 }
 
+#[cfg(feature = "std")]
 fn main() {
     match run_cli() {
         Ok(()) => (),
@@ -40,6 +46,7 @@ fn main() {
     }
 }
 
+#[cfg(feature = "std")]
 fn run_cli() -> Result<()> {
     let cli = Cli::parse();
 
@@ -120,3 +127,6 @@ fn run_cli() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "no-std")]
+fn main() {}
