@@ -25,7 +25,7 @@ palette = { version = "0.7", default-features = false }
 png = "0.17"
 rand = { version = "0.9", default-features = false }
 rand_chacha = { version = "0.9", default-features = false }
-sha2 = "0.10.8"
+sha2 = "0.10"
 tiny-skia = { version = "0.11", default-features = false, optional = true }
 
 [features]

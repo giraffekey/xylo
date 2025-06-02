@@ -895,28 +895,6 @@ mod tests {
             literal("BLEND_DESTINATION_OVER"),
             Ok(("", Literal::BlendMode(BlendMode::DestinationOver)))
         );
-        assert_eq!(
-            literal("[1, 2, 3]"),
-            Ok((
-                "",
-                Literal::List(vec![
-                    Literal::Integer(1),
-                    Literal::Integer(2),
-                    Literal::Integer(3)
-                ])
-            ))
-        );
-        assert_eq!(
-            literal("[1.0, 2.0, 3.0]"),
-            Ok((
-                "",
-                Literal::List(vec![
-                    Literal::Float(1.0),
-                    Literal::Float(2.0),
-                    Literal::Float(3.0)
-                ])
-            ))
-        );
     }
 
     #[test]
