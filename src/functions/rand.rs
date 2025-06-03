@@ -39,21 +39,6 @@ builtin_function!(rand_range rng => {
     }
 });
 
-builtin_function!(randi_range rng => {
-    [Value::Integer(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
-        Ok(Value::Integer(rng.random_range(*a..*b)))
-    },
-    [Value::Float(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
-        Ok(Value::Integer(rng.random_range((*a as i32)..(*b as i32))))
-    },
-    [Value::Integer(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
-        Ok(Value::Integer(rng.random_range(*a..(*b as i32))))
-    },
-    [Value::Float(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
-        Ok(Value::Integer(rng.random_range((*a as i32)..*b)))
-    }
-});
-
 builtin_function!(rand_rangei rng => {
     [Value::Integer(from), Value::Integer(to)] => |rng: &mut ChaCha8Rng| {
         let a = *from as f32;
@@ -70,6 +55,21 @@ builtin_function!(rand_rangei rng => {
     [Value::Float(from), Value::Integer(to)] => |rng: &mut ChaCha8Rng| {
         let b = *to as f32;
         Ok(Value::Float(rng.random_range(*from..=b)))
+    }
+});
+
+builtin_function!(randi_range rng => {
+    [Value::Integer(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
+        Ok(Value::Integer(rng.random_range(*a..*b)))
+    },
+    [Value::Float(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
+        Ok(Value::Integer(rng.random_range((*a as i32)..(*b as i32))))
+    },
+    [Value::Integer(a), Value::Float(b)] => |rng: &mut ChaCha8Rng| {
+        Ok(Value::Integer(rng.random_range(*a..(*b as i32))))
+    },
+    [Value::Float(a), Value::Integer(b)] => |rng: &mut ChaCha8Rng| {
+        Ok(Value::Integer(rng.random_range((*a as i32)..*b)))
     }
 });
 

@@ -229,12 +229,12 @@ builtin_function!(log10 => {
 });
 
 builtin_function!(log => {
-    [Value::Integer(n), Value::Integer(b)] => Value::Integer(n.ilog(*b) as i32),
-    [Value::Float(n), Value::Float(b)] => Value::Float(n.log(*b)),
-    [Value::Integer(n), Value::Float(b)] => Value::Float((*n as f32).log(*b)),
-    [Value::Float(n), Value::Integer(b)] => Value::Float(n.log(*b as f32)),
-    [Value::Complex(n), Value::Integer(b)] => Value::Complex(n.log(*b as f32)),
-    [Value::Complex(n), Value::Float(b)] => Value::Complex(n.log(*b))
+    [Value::Integer(b), Value::Integer(n)] => Value::Integer(n.ilog(*b) as i32),
+    [Value::Float(b), Value::Integer(n)] => Value::Float((*n as f32).log(*b)),
+    [Value::Integer(b), Value::Float(n)] => Value::Float(n.log(*b as f32)),
+    [Value::Float(b), Value::Float(n)] => Value::Float(n.log(*b)),
+    [Value::Integer(b), Value::Complex(n)] => Value::Complex(n.log(*b as f32)),
+    [Value::Float(b), Value::Complex(n)] => Value::Complex(n.log(*b))
 });
 
 builtin_function!(abs => {
@@ -299,7 +299,7 @@ builtin_function!(min => {
     [Value::Integer(a), Value::Integer(b)] => Value::Integer(*a.min(b)),
     [Value::Float(a), Value::Float(b)] => Value::Float(a.min(*b)),
     [Value::Integer(a), Value::Float(b)] => Value::Float((*a as f32).min(*b)),
-    [Value::Float(a), Value::Integer(b)] => Value::Float((*b as f32).min(*a))
+    [Value::Float(a), Value::Integer(b)] => Value::Float((*b as f32).min(*a)),
 });
 
 builtin_function!(max => {

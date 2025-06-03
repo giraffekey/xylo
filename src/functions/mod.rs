@@ -232,7 +232,7 @@ define_builtins! {
     "a" => {color::alpha, 2},
     "alpha" => {color::alpha, 2},
     "hshift" => {color::hshift, 2},
-    "sshift" => {color::sshift, 2},
+    "satshift" => {color::satshift, 2},
     "lshift" => {color::lshift, 2},
     "ashift" => {color::ashift, 2},
     "hex" => {color::hex, 2},

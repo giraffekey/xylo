@@ -108,7 +108,7 @@ builtin_function!(hshift => {
     }
 });
 
-builtin_function!(sshift => {
+builtin_function!(satshift => {
     [Value::Integer(s), Value::Shape(shape)] => {
          shape.borrow_mut().shift_saturation(*s as f32);
          Value::Shape(shape.clone())
