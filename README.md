@@ -53,6 +53,12 @@ petal6 i =
 
 ## Installation
 
+### Released Builds
+
+You can find the latest release of the Xylo binaries [here](https://github.com/giraffekey/xylo/releases/latest).
+
+### Manual Build (Linux)
+
 Clone the repo:
 
 ```sh
