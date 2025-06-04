@@ -8,16 +8,15 @@ description = "A functional programming language for generative art."
 repository = "https://github.com/giraffekey/xylo"
 readme = "README.md"
 categories = [
-    "language",
+	"command-line-utilities",
     "graphics",
-    "art",
+    "no-std",
+    "rendering",
     "visualization"
 ]
 keywords = [
-    "generative",
-    "functional",
-    "creative",
-    "visual",
+    "language",
+    "procedural",
     "art"
 ]
 
