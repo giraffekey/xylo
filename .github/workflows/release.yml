@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read|write|none
+  contents: write
 
 jobs:
   build:
