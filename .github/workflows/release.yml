@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read|write|none
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -32,5 +35,3 @@ jobs:
       with:
         files: |
           target/release/${{ matrix.binary_name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
