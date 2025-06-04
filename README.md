@@ -57,6 +57,14 @@ petal6 i =
 
 You can find the latest release of the Xylo binaries [here](https://github.com/giraffekey/xylo/releases/latest).
 
+### Cargo Install
+
+You can install Xylo using Cargo:
+
+```sh
+cargo install xylo-lang
+```
+
 ### Manual Build (Linux)
 
 Clone the repo:
