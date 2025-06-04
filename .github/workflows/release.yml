@@ -16,17 +16,22 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            binary_name: xylo-lang
+            target: target/release/xylo-lang
+            file_name: xylo_ubuntu
           - os: macos-latest
-            binary_name: xylo-lang
+            target: target/release/xylo-lang
+            file_name: xylo_macos
           - os: windows-latest
-            binary_name: xylo-lang.exe
+            target: target/release/xylo-lang.exe
+            file_name: xylo_windows.exe
 
     steps:
     - uses: actions/checkout@v2
 
     - name: Build
-      run: cargo build --release
+      run: |
+        cargo build --release
+        mv ${{ matrix.target }} ${{ matrix.file_name }}
 
     - name: Create Release
       id: create_release
@@ -34,4 +39,4 @@ jobs:
       if: github.ref_type == 'tag'
       with:
         files: |
-          target/release/${{ matrix.binary_name }}
+          ${{ matrix.file_name }}
