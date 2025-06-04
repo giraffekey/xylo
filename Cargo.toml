@@ -2,6 +2,27 @@
 name = "xylo-lang"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+authors = ["giraffekey <giraffekey@tutanota.com>"]
+description = "A functional programming language for generative art."
+repository = "https://github.com/giraffekey/xylo"
+readme = "README.md"
+categories = [
+    "language",
+    "graphics",
+    "art",
+    "visualization"
+]
+keywords = [
+    "generative",
+    "functional",
+    "creative",
+    "algorithmic",
+    "visual",
+    "procedural",
+    "interactive",
+    "art"
+]
 
 [profile.release]
 codegen-units = 1
