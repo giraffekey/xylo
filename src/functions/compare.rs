@@ -2,6 +2,7 @@ use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
+use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 
 builtin_function!(not => {

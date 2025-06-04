@@ -10,6 +10,7 @@ use crate::interpreter::Value;
 use crate::shape::{BasicShape, HslaChange, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
+use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 use tiny_skia::BlendMode;
 

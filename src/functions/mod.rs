@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
+use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 
 mod color;
@@ -26,10 +27,10 @@ macro_rules! define_builtins {
         ];
 
         // Generate the handle_builtin function with match statements
-        pub fn handle_builtin(name: &str, rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+        pub fn handle_builtin(name: &str, rng: &mut ChaCha8Rng, perlin: &Perlin, args: &[Value]) -> Result<Value> {
             match name {
                 $(
-                    $name => $func(rng, args),
+                    $name => $func(rng, perlin, args),
                 )*
                 _ => Err(Error::UnknownFunction(name.into())),
             }
@@ -252,7 +253,7 @@ macro_rules! builtin_function {
             $pattern:pat => $body:expr
         ),* $(,)?
     }) => {
-        pub fn $name(_rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+        pub fn $name(_rng: &mut ChaCha8Rng, _perlin: &Perlin, args: &[Value]) -> Result<Value> {
             match args {
                 $(
                     $pattern => Ok($body),
@@ -267,10 +268,27 @@ macro_rules! builtin_function {
             $pattern:pat => $body:expr
         ),* $(,)?
     }) => {
-        pub fn $name(rng: &mut ChaCha8Rng, args: &[Value]) -> Result<Value> {
+        pub fn $name(rng: &mut ChaCha8Rng, _perlin: &Perlin, args: &[Value]) -> Result<Value> {
             match args {
                 $(
                     $pattern => $body(rng),
+                )*
+                _ => Err(Error::InvalidArgument(
+                    stringify!($name).into(),
+                )),
+            }
+        }
+    };
+
+    ($name:ident perlin => {
+        $(
+            $pattern:pat => $body:expr
+        ),* $(,)?
+    }) => {
+        pub fn $name(_rng: &mut ChaCha8Rng, perlin: &Perlin, args: &[Value]) -> Result<Value> {
+            match args {
+                $(
+                    $pattern => $body(perlin),
                 )*
                 _ => Err(Error::InvalidArgument(
                     stringify!($name).into(),

@@ -4,6 +4,7 @@ use crate::interpreter::Value;
 
 use core::f32::consts::{E, PI, TAU};
 use factorial::{DoubleFactorial, Factorial};
+use noise::Perlin;
 use num::complex::{Complex, ComplexFloat};
 use rand_chacha::ChaCha8Rng;
 

@@ -102,22 +102,20 @@ builtin_function!(choose rng => {
     }
 });
 
-builtin_function!(noise1 rng => {
-    [a] => |rng: &mut ChaCha8Rng| {
+builtin_function!(noise1 perlin => {
+    [a] => |perlin: &Perlin| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
             _ => return Err(Error::InvalidArgument("noise1".into())),
         };
 
-        let perlin = Perlin::new(rng.random());
-        let val = perlin.get([a]);
-        Ok(Value::Float(val as f32))
+        Ok(Value::Float(perlin.get([a]) as f32))
     }
 });
 
-builtin_function!(noise2 rng => {
-    [a, b] => |rng: &mut ChaCha8Rng| {
+builtin_function!(noise2 perlin => {
+    [a, b] => |perlin: &Perlin| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
@@ -130,14 +128,12 @@ builtin_function!(noise2 rng => {
             _ => return Err(Error::InvalidArgument("noise2".into())),
         };
 
-        let perlin = Perlin::new(rng.random());
-        let val = perlin.get([a, b]);
-        Ok(Value::Float(val as f32))
+        Ok(Value::Float(perlin.get([a, b]) as f32))
     }
 });
 
-builtin_function!(noise3 rng => {
-    [a, b, c] => |rng: &mut ChaCha8Rng| {
+builtin_function!(noise3 perlin => {
+    [a, b, c] => |perlin: &Perlin| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
@@ -156,14 +152,12 @@ builtin_function!(noise3 rng => {
             _ => return Err(Error::InvalidArgument("noise3".into())),
         };
 
-        let perlin = Perlin::new(rng.random());
-        let val = perlin.get([a, b, c]);
-        Ok(Value::Float(val as f32))
+        Ok(Value::Float(perlin.get([a, b, c]) as f32))
     }
 });
 
-builtin_function!(noise4 rng => {
-    [a, b, c, d] => |rng: &mut ChaCha8Rng| {
+builtin_function!(noise4 perlin => {
+    [a, b, c, d] => |perlin: &Perlin| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
@@ -188,8 +182,6 @@ builtin_function!(noise4 rng => {
             _ => return Err(Error::InvalidArgument("noise4".into())),
         };
 
-        let perlin = Perlin::new(rng.random());
-        let val = perlin.get([a, b, c, d]);
-        Ok(Value::Float(val as f32))
+        Ok(Value::Float(perlin.get([a, b, c, d]) as f32))
     }
 });

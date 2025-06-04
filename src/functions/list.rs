@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use crate::interpreter::Value;
 
 use itertools::Itertools;
+use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 
 builtin_function!(range => {
@@ -175,7 +176,7 @@ builtin_function!(index_of => {
         let i = list.iter().position(|v| v == value);
         match i {
             Some(i) => Value::Integer(i as i32),
-            None => return Err(Error::NotFound),
+            None => Value::Integer(-1),
         }
     }
 });
