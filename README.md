@@ -1,4 +1,11 @@
-# xylo
+# Xylo &emsp; [![License]][github.com] [![Latest Version]][crates.io] [![Docs]][docs.rs]
+
+[License]: https://img.shields.io/badge/license-MIT%2FApache-blue.svg
+[github.com]: https://github.com/giraffekey/xylo/blob/main/LICENSE
+[Latest Version]: https://img.shields.io/crates/v/xylo-lang.svg
+[crates.io]: https://crates.io/crates/xylo-lang
+[Docs]: https://docs.rs/xylo-lang/badge.svg
+[docs.rs]: https://docs.rs/xylo-lang/latest/xylo_lang/index.html
 
 A functional programming language for generative art.
 
@@ -85,8 +92,6 @@ Copy the CLI:
 sudo cp target/release/xylo-lang /usr/bin/xylo
 ```
 
-You should now be able to use the `xylo` command!
-
 ## Usage
 
 Write some Xylo code in a `.xylo` file e.g. `art.xylo`.
@@ -97,4 +102,4 @@ Then, generate an image from that code:
 xylo generate art.xylo --width 800 --height 800
 ```
 
-If your code is valid, you should see an image output to `art.png`!
+If your code is valid, you should see an image output to `art.png`.
