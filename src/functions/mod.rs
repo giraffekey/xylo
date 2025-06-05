@@ -1,7 +1,6 @@
 use crate::error::{Error, Result};
-use crate::interpreter::Value;
+use crate::interpreter::{Data, Value};
 
-use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 
 mod color;
@@ -27,10 +26,10 @@ macro_rules! define_builtins {
         ];
 
         // Generate the handle_builtin function with match statements
-        pub fn handle_builtin(name: &str, rng: &mut ChaCha8Rng, perlin: &Perlin, args: &[Value]) -> Result<Value> {
+        pub fn handle_builtin(name: &str, rng: &mut ChaCha8Rng, data: &Data, args: &[Value]) -> Result<Value> {
             match name {
                 $(
-                    $name => $func(rng, perlin, args),
+                    $name => $func(rng, data, args),
                 )*
                 _ => Err(Error::UnknownFunction(name.into())),
             }
@@ -140,6 +139,8 @@ define_builtins! {
     "ℯ" => {math::e, 0},
     "phi" => {math::phi, 0},
     "φ" => {math::phi, 0},
+    "width" => {math::width, 0},
+    "height" => {math::height, 0},
     "int" => {math::int, 1},
     "float" => {math::float, 1},
     "complex" => {math::complex, 2},
@@ -253,7 +254,7 @@ macro_rules! builtin_function {
             $pattern:pat => $body:expr
         ),* $(,)?
     }) => {
-        pub fn $name(_rng: &mut ChaCha8Rng, _perlin: &Perlin, args: &[Value]) -> Result<Value> {
+        pub fn $name(_rng: &mut ChaCha8Rng, _data: &Data, args: &[Value]) -> Result<Value> {
             match args {
                 $(
                     $pattern => Ok($body),
@@ -268,7 +269,7 @@ macro_rules! builtin_function {
             $pattern:pat => $body:expr
         ),* $(,)?
     }) => {
-        pub fn $name(rng: &mut ChaCha8Rng, _perlin: &Perlin, args: &[Value]) -> Result<Value> {
+        pub fn $name(rng: &mut ChaCha8Rng, _data: &Data, args: &[Value]) -> Result<Value> {
             match args {
                 $(
                     $pattern => $body(rng),
@@ -280,15 +281,15 @@ macro_rules! builtin_function {
         }
     };
 
-    ($name:ident perlin => {
+    ($name:ident data => {
         $(
             $pattern:pat => $body:expr
         ),* $(,)?
     }) => {
-        pub fn $name(_rng: &mut ChaCha8Rng, perlin: &Perlin, args: &[Value]) -> Result<Value> {
+        pub fn $name(_rng: &mut ChaCha8Rng, data: &Data, args: &[Value]) -> Result<Value> {
             match args {
                 $(
-                    $pattern => $body(perlin),
+                    $pattern => $body(data),
                 )*
                 _ => Err(Error::InvalidArgument(
                     stringify!($name).into(),

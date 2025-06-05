@@ -224,11 +224,14 @@ pub fn format(input: &str) -> Result<String> {
 mod tests {
     use super::*;
     use crate::interpreter::execute;
+    use crate::out::Config;
 
     fn can_execute(output: &str) -> bool {
-        parse(output)
-            .and_then(|tree| execute(tree, Some([0; 32])))
-            .is_ok()
+        let config = Config {
+            dimensions: (400, 400),
+            seed: Some([0; 32]),
+        };
+        parse(output).and_then(|tree| execute(tree, config)).is_ok()
     }
 
     #[test]

@@ -3,10 +3,9 @@ use alloc::{vec, vec::Vec};
 
 use crate::builtin_function;
 use crate::error::{Error, Result};
-use crate::interpreter::Value;
+use crate::interpreter::{Data, Value};
 
 use itertools::Itertools;
-use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 
 builtin_function!(range => {

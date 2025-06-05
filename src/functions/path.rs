@@ -6,11 +6,10 @@ use alloc::{rc::Rc, vec};
 
 use crate::builtin_function;
 use crate::error::{Error, Result};
-use crate::interpreter::Value;
+use crate::interpreter::{Data, Value};
 use crate::shape::{PathSegment, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
-use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 use tiny_skia::BlendMode;
 

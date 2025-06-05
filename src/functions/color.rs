@@ -1,8 +1,7 @@
 use crate::builtin_function;
-use crate::interpreter::Value;
+use crate::interpreter::{Data, Value};
 
 use crate::error::{Error, Result};
-use noise::Perlin;
 use rand_chacha::ChaCha8Rng;
 
 builtin_function!(hsl => {

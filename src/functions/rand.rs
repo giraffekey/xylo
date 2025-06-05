@@ -1,8 +1,8 @@
 use crate::builtin_function;
 use crate::error::{Error, Result};
-use crate::interpreter::Value;
+use crate::interpreter::{Data, Value};
 
-use noise::{NoiseFn, Perlin};
+use noise::NoiseFn;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
@@ -102,20 +102,20 @@ builtin_function!(choose rng => {
     }
 });
 
-builtin_function!(noise1 perlin => {
-    [a] => |perlin: &Perlin| {
+builtin_function!(noise1 data => {
+    [a] => |data: &Data| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
             _ => return Err(Error::InvalidArgument("noise1".into())),
         };
 
-        Ok(Value::Float(perlin.get([a]) as f32))
+        Ok(Value::Float(data.perlin.get([a]) as f32))
     }
 });
 
-builtin_function!(noise2 perlin => {
-    [a, b] => |perlin: &Perlin| {
+builtin_function!(noise2 data => {
+    [a, b] => |data: &Data| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
@@ -128,12 +128,12 @@ builtin_function!(noise2 perlin => {
             _ => return Err(Error::InvalidArgument("noise2".into())),
         };
 
-        Ok(Value::Float(perlin.get([a, b]) as f32))
+        Ok(Value::Float(data.perlin.get([a, b]) as f32))
     }
 });
 
-builtin_function!(noise3 perlin => {
-    [a, b, c] => |perlin: &Perlin| {
+builtin_function!(noise3 data => {
+    [a, b, c] => |data: &Data| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
@@ -152,12 +152,12 @@ builtin_function!(noise3 perlin => {
             _ => return Err(Error::InvalidArgument("noise3".into())),
         };
 
-        Ok(Value::Float(perlin.get([a, b, c]) as f32))
+        Ok(Value::Float(data.perlin.get([a, b, c]) as f32))
     }
 });
 
-builtin_function!(noise4 perlin => {
-    [a, b, c, d] => |perlin: &Perlin| {
+builtin_function!(noise4 data => {
+    [a, b, c, d] => |data: &Data| {
         let a = match a {
             Value::Integer(a) => *a as f64,
             Value::Float(a) => *a as f64,
@@ -182,6 +182,6 @@ builtin_function!(noise4 perlin => {
             _ => return Err(Error::InvalidArgument("noise4".into())),
         };
 
-        Ok(Value::Float(perlin.get([a, b, c, d]) as f32))
+        Ok(Value::Float(data.perlin.get([a, b, c, d]) as f32))
     }
 });

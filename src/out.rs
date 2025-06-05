@@ -36,7 +36,7 @@ impl Default for Config {
 
 pub fn generate_pixmap(input: &str, config: Config) -> Result<Pixmap> {
     let tree = parse(input)?;
-    let shape = execute(tree, config.seed)?;
+    let shape = execute(tree, config)?;
     Ok(render(shape, config.dimensions.0, config.dimensions.1)?)
 }
 

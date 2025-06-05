@@ -6,6 +6,7 @@ use alloc::{boxed::Box, rc::Rc, string::String, vec, vec::Vec};
 
 use crate::error::{Error, Result};
 use crate::functions::{builtin_param_count, handle_builtin, BUILTIN_FUNCTIONS};
+use crate::out::Config;
 use crate::parser::*;
 use crate::shape::{Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
@@ -95,6 +96,12 @@ impl PartialEq for Value {
             _ => false,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Data {
+    pub dimensions: (u32, u32),
+    pub perlin: Perlin,
 }
 
 type Frame = HashMap<String, Function>;
@@ -198,7 +205,7 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
 fn reduce_call(
     stack: &mut Stack,
     rng: &mut ChaCha8Rng,
-    perlin: &Perlin,
+    data: &Data,
     name: &str,
     mut args: Vec<Value>,
 ) -> Result<FunctionBlock> {
@@ -218,7 +225,7 @@ fn reduce_call(
         match name {
             "map" => return Ok(FunctionBlock::HigherOrder),
             _ => {
-                let value = handle_builtin(name, rng, perlin, &args)?;
+                let value = handle_builtin(name, rng, data, &args)?;
                 Ok(FunctionBlock::Value(value))
             }
         }
@@ -310,7 +317,7 @@ enum Operand {
 fn next_operand(
     stack: &mut Stack,
     rng: &mut ChaCha8Rng,
-    perlin: &Perlin,
+    data: &Data,
     index: &mut usize,
 ) -> Result<Operand> {
     match stack.operands.pop() {
@@ -319,7 +326,7 @@ fn next_operand(
             args.extend(pre_args);
 
             for _ in 0..argc {
-                let arg = match next_operand(stack, rng, perlin, index)? {
+                let arg = match next_operand(stack, rng, data, index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => {
                         stack.operands.extend(args);
@@ -330,7 +337,7 @@ fn next_operand(
             }
             args.reverse();
 
-            let function_block = reduce_call(stack, rng, perlin, &name, args)?;
+            let function_block = reduce_call(stack, rng, data, &name, args)?;
             match function_block {
                 FunctionBlock::Value(value) => Ok(Operand::Value(Some(value))),
                 FunctionBlock::Start(start) => {
@@ -348,7 +355,7 @@ fn next_operand(
 fn execute_block<'a>(
     stack: &mut Stack<'a>,
     rng: &mut ChaCha8Rng,
-    perlin: &Perlin,
+    data: &Data,
     block: &[Token<'a>],
     start: usize,
 ) -> Result<Value> {
@@ -363,31 +370,31 @@ fn execute_block<'a>(
             Token::List(blocks) => {
                 let values: Result<Vec<_>> = blocks
                     .iter()
-                    .map(|block| execute_block(stack, rng, perlin, block, 0))
+                    .map(|block| execute_block(stack, rng, data, block, 0))
                     .collect();
                 stack.operands.push(Value::List(values?));
                 index += 1;
             }
             Token::UnaryOperator(op) => {
-                let arg = match next_operand(stack, rng, perlin, &mut index)? {
+                let arg = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => continue 'a,
                 };
 
-                let value = handle_builtin(op.as_str(), rng, perlin, &[arg])?;
+                let value = handle_builtin(op.as_str(), rng, data, &[arg])?;
                 stack.operands.push(value);
                 index += 1;
             }
             Token::BinaryOperator(op) => {
                 let b = match op {
                     BinaryOperator::Pipe => stack.operands.pop().unwrap(),
-                    _ => match next_operand(stack, rng, perlin, &mut index)? {
+                    _ => match next_operand(stack, rng, data, &mut index)? {
                         Operand::Value(value) => value.unwrap(),
                         Operand::Function => continue 'a,
                     },
                 };
 
-                let a = match next_operand(stack, rng, perlin, &mut index)? {
+                let a = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => {
                         stack.operands.push(b);
@@ -395,14 +402,14 @@ fn execute_block<'a>(
                     }
                 };
 
-                let value = handle_builtin(op.as_str(), rng, perlin, &[a, b])?;
+                let value = handle_builtin(op.as_str(), rng, data, &[a, b])?;
                 stack.operands.push(value);
                 index += 1;
             }
             Token::Call(name, argc) => {
                 let mut args = Vec::with_capacity(*argc);
                 for _ in 0..*argc {
-                    // let arg = match next_operand(stack, rng, perlin, &mut index)? {
+                    // let arg = match next_operand(stack, rng, data, &mut index)? {
                     //     Operand::Value(value) => value.unwrap(),
                     //     Operand::Function => {
                     //         stack.operands.extend(args);
@@ -415,7 +422,7 @@ fn execute_block<'a>(
                 args.reverse();
 
                 stack.scopes.push(stack.scope);
-                let function_block = reduce_call(stack, rng, perlin, name, args.clone())?;
+                let function_block = reduce_call(stack, rng, data, name, args.clone())?;
                 match function_block {
                     FunctionBlock::Value(value) => {
                         stack.operands.push(value);
@@ -441,7 +448,7 @@ fn execute_block<'a>(
                                     args.reverse();
 
                                     let function_block =
-                                        reduce_call(stack, rng, perlin, &name, args)?;
+                                        reduce_call(stack, rng, data, &name, args)?;
                                     match function_block {
                                         FunctionBlock::Value(value) => values.push(value),
                                         FunctionBlock::Start(start) => {
@@ -482,7 +489,7 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::Return(start) => {
-                let value = match next_operand(stack, rng, perlin, &mut index)? {
+                let value = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value,
                     Operand::Function => continue 'a,
                 };
@@ -539,7 +546,7 @@ fn execute_block<'a>(
                 index += skip + 1;
             }
             Token::If(skip) => {
-                let condition = match next_operand(stack, rng, perlin, &mut index)? {
+                let condition = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => continue 'a,
                 };
@@ -555,7 +562,7 @@ fn execute_block<'a>(
                 }
             }
             Token::Match(patterns) => {
-                let a = match next_operand(stack, rng, perlin, &mut index)? {
+                let a = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => continue 'a,
                 };
@@ -586,7 +593,7 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::ForStart(var) => {
-                let iter = match next_operand(stack, rng, perlin, &mut index)? {
+                let iter = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => continue 'a,
                 };
@@ -632,7 +639,7 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::ForEnd => {
-                let value = match next_operand(stack, rng, perlin, &mut index)? {
+                let value = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value,
                     Operand::Function => continue 'a,
                 };
@@ -672,7 +679,7 @@ fn execute_block<'a>(
                 }
             }
             Token::LoopStart => {
-                let count = match next_operand(stack, rng, perlin, &mut index)? {
+                let count = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => continue 'a,
                 };
@@ -693,7 +700,7 @@ fn execute_block<'a>(
                 index += 1;
             }
             Token::LoopEnd => {
-                let value = match next_operand(stack, rng, perlin, &mut index)? {
+                let value = match next_operand(stack, rng, data, &mut index)? {
                     Operand::Value(value) => value,
                     Operand::Function => continue 'a,
                 };
@@ -723,8 +730,8 @@ fn execute_block<'a>(
     Ok(stack.operands.pop().unwrap())
 }
 
-pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
-    let seed = match seed {
+pub fn execute(tree: Tree, config: Config) -> Result<Shape> {
+    let seed = match config.seed {
         Some(seed) => seed,
         None => {
             #[cfg(feature = "std")]
@@ -736,7 +743,12 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
         }
     };
     let mut rng = ChaCha8Rng::from_seed(seed);
+
     let perlin = Perlin::new(rng.random());
+    let data = Data {
+        dimensions: config.dimensions,
+        perlin,
+    };
 
     let mut functions: HashMap<String, Function> = HashMap::new();
     let mut block = Vec::new();
@@ -771,9 +783,9 @@ pub fn execute(tree: Tree, seed: Option<[u8; 32]>) -> Result<Shape> {
     }
 
     let mut stack = Stack::new(functions);
-    let shape = match reduce_call(&mut stack, &mut rng, &perlin, "root", Vec::new())? {
+    let shape = match reduce_call(&mut stack, &mut rng, &data, "root", Vec::new())? {
         FunctionBlock::Start(start) => {
-            match execute_block(&mut stack, &mut rng, &perlin, &block, start)? {
+            match execute_block(&mut stack, &mut rng, &data, &block, start)? {
                 Value::Shape(shape) => shape,
                 _ => return Err(Error::InvalidRoot),
             }
@@ -799,6 +811,10 @@ mod tests {
 
     #[test]
     fn test_binary_operation() {
+        let config = Config {
+            dimensions: (400, 400),
+            seed: Some([0; 32]),
+        };
         let res = execute(
             parse(
                 "
@@ -808,7 +824,7 @@ square = ss (3 + 5) SQUARE
                 ",
             )
             .unwrap(),
-            Some([0; 32]),
+            config,
         );
         assert!(res.is_ok());
         assert_eq!(
@@ -829,6 +845,10 @@ square = ss (3 + 5) SQUARE
 
     #[test]
     fn test_let_statement() {
+        let config = Config {
+            dimensions: (400, 400),
+            seed: Some([0; 32]),
+        };
         let res = execute(
             parse(
                 "
@@ -842,7 +862,7 @@ square =
                 ",
             )
             .unwrap(),
-            Some([0; 32]),
+            config,
         );
         assert!(res.is_ok());
         assert_eq!(
@@ -863,6 +883,10 @@ square =
 
     #[test]
     fn test_if_statement() {
+        let config = Config {
+            dimensions: (400, 400),
+            seed: Some([0; 32]),
+        };
         let res = execute(
             parse(
                 "
@@ -876,7 +900,7 @@ shape is_square =
                 ",
             )
             .unwrap(),
-            Some([0; 32]),
+            config,
         );
         assert!(res.is_ok());
         assert_eq!(
@@ -897,6 +921,10 @@ shape is_square =
 
     #[test]
     fn test_match_statement() {
+        let config = Config {
+            dimensions: (400, 400),
+            seed: Some([0; 32]),
+        };
         let res = execute(
             parse(
                 "
@@ -911,7 +939,7 @@ shape n =
                 ",
             )
             .unwrap(),
-            Some([0; 32]),
+            config,
         );
         assert!(res.is_ok());
         assert_eq!(
@@ -952,6 +980,10 @@ shape n =
 
     #[test]
     fn test_for_statement() {
+        let config = Config {
+            dimensions: (400, 400),
+            seed: Some([0; 32]),
+        };
         let res = execute(
             parse(
                 "
@@ -966,7 +998,7 @@ shapes =
                 ",
             )
             .unwrap(),
-            Some([0; 32]),
+            config,
         );
         assert!(res.is_ok());
         assert_eq!(
@@ -997,6 +1029,10 @@ shapes =
 
     #[test]
     fn test_loop_statement() {
+        let config = Config {
+            dimensions: (400, 400),
+            seed: Some([0; 32]),
+        };
         let res = execute(
             parse(
                 "
@@ -1008,7 +1044,7 @@ shapes =
                 ",
             )
             .unwrap(),
-            Some([0; 32]),
+            config,
         );
         assert!(res.is_ok());
         assert_eq!(
