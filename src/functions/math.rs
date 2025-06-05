@@ -121,6 +121,16 @@ builtin_function!(imag => {
     [Value::Complex(c)] => Value::Float(c.im),
 });
 
+builtin_function!(deg_to_rad => {
+    [Value::Integer(n)] => Value::Float((*n as f32).to_radians()),
+    [Value::Float(n)] => Value::Float(n.to_radians()),
+});
+
+builtin_function!(rad_to_deg => {
+    [Value::Integer(n)] => Value::Float((*n as f32).to_degrees()),
+    [Value::Float(n)] => Value::Float(n.to_degrees()),
+});
+
 builtin_function!(pi => {
     [] => Value::Float(PI),
 });
@@ -135,14 +145,6 @@ builtin_function!(e => {
 
 builtin_function!(phi => {
     [] => Value::Float(PHI),
-});
-
-builtin_function!(width data => {
-    [] => |data: &Data| Ok(Value::Integer(data.dimensions.0 as i32)),
-});
-
-builtin_function!(height data => {
-    [] => |data: &Data| Ok(Value::Integer(data.dimensions.1 as i32)),
 });
 
 builtin_function!(sin => {
