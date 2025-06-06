@@ -130,3 +130,7 @@ builtin_function!(collect => {
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
 });
+
+builtin_function!(copy => {
+    [Value::Shape(shape)] => Value::Shape(Rc::new(RefCell::new(shape.borrow().deep_clone()))),
+});

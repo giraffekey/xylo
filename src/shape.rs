@@ -159,6 +159,55 @@ pub enum Shape {
 }
 
 impl Shape {
+    pub fn deep_clone(&self) -> Shape {
+        match self {
+            Self::Basic(_) | Self::Path { .. } => self.clone(),
+            Self::Composite {
+                a,
+                b,
+                transform,
+                zindex_overwrite,
+                zindex_shift,
+                color_overwrite,
+                color_shift,
+                blend_mode_overwrite,
+                anti_alias_overwrite,
+            } => Shape::Composite {
+                a: Rc::new(RefCell::new(a.borrow().deep_clone())),
+                b: Rc::new(RefCell::new(b.borrow().deep_clone())),
+                transform: *transform,
+                zindex_overwrite: *zindex_overwrite,
+                zindex_shift: *zindex_shift,
+                color_overwrite: *color_overwrite,
+                color_shift: *color_shift,
+                blend_mode_overwrite: *blend_mode_overwrite,
+                anti_alias_overwrite: *anti_alias_overwrite,
+            },
+            Self::Collection {
+                shapes,
+                transform,
+                zindex_overwrite,
+                zindex_shift,
+                color_overwrite,
+                color_shift,
+                blend_mode_overwrite,
+                anti_alias_overwrite,
+            } => Shape::Collection {
+                shapes: shapes
+                    .iter()
+                    .map(|shape| Rc::new(RefCell::new(shape.borrow().deep_clone())))
+                    .collect(),
+                transform: *transform,
+                zindex_overwrite: *zindex_overwrite,
+                zindex_shift: *zindex_shift,
+                color_overwrite: *color_overwrite,
+                color_shift: *color_shift,
+                blend_mode_overwrite: *blend_mode_overwrite,
+                anti_alias_overwrite: *anti_alias_overwrite,
+            },
+        }
+    }
+
     pub fn translate(&mut self, tx: f32, ty: f32) {
         match self {
             Self::Basic(BasicShape::Square { transform, .. })
