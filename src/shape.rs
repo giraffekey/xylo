@@ -6,7 +6,7 @@ use alloc::{rc::Rc, vec::Vec};
 
 use core::cell::RefCell;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
-use tiny_skia::{BlendMode, Transform};
+use tiny_skia::{BlendMode, SpreadMode, Transform};
 
 pub static IDENTITY: Transform = Transform {
     sx: 1.0,
@@ -26,7 +26,7 @@ pub static SQUARE: BasicShape = BasicShape::Square {
     height: 2.0,
     transform: IDENTITY,
     zindex: None,
-    color: WHITE,
+    color: Color::Solid(WHITE),
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
 };
@@ -37,7 +37,7 @@ pub static CIRCLE: BasicShape = BasicShape::Circle {
     radius: 1.0,
     transform: IDENTITY,
     zindex: None,
-    color: WHITE,
+    color: Color::Solid(WHITE),
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
 };
@@ -46,17 +46,107 @@ pub static TRIANGLE: BasicShape = BasicShape::Triangle {
     points: [-1.0, 0.577350269, 1.0, 0.577350269, 0.0, -1.154700538],
     transform: IDENTITY,
     zindex: None,
-    color: WHITE,
+    color: Color::Solid(WHITE),
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
 };
 
 pub static FILL: BasicShape = BasicShape::Fill {
     zindex: None,
-    color: WHITE,
+    color: Color::Solid(WHITE),
 };
 
 pub static EMPTY: BasicShape = BasicShape::Empty;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Gradient {
+    pub start: (f32, f32),
+    pub end: (f32, f32),
+    pub radius: Option<f32>,
+    pub stops: Vec<(f32, Hsla<f32>)>,
+    pub mode: SpreadMode,
+    pub transform: Transform,
+}
+
+impl Gradient {
+    pub fn linear(start_x: f32, start_y: f32, end_x: f32, end_y: f32) -> Self {
+        Self {
+            start: (start_x, start_y),
+            end: (end_x, end_y),
+            radius: None,
+            stops: Vec::new(),
+            mode: SpreadMode::Pad,
+            transform: IDENTITY,
+        }
+    }
+
+    pub fn radial(start_x: f32, start_y: f32, end_x: f32, end_y: f32, radius: f32) -> Self {
+        Self {
+            start: (start_x, start_y),
+            end: (end_x, end_y),
+            radius: Some(radius),
+            stops: Vec::new(),
+            mode: SpreadMode::Pad,
+            transform: IDENTITY,
+        }
+    }
+
+    pub fn set_start(&mut self, x: f32, y: f32) {
+        self.start = (x, y);
+    }
+
+    pub fn set_end(&mut self, x: f32, y: f32) {
+        self.end = (x, y);
+    }
+
+    pub fn set_radius(&mut self, radius: Option<f32>) {
+        self.radius = radius;
+    }
+
+    pub fn set_stop_hsl(&mut self, pos: f32, h: f32, s: f32, l: f32) {
+        match self.stops.iter_mut().find(|(p, _)| *p == pos) {
+            Some((_, color)) => {
+                color.hue = h.into();
+                color.saturation = s;
+                color.lightness = l;
+            }
+            None => {
+                self.stops.push((pos, Hsla::new(RgbHue::new(h), s, l, 1.0)));
+                self.stops
+                    .sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap());
+            }
+        }
+    }
+
+    pub fn set_stop_hsla(&mut self, pos: f32, h: f32, s: f32, l: f32, a: f32) {
+        match self.stops.iter_mut().find(|(p, _)| *p == pos) {
+            Some((_, color)) => {
+                color.hue = h.into();
+                color.saturation = s;
+                color.lightness = l;
+                color.alpha = a;
+            }
+            None => {
+                self.stops.push((pos, Hsla::new(RgbHue::new(h), s, l, a)));
+                self.stops
+                    .sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap());
+            }
+        }
+    }
+
+    pub fn set_stop_hex(&mut self, pos: f32, hex: [u8; 3]) {
+        let color = Rgb::from(hex);
+        let color: Rgb<f32> = color.into();
+        let color = Hsl::from_color(color);
+        self.set_stop_hsl(pos, color.hue.into(), color.saturation, color.lightness);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Color {
+    Solid(Hsla<f32>),
+    Gradient(Gradient),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HslaChange {
@@ -77,6 +167,18 @@ impl Default for HslaChange {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ColorChange {
+    Hsla(HslaChange),
+    Gradient(Gradient),
+}
+
+impl Default for ColorChange {
+    fn default() -> ColorChange {
+        ColorChange::Hsla(HslaChange::default())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathSegment {
     MoveTo(f32, f32),
@@ -86,7 +188,7 @@ pub enum PathSegment {
     Close,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BasicShape {
     Square {
         x: f32,
@@ -95,7 +197,7 @@ pub enum BasicShape {
         height: f32,
         transform: Transform,
         zindex: Option<f32>,
-        color: Hsla<f32>,
+        color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
     },
@@ -105,7 +207,7 @@ pub enum BasicShape {
         radius: f32,
         transform: Transform,
         zindex: Option<f32>,
-        color: Hsla<f32>,
+        color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
     },
@@ -113,13 +215,13 @@ pub enum BasicShape {
         points: [f32; 6],
         transform: Transform,
         zindex: Option<f32>,
-        color: Hsla<f32>,
+        color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
     },
     Fill {
         zindex: Option<f32>,
-        color: Hsla<f32>,
+        color: Color,
     },
     Empty,
 }
@@ -131,7 +233,7 @@ pub enum Shape {
         segments: Vec<PathSegment>,
         transform: Transform,
         zindex: Option<f32>,
-        color: Hsla<f32>,
+        color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
     },
@@ -141,7 +243,7 @@ pub enum Shape {
         transform: Transform,
         zindex_overwrite: Option<f32>,
         zindex_shift: Option<f32>,
-        color_overwrite: HslaChange,
+        color_overwrite: ColorChange,
         color_shift: HslaChange,
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
@@ -151,7 +253,7 @@ pub enum Shape {
         transform: Transform,
         zindex_overwrite: Option<f32>,
         zindex_shift: Option<f32>,
-        color_overwrite: HslaChange,
+        color_overwrite: ColorChange,
         color_shift: HslaChange,
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
@@ -178,7 +280,7 @@ impl Shape {
                 transform: *transform,
                 zindex_overwrite: *zindex_overwrite,
                 zindex_shift: *zindex_shift,
-                color_overwrite: *color_overwrite,
+                color_overwrite: color_overwrite.clone(),
                 color_shift: *color_shift,
                 blend_mode_overwrite: *blend_mode_overwrite,
                 anti_alias_overwrite: *anti_alias_overwrite,
@@ -200,7 +302,7 @@ impl Shape {
                 transform: *transform,
                 zindex_overwrite: *zindex_overwrite,
                 zindex_shift: *zindex_shift,
-                color_overwrite: *color_overwrite,
+                color_overwrite: color_overwrite.clone(),
                 color_shift: *color_shift,
                 blend_mode_overwrite: *blend_mode_overwrite,
                 anti_alias_overwrite: *anti_alias_overwrite,
@@ -379,16 +481,14 @@ impl Shape {
         }
     }
 
-    pub fn set_hsl(&mut self, hue: f32, saturation: f32, lightness: f32) {
+    pub fn set_color(&mut self, c: Color) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
             | Self::Path { color, .. } => {
-                color.hue = hue.into();
-                color.saturation = saturation;
-                color.lightness = lightness;
+                *color = c;
             }
             Self::Composite {
                 color_overwrite,
@@ -400,27 +500,37 @@ impl Shape {
                 color_shift,
                 ..
             } => {
-                color_overwrite.hue = Some(hue.into());
-                color_overwrite.saturation = Some(saturation);
-                color_overwrite.lightness = Some(lightness);
+                match c {
+                    Color::Solid(c) => {
+                        let mut overwrite = HslaChange::default();
+                        overwrite.hue = Some(c.hue);
+                        overwrite.saturation = Some(c.saturation);
+                        overwrite.lightness = Some(c.lightness);
+                        overwrite.alpha = Some(c.alpha);
+                        *color_overwrite = ColorChange::Hsla(overwrite);
+                    }
+                    Color::Gradient(g) => *color_overwrite = ColorChange::Gradient(g),
+                }
                 *color_shift = HslaChange::default();
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn set_hsla(&mut self, hue: f32, saturation: f32, lightness: f32, alpha: f32) {
+    pub fn set_hsl(&mut self, h: f32, s: f32, l: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.hue = hue.into();
-                color.saturation = saturation;
-                color.lightness = lightness;
-                color.alpha = alpha;
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.hue = h.into();
+                    color.saturation = s;
+                    color.lightness = l;
+                }
+                Color::Gradient(_) => *color = Color::Solid(Hsla::new(RgbHue::new(h), s, l, 1.0)),
+            },
             Self::Composite {
                 color_overwrite,
                 color_shift,
@@ -431,25 +541,41 @@ impl Shape {
                 color_shift,
                 ..
             } => {
-                color_overwrite.hue = Some(hue.into());
-                color_overwrite.saturation = Some(saturation);
-                color_overwrite.lightness = Some(lightness);
-                color_overwrite.alpha = Some(alpha);
+                match color_overwrite {
+                    ColorChange::Hsla(overwrite) => {
+                        overwrite.hue = Some(h.into());
+                        overwrite.saturation = Some(s);
+                        overwrite.lightness = Some(l);
+                    }
+                    ColorChange::Gradient(_) => {
+                        let mut overwrite = HslaChange::default();
+                        overwrite.hue = Some(h.into());
+                        overwrite.saturation = Some(s);
+                        overwrite.lightness = Some(l);
+                        *color_overwrite = ColorChange::Hsla(overwrite);
+                    }
+                }
                 *color_shift = HslaChange::default();
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn set_hue(&mut self, hue: f32) {
+    pub fn set_hsla(&mut self, h: f32, s: f32, l: f32, a: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.hue = hue.into();
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.hue = h.into();
+                    color.saturation = s;
+                    color.lightness = l;
+                    color.alpha = a;
+                }
+                Color::Gradient(_) => *color = Color::Solid(Hsla::new(RgbHue::new(h), s, l, a)),
+            },
             Self::Composite {
                 color_overwrite,
                 color_shift,
@@ -460,22 +586,44 @@ impl Shape {
                 color_shift,
                 ..
             } => {
-                color_overwrite.hue = Some(hue.into());
+                match color_overwrite {
+                    ColorChange::Hsla(overwrite) => {
+                        overwrite.hue = Some(h.into());
+                        overwrite.saturation = Some(s);
+                        overwrite.lightness = Some(l);
+                        overwrite.alpha = Some(a);
+                    }
+                    ColorChange::Gradient(_) => {
+                        let mut overwrite = HslaChange::default();
+                        overwrite.hue = Some(h.into());
+                        overwrite.saturation = Some(s);
+                        overwrite.lightness = Some(l);
+                        overwrite.alpha = Some(a);
+                        *color_overwrite = ColorChange::Hsla(overwrite);
+                    }
+                }
                 *color_shift = HslaChange::default();
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn set_saturation(&mut self, saturation: f32) {
+    pub fn set_hue(&mut self, h: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.saturation = saturation;
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.hue = h.into();
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.hue = h.into();
+                    }
+                }
+            },
             Self::Composite {
                 color_overwrite,
                 color_shift,
@@ -486,22 +634,38 @@ impl Shape {
                 color_shift,
                 ..
             } => {
-                color_overwrite.saturation = Some(saturation);
+                match color_overwrite {
+                    ColorChange::Hsla(overwrite) => {
+                        overwrite.hue = Some(h.into());
+                    }
+                    ColorChange::Gradient(gradient) => {
+                        for (_, color) in &mut gradient.stops {
+                            color.hue = h.into();
+                        }
+                    }
+                }
                 *color_shift = HslaChange::default();
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn set_lightness(&mut self, lightness: f32) {
+    pub fn set_saturation(&mut self, s: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.lightness = lightness;
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.saturation = s;
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.saturation = s;
+                    }
+                }
+            },
             Self::Composite {
                 color_overwrite,
                 color_shift,
@@ -512,22 +676,38 @@ impl Shape {
                 color_shift,
                 ..
             } => {
-                color_overwrite.lightness = Some(lightness);
+                match color_overwrite {
+                    ColorChange::Hsla(overwrite) => {
+                        overwrite.saturation = Some(s);
+                    }
+                    ColorChange::Gradient(gradient) => {
+                        for (_, color) in &mut gradient.stops {
+                            color.saturation = s;
+                        }
+                    }
+                }
                 *color_shift = HslaChange::default();
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn set_alpha(&mut self, alpha: f32) {
+    pub fn set_lightness(&mut self, l: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.alpha = alpha;
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.lightness = l;
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.lightness = l;
+                    }
+                }
+            },
             Self::Composite {
                 color_overwrite,
                 color_shift,
@@ -538,108 +718,161 @@ impl Shape {
                 color_shift,
                 ..
             } => {
-                color_overwrite.alpha = Some(alpha);
+                match color_overwrite {
+                    ColorChange::Hsla(overwrite) => {
+                        overwrite.lightness = Some(l);
+                    }
+                    ColorChange::Gradient(gradient) => {
+                        for (_, color) in &mut gradient.stops {
+                            color.lightness = l;
+                        }
+                    }
+                }
                 *color_shift = HslaChange::default();
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn shift_hue(&mut self, hue: f32) {
+    pub fn set_alpha(&mut self, a: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.hue += hue;
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.alpha = a;
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.alpha = a;
+                    }
+                }
+            },
+            Self::Composite {
+                color_overwrite,
+                color_shift,
+                ..
             }
+            | Self::Collection {
+                color_overwrite,
+                color_shift,
+                ..
+            } => {
+                match color_overwrite {
+                    ColorChange::Hsla(overwrite) => {
+                        overwrite.alpha = Some(a);
+                    }
+                    ColorChange::Gradient(gradient) => {
+                        for (_, color) in &mut gradient.stops {
+                            color.alpha = a;
+                        }
+                    }
+                }
+                *color_shift = HslaChange::default();
+            }
+            Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn shift_hue(&mut self, n: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { color, .. })
+            | Self::Basic(BasicShape::Circle { color, .. })
+            | Self::Basic(BasicShape::Triangle { color, .. })
+            | Self::Basic(BasicShape::Fill { color, .. })
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.hue += n;
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.hue += n;
+                    }
+                }
+            },
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
-                *color_shift.hue.get_or_insert(RgbHue::new(0.0)) += hue;
+                *color_shift.hue.get_or_insert(RgbHue::new(0.0)) += n;
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn shift_saturation(&mut self, saturation: f32) {
+    pub fn shift_saturation(&mut self, n: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.saturation += saturation;
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.saturation += n;
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.saturation += n;
+                    }
+                }
+            },
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
-                *color_shift.saturation.get_or_insert(0.0) += saturation;
+                *color_shift.saturation.get_or_insert(0.0) += n;
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn shift_lightness(&mut self, lightness: f32) {
+    pub fn shift_lightness(&mut self, n: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.lightness += lightness;
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.lightness += n;
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.lightness += n;
+                    }
+                }
+            },
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
-                *color_shift.lightness.get_or_insert(0.0) += lightness;
+                *color_shift.lightness.get_or_insert(0.0) += n;
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
-    pub fn shift_alpha(&mut self, alpha: f32) {
+    pub fn shift_alpha(&mut self, n: f32) {
         match self {
             Self::Basic(BasicShape::Square { color, .. })
             | Self::Basic(BasicShape::Circle { color, .. })
             | Self::Basic(BasicShape::Triangle { color, .. })
             | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.alpha += alpha;
-            }
+            | Self::Path { color, .. } => match color {
+                Color::Solid(color) => {
+                    color.alpha += n;
+                }
+                Color::Gradient(gradient) => {
+                    for (_, color) in &mut gradient.stops {
+                        color.alpha += n;
+                    }
+                }
+            },
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
-                *color_shift.alpha.get_or_insert(0.0) += alpha;
+                *color_shift.alpha.get_or_insert(0.0) += n;
             }
             Self::Basic(BasicShape::Empty) => (),
         }
     }
 
     pub fn set_hex(&mut self, hex: [u8; 3]) {
-        let new_color = Rgb::from(hex);
-        let new_color: Rgb<f32> = new_color.into();
-        let new_color = Hsl::from_color(new_color);
-        match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
-            | Self::Path { color, .. } => {
-                color.hue = new_color.hue;
-                color.saturation = new_color.saturation;
-                color.lightness = new_color.lightness;
-            }
-            Self::Composite {
-                color_overwrite,
-                color_shift,
-                ..
-            }
-            | Self::Collection {
-                color_overwrite,
-                color_shift,
-                ..
-            } => {
-                color_overwrite.hue = Some(new_color.hue);
-                color_overwrite.saturation = Some(new_color.saturation);
-                color_overwrite.lightness = Some(new_color.lightness);
-                *color_shift = HslaChange::default();
-            }
-            Self::Basic(BasicShape::Empty) => (),
-        }
+        let color = Rgb::from(hex);
+        let color: Rgb<f32> = color.into();
+        let color = Hsl::from_color(color);
+        self.set_hsl(color.hue.into(), color.saturation, color.lightness);
     }
 
     pub fn set_blend_mode(&mut self, b: BlendMode) {

@@ -7,7 +7,7 @@ use alloc::{rc::Rc, vec::Vec};
 use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::interpreter::{Data, Value};
-use crate::shape::{BasicShape, HslaChange, Shape, IDENTITY, WHITE};
+use crate::shape::{BasicShape, Color, ColorChange, HslaChange, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
 use rand_chacha::ChaCha8Rng;
@@ -38,7 +38,7 @@ builtin_function!(compose => {
                     segments,
                     transform: a_transform.post_concat(*b_transform),
                     zindex: *zindex,
-                    color: *color,
+                    color: color.clone(),
                     blend_mode: *blend_mode,
                     anti_alias: *anti_alias,
                 }
@@ -49,7 +49,7 @@ builtin_function!(compose => {
                 transform: IDENTITY,
                 zindex_overwrite: None,
                 zindex_shift: None,
-                color_overwrite: HslaChange::default(),
+                color_overwrite: ColorChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
@@ -82,7 +82,7 @@ builtin_function!(collect => {
             let mut segments = Vec::with_capacity(shapes.len());
             let mut transform = IDENTITY;
             let mut zindex = None;
-            let mut color = WHITE;
+            let mut color = Color::Solid(WHITE);
             let mut blend_mode = BlendMode::SourceOver;
             let mut anti_alias = true;
 
@@ -99,7 +99,7 @@ builtin_function!(collect => {
                         segments.extend(other_segments);
                         transform = transform.post_concat(*other_transform);
                         zindex = *other_zindex;
-                        color = *other_color;
+                        color = other_color.clone();
                         blend_mode = *other_blend_mode;
                         anti_alias = *other_anti_alias;
                     }
@@ -121,7 +121,7 @@ builtin_function!(collect => {
                 transform: IDENTITY,
                 zindex_overwrite: None,
                 zindex_shift: None,
-                color_overwrite: HslaChange::default(),
+                color_overwrite: ColorChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
@@ -133,4 +133,18 @@ builtin_function!(collect => {
 
 builtin_function!(copy => {
     [Value::Shape(shape)] => Value::Shape(Rc::new(RefCell::new(shape.borrow().deep_clone()))),
+});
+
+builtin_function!(blend => {
+    [Value::BlendMode(blend_mode), Value::Shape(shape)] => {
+         shape.borrow_mut().set_blend_mode(*blend_mode);
+         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(anti_alias => {
+    [Value::Boolean(anti_alias), Value::Shape(shape)] => {
+         shape.borrow_mut().set_anti_alias(*anti_alias);
+         Value::Shape(shape.clone())
+    }
 });

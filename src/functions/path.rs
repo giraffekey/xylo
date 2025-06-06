@@ -7,7 +7,7 @@ use alloc::{rc::Rc, vec};
 use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::interpreter::{Data, Value};
-use crate::shape::{PathSegment, Shape, IDENTITY, WHITE};
+use crate::shape::{Color, PathSegment, Shape, IDENTITY, WHITE};
 use core::cell::RefCell;
 
 use rand_chacha::ChaCha8Rng;
@@ -32,7 +32,7 @@ builtin_function!(move_to => {
             segments,
             transform: IDENTITY,
             zindex: None,
-            color: WHITE,
+            color: Color::Solid(WHITE),
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
         };
@@ -59,7 +59,7 @@ builtin_function!(line_to => {
             segments,
             transform: IDENTITY,
             zindex: None,
-            color: WHITE,
+            color: Color::Solid(WHITE),
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
         };
@@ -98,7 +98,7 @@ builtin_function!(quad_to => {
             segments,
             transform: IDENTITY,
             zindex: None,
-            color: WHITE,
+            color: Color::Solid(WHITE),
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
         };
@@ -149,7 +149,7 @@ builtin_function!(cubic_to => {
             segments,
             transform: IDENTITY,
             zindex: None,
-            color: WHITE,
+            color: Color::Solid(WHITE),
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
         };
@@ -164,7 +164,7 @@ builtin_function!(close => {
             segments,
             transform: IDENTITY,
             zindex: None,
-            color: WHITE,
+            color: Color::Solid(WHITE),
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
         };

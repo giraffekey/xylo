@@ -8,7 +8,7 @@ use crate::error::{Error, Result};
 use crate::functions::{builtin_param_count, handle_builtin, BUILTIN_FUNCTIONS};
 use crate::out::Config;
 use crate::parser::*;
-use crate::shape::{Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
+use crate::shape::{Gradient, Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
 
 use core::cell::RefCell;
 use hashbrown::HashMap;
@@ -26,6 +26,7 @@ pub enum ValueKind {
     Complex,
     Boolean,
     Hex,
+    Gradient,
     Shape,
     BlendMode,
     Function(usize),
@@ -40,6 +41,7 @@ pub enum Value {
     Complex(Complex<f32>),
     Boolean(bool),
     Hex([u8; 3]),
+    Gradient(Gradient),
     Shape(Rc<RefCell<Shape>>),
     BlendMode(BlendMode),
     Function(String, usize, Vec<Value>),
@@ -54,6 +56,7 @@ impl Value {
             Self::Complex(_) => Ok(ValueKind::Complex),
             Self::Boolean(_) => Ok(ValueKind::Boolean),
             Self::Hex(_) => Ok(ValueKind::Hex),
+            Self::Gradient(_) => Ok(ValueKind::Gradient),
             Self::Shape(_) => Ok(ValueKind::Shape),
             Self::BlendMode(_) => Ok(ValueKind::BlendMode),
             Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
@@ -87,6 +90,7 @@ impl PartialEq for Value {
             (Value::Complex(a), Value::Complex(b)) => a == b,
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Hex(a), Value::Hex(b)) => a == b,
+            (Value::Gradient(a), Value::Gradient(b)) => a == b,
             (Value::Shape(a), Value::Shape(b)) => *a.borrow() == *b.borrow(),
             (Value::BlendMode(a), Value::BlendMode(b)) => a == b,
             (Value::Function(a_name, a_argc, a_args), Value::Function(b_name, b_argc, b_args)) => {
@@ -190,11 +194,11 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
         Literal::Hex(hex) => Ok(Value::Hex(*hex)),
         Literal::Shape(kind) => {
             let shape = match kind {
-                ShapeKind::Square => SQUARE,
-                ShapeKind::Circle => CIRCLE,
-                ShapeKind::Triangle => TRIANGLE,
-                ShapeKind::Fill => FILL,
-                ShapeKind::Empty => EMPTY,
+                ShapeKind::Square => SQUARE.clone(),
+                ShapeKind::Circle => CIRCLE.clone(),
+                ShapeKind::Triangle => TRIANGLE.clone(),
+                ShapeKind::Fill => FILL.clone(),
+                ShapeKind::Empty => EMPTY.clone(),
             };
             Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(shape)))))
         }
@@ -806,7 +810,7 @@ fn gen_seed() -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shape::{BasicShape, HslaChange, IDENTITY, WHITE};
+    use crate::shape::{BasicShape, Color, ColorChange, HslaChange, IDENTITY, WHITE};
     use tiny_skia::Transform;
 
     #[test]
@@ -836,7 +840,7 @@ square = ss (3 + 5) SQUARE
                 height: 2.0,
                 transform: Transform::from_scale(8.0, 8.0),
                 zindex: None,
-                color: WHITE,
+                color: Color::Solid(WHITE),
                 blend_mode: BlendMode::SourceOver,
                 anti_alias: true,
             })
@@ -874,7 +878,7 @@ square =
                 height: 2.0,
                 transform: Transform::from_scale(30.0, 30.0),
                 zindex: None,
-                color: WHITE,
+                color: Color::Solid(WHITE),
                 blend_mode: BlendMode::SourceOver,
                 anti_alias: true,
             })
@@ -906,12 +910,12 @@ shape is_square =
         assert_eq!(
             res.unwrap(),
             Shape::Composite {
-                a: Rc::new(RefCell::new(Shape::Basic(SQUARE))),
-                b: Rc::new(RefCell::new(Shape::Basic(EMPTY))),
+                a: Rc::new(RefCell::new(Shape::Basic(SQUARE.clone()))),
+                b: Rc::new(RefCell::new(Shape::Basic(EMPTY.clone()))),
                 transform: IDENTITY,
                 zindex_overwrite: None,
                 zindex_shift: None,
-                color_overwrite: HslaChange::default(),
+                color_overwrite: ColorChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
@@ -947,30 +951,30 @@ shape n =
             Shape::Composite {
                 a: Rc::new(RefCell::new(Shape::Composite {
                     a: Rc::new(RefCell::new(Shape::Composite {
-                        a: Rc::new(RefCell::new(Shape::Basic(SQUARE))),
-                        b: Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                        a: Rc::new(RefCell::new(Shape::Basic(SQUARE.clone()))),
+                        b: Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone()))),
                         transform: IDENTITY,
                         zindex_overwrite: None,
                         zindex_shift: None,
-                        color_overwrite: HslaChange::default(),
+                        color_overwrite: ColorChange::default(),
                         color_shift: HslaChange::default(),
                         blend_mode_overwrite: None,
                         anti_alias_overwrite: None,
                     })),
-                    b: Rc::new(RefCell::new(Shape::Basic(TRIANGLE))),
+                    b: Rc::new(RefCell::new(Shape::Basic(TRIANGLE.clone()))),
                     transform: IDENTITY,
                     zindex_overwrite: None,
                     zindex_shift: None,
-                    color_overwrite: HslaChange::default(),
+                    color_overwrite: ColorChange::default(),
                     color_shift: HslaChange::default(),
                     blend_mode_overwrite: None,
                     anti_alias_overwrite: None,
                 })),
-                b: Rc::new(RefCell::new(Shape::Basic(EMPTY))),
+                b: Rc::new(RefCell::new(Shape::Basic(EMPTY.clone()))),
                 transform: IDENTITY,
                 zindex_overwrite: None,
                 zindex_shift: None,
-                color_overwrite: HslaChange::default(),
+                color_overwrite: ColorChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
@@ -1005,21 +1009,21 @@ shapes =
             res.unwrap(),
             Shape::Collection {
                 shapes: vec![
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone()))),
+                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone()))),
                 ],
                 transform: IDENTITY,
                 zindex_overwrite: None,
                 zindex_shift: None,
-                color_overwrite: HslaChange::default(),
+                color_overwrite: ColorChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
@@ -1058,7 +1062,7 @@ shapes =
                         height: 2.0,
                         transform: Transform::from_scale(83.69197, 83.69197),
                         zindex: None,
-                        color: WHITE,
+                        color: Color::Solid(WHITE),
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
                     }))),
@@ -1069,7 +1073,7 @@ shapes =
                         height: 2.0,
                         transform: Transform::from_scale(90.9063, 90.9063),
                         zindex: None,
-                        color: WHITE,
+                        color: Color::Solid(WHITE),
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
                     }))),
@@ -1080,7 +1084,7 @@ shapes =
                         height: 2.0,
                         transform: Transform::from_scale(63.14245, 63.14245),
                         zindex: None,
-                        color: WHITE,
+                        color: Color::Solid(WHITE),
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
                     }))),
@@ -1088,7 +1092,7 @@ shapes =
                 transform: IDENTITY,
                 zindex_overwrite: None,
                 zindex_shift: None,
-                color_overwrite: HslaChange::default(),
+                color_overwrite: ColorChange::default(),
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
