@@ -1,13 +1,17 @@
-# Xylo &emsp; [![License]][github.com] [![Latest Version]][crates.io] [![Docs]][docs.rs]
+# Xylo &emsp; [![License]][license] [![Build Status]][actions] [![Latest Version]][crates.io] [![Docs]][docs.rs]
 
-[License]: https://img.shields.io/badge/license-MIT%2FApache-blue.svg
-[github.com]: https://github.com/giraffekey/xylo/blob/main/LICENSE
+[License]: https://img.shields.io/badge/license-MIT-blue.svg
+[license]: https://github.com/giraffekey/xylo/blob/main/LICENSE
+[Build Status]: https://github.com/giraffekey/xylo/actions/workflows/rust.yml/badge.svg
+[actions]: https://github.com/giraffekey/xylo/actions
 [Latest Version]: https://img.shields.io/crates/v/xylo-lang.svg
 [crates.io]: https://crates.io/crates/xylo-lang
 [Docs]: https://docs.rs/xylo-lang/badge.svg
 [docs.rs]: https://docs.rs/xylo-lang/latest/xylo_lang/index.html
 
-A functional programming language for generative art.
+Xylo is a domain specific language of the functional paradigm that is designed for use in creative coding and procedural art.
+
+Documentation: https://xylo-1.gitbook.io/docs
 
 ![example](example.png)
 
