@@ -12,6 +12,7 @@ mod path;
 mod rand;
 mod shape;
 mod transform;
+mod system;
 
 macro_rules! define_builtins {
     (
@@ -49,6 +50,8 @@ macro_rules! define_builtins {
 }
 
 define_builtins! {
+    "width" => {system::width, 0},
+    "height" => {system::height, 0},
     "neg" => {math::neg, 1},
     "!" => {compare::not, 1},
     "not" => {compare::not, 1},
@@ -196,8 +199,6 @@ define_builtins! {
     "line_join" => {shape::line_join, 2},
     "dash" => {shape::dash, 3},
     "no_dash" => {shape::no_dash, 1},
-    "width" => {transform::width, 0},
-    "height" => {transform::height, 0},
     "t" => {transform::translate, 3},
     "translate" => {transform::translate, 3},
     "tx" => {transform::translatex, 2},
