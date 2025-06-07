@@ -69,7 +69,7 @@ pub struct Gradient {
     pub end: (f32, f32),
     pub radius: Option<f32>,
     pub stops: Vec<(f32, Hsla<f32>)>,
-    pub mode: SpreadMode,
+    pub spread_mode: SpreadMode,
     pub transform: Transform,
 }
 
@@ -80,7 +80,7 @@ impl Gradient {
             end: (end_x, end_y),
             radius: None,
             stops: Vec::new(),
-            mode: SpreadMode::Pad,
+            spread_mode: SpreadMode::Pad,
             transform: IDENTITY,
         }
     }
@@ -91,7 +91,7 @@ impl Gradient {
             end: (end_x, end_y),
             radius: Some(radius),
             stops: Vec::new(),
-            mode: SpreadMode::Pad,
+            spread_mode: SpreadMode::Pad,
             transform: IDENTITY,
         }
     }
@@ -144,6 +144,10 @@ impl Gradient {
         let color: Rgb<f32> = color.into();
         let color = Hsl::from_color(color);
         self.set_stop_hsl(pos, color.hue.into(), color.saturation, color.lightness);
+    }
+
+    pub fn set_spread_mode(&mut self, spread_mode: SpreadMode) {
+        self.spread_mode = spread_mode;
     }
 }
 

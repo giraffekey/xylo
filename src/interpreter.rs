@@ -17,7 +17,7 @@ use num::Complex;
 use rand::distr::{weighted::WeightedIndex, Distribution};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use tiny_skia::{BlendMode, LineCap, LineJoin};
+use tiny_skia::{BlendMode, LineCap, LineJoin, SpreadMode};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueKind {
@@ -46,6 +46,7 @@ pub enum Value {
     BlendMode(BlendMode),
     LineCap(LineCap),
     LineJoin(LineJoin),
+    SpreadMode(SpreadMode),
     Function(String, usize, Vec<Value>),
     List(Vec<Value>),
 }
@@ -60,7 +61,9 @@ impl Value {
             Self::Hex(_) => Ok(ValueKind::Hex),
             Self::Gradient(_) => Ok(ValueKind::Gradient),
             Self::Shape(_) => Ok(ValueKind::Shape),
-            Self::BlendMode(_) | Self::LineCap(_) | Self::LineJoin(_) => Ok(ValueKind::Enum),
+            Self::BlendMode(_) | Self::LineCap(_) | Self::LineJoin(_) | Self::SpreadMode(_) => {
+                Ok(ValueKind::Enum)
+            }
             Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
             Self::List(list) => {
                 let kind = list
@@ -95,6 +98,9 @@ impl PartialEq for Value {
             (Value::Gradient(a), Value::Gradient(b)) => a == b,
             (Value::Shape(a), Value::Shape(b)) => *a.borrow() == *b.borrow(),
             (Value::BlendMode(a), Value::BlendMode(b)) => a == b,
+            (Value::LineCap(a), Value::LineCap(b)) => a == b,
+            (Value::LineJoin(a), Value::LineJoin(b)) => a == b,
+            (Value::SpreadMode(a), Value::SpreadMode(b)) => a == b,
             (Value::Function(a_name, a_argc, a_args), Value::Function(b_name, b_argc, b_args)) => {
                 a_name == b_name && a_argc == b_argc && a_args == b_args
             }
@@ -204,9 +210,10 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
             };
             Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(shape)))))
         }
-        Literal::BlendMode(b) => Ok(Value::BlendMode(*b)),
+        Literal::BlendMode(bm) => Ok(Value::BlendMode(*bm)),
         Literal::LineCap(lc) => Ok(Value::LineCap(*lc)),
         Literal::LineJoin(lj) => Ok(Value::LineJoin(*lj)),
+        Literal::SpreadMode(sm) => Ok(Value::SpreadMode(*sm)),
     }
 }
 

@@ -18,7 +18,7 @@ use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{Err, IResult, Parser};
 use num::Complex;
-use tiny_skia::{BlendMode, LineCap, LineJoin};
+use tiny_skia::{BlendMode, LineCap, LineJoin, SpreadMode};
 
 const KEYWORDS: &[&str] = &["let", "if", "else", "match", "for", "loop"];
 
@@ -54,6 +54,7 @@ pub enum Literal {
     BlendMode(BlendMode),
     LineCap(LineCap),
     LineJoin(LineJoin),
+    SpreadMode(SpreadMode),
 }
 
 impl ToString for Literal {
@@ -65,7 +66,7 @@ impl ToString for Literal {
             Literal::Boolean(b) => b.to_string(),
             Literal::Hex([r, g, b]) => format!("0x{}{}{}", r, g, b),
             Literal::Shape(kind) => kind.to_string(),
-            Literal::BlendMode(b) => match b {
+            Literal::BlendMode(bm) => match bm {
                 BlendMode::Clear => "BLEND_CLEAR".into(),
                 BlendMode::SourceOver => "BLEND_SOURCE_OVER".into(),
                 BlendMode::DestinationOver => "BLEND_DESTINATION_OVER".into(),
@@ -106,6 +107,11 @@ impl ToString for Literal {
                 LineJoin::MiterClip => "LINE_JOIN_MITER_CLIP".into(),
                 LineJoin::Round => "LINE_JOIN_ROUND".into(),
                 LineJoin::Bevel => "LINE_JOIN_BEVEL".into(),
+            },
+            Literal::SpreadMode(sm) => match sm {
+                SpreadMode::Pad => "SPREAD_MODE_PAD".into(),
+                SpreadMode::Reflect => "SPREAD_MODE_REFLECT".into(),
+                SpreadMode::Repeat => "SPREAD_MODE_REPEAT".into(),
             },
         }
     }
@@ -448,9 +454,30 @@ fn line_join(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
+fn spread_mode(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(SpreadMode::Pad, tag("SPREAD_MODE_PAD")),
+            value(SpreadMode::Reflect, tag("SPREAD_MODE_REFLECT")),
+            value(SpreadMode::Repeat, tag("SPREAD_MODE_REPEAT")),
+        )),
+        Literal::SpreadMode,
+    )
+    .parse(input)
+}
+
 fn literal(input: &str) -> IResult<&str, Literal> {
     alt((
-        hex, complex, float, integer, boolean, shape, blend_mode, line_cap, line_join,
+        hex,
+        complex,
+        float,
+        integer,
+        boolean,
+        shape,
+        blend_mode,
+        line_cap,
+        line_join,
+        spread_mode,
     ))
     .parse(input)
 }

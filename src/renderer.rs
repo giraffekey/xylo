@@ -82,7 +82,7 @@ fn gradient_paint<'a>(gradient: Gradient, blend_mode: BlendMode, anti_alias: boo
             gradient.end.into(),
             radius,
             stops,
-            gradient.mode,
+            gradient.spread_mode,
             gradient.transform,
         )
         .unwrap(),
@@ -90,7 +90,7 @@ fn gradient_paint<'a>(gradient: Gradient, blend_mode: BlendMode, anti_alias: boo
             gradient.start.into(),
             gradient.end.into(),
             stops,
-            gradient.mode,
+            gradient.spread_mode,
             gradient.transform,
         )
         .unwrap(),

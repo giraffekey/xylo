@@ -264,6 +264,7 @@ define_builtins! {
     "grad_stop_hsl" => {color::grad_stop_hsl, 5},
     "grad_stop_hsla" => {color::grad_stop_hsla, 6},
     "grad_stop_hex" => {color::grad_stop_hex, 3},
+    "grad_spread_mode" => {color::grad_spread_mode, 2},
     "move_to" => {path::move_to, 2},
     "line_to" => {path::line_to, 2},
     "quad_to" => {path::quad_to, 4},

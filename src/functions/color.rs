@@ -356,3 +356,11 @@ builtin_function!(grad_stop_hex => {
         Value::Gradient(g)
     }
 });
+
+builtin_function!(grad_spread_mode => {
+    [Value::SpreadMode(spread_mode), Value::Gradient(g)] => {
+        let mut g = g.clone();
+        g.set_spread_mode(*spread_mode);
+        Value::Gradient(g)
+    }
+});
