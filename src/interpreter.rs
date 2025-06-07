@@ -1117,6 +1117,7 @@ shapes =
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
+                style_overwrite: None,
             }
         );
     }
