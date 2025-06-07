@@ -6,7 +6,9 @@ use alloc::{rc::Rc, vec::Vec};
 
 use core::cell::RefCell;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
-use tiny_skia::{BlendMode, SpreadMode, Transform};
+use tiny_skia::{
+    BlendMode, FillRule, LineCap, LineJoin, SpreadMode, Stroke, StrokeDash, Transform,
+};
 
 pub static IDENTITY: Transform = Transform {
     sx: 1.0,
@@ -29,6 +31,7 @@ pub static SQUARE: BasicShape = BasicShape::Square {
     color: Color::Solid(WHITE),
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
+    style: Style::Fill(FillRule::Winding),
 };
 
 pub static CIRCLE: BasicShape = BasicShape::Circle {
@@ -40,6 +43,7 @@ pub static CIRCLE: BasicShape = BasicShape::Circle {
     color: Color::Solid(WHITE),
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
+    style: Style::Fill(FillRule::Winding),
 };
 
 pub static TRIANGLE: BasicShape = BasicShape::Triangle {
@@ -49,6 +53,7 @@ pub static TRIANGLE: BasicShape = BasicShape::Triangle {
     color: Color::Solid(WHITE),
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
+    style: Style::Fill(FillRule::Winding),
 };
 
 pub static FILL: BasicShape = BasicShape::Fill {
@@ -179,6 +184,18 @@ impl Default for ColorChange {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Style {
+    Fill(FillRule),
+    Stroke(Stroke),
+}
+
+impl Default for Style {
+    fn default() -> Style {
+        Style::Fill(FillRule::Winding)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathSegment {
     MoveTo(f32, f32),
@@ -200,6 +217,7 @@ pub enum BasicShape {
         color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
+        style: Style,
     },
     Circle {
         x: f32,
@@ -210,6 +228,7 @@ pub enum BasicShape {
         color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
+        style: Style,
     },
     Triangle {
         points: [f32; 6],
@@ -218,6 +237,7 @@ pub enum BasicShape {
         color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
+        style: Style,
     },
     Fill {
         zindex: Option<f32>,
@@ -236,6 +256,7 @@ pub enum Shape {
         color: Color,
         blend_mode: BlendMode,
         anti_alias: bool,
+        style: Style,
     },
     Composite {
         a: Rc<RefCell<Shape>>,
@@ -247,6 +268,7 @@ pub enum Shape {
         color_shift: HslaChange,
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
+        style_overwrite: Option<Style>,
     },
     Collection {
         shapes: Vec<Rc<RefCell<Shape>>>,
@@ -257,6 +279,7 @@ pub enum Shape {
         color_shift: HslaChange,
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
+        style_overwrite: Option<Style>,
     },
 }
 
@@ -274,6 +297,7 @@ impl Shape {
                 color_shift,
                 blend_mode_overwrite,
                 anti_alias_overwrite,
+                style_overwrite,
             } => Shape::Composite {
                 a: Rc::new(RefCell::new(a.borrow().deep_clone())),
                 b: Rc::new(RefCell::new(b.borrow().deep_clone())),
@@ -284,6 +308,7 @@ impl Shape {
                 color_shift: *color_shift,
                 blend_mode_overwrite: *blend_mode_overwrite,
                 anti_alias_overwrite: *anti_alias_overwrite,
+                style_overwrite: style_overwrite.clone(),
             },
             Self::Collection {
                 shapes,
@@ -294,6 +319,7 @@ impl Shape {
                 color_shift,
                 blend_mode_overwrite,
                 anti_alias_overwrite,
+                style_overwrite,
             } => Shape::Collection {
                 shapes: shapes
                     .iter()
@@ -306,6 +332,7 @@ impl Shape {
                 color_shift: *color_shift,
                 blend_mode_overwrite: *blend_mode_overwrite,
                 anti_alias_overwrite: *anti_alias_overwrite,
+                style_overwrite: style_overwrite.clone(),
             },
         }
     }
@@ -915,6 +942,186 @@ impl Shape {
             } => {
                 *anti_alias_overwrite = Some(a);
             }
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_fill_rule(&mut self, fill_rule: FillRule) {
+        match self {
+            Self::Basic(BasicShape::Square { style, .. })
+            | Self::Basic(BasicShape::Circle { style, .. })
+            | Self::Basic(BasicShape::Triangle { style, .. })
+            | Self::Path { style, .. } => {
+                *style = Style::Fill(fill_rule);
+            }
+            Self::Composite {
+                style_overwrite, ..
+            }
+            | Self::Collection {
+                style_overwrite, ..
+            } => {
+                *style_overwrite = Some(Style::Fill(fill_rule));
+            }
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_stroke_width(&mut self, width: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { style, .. })
+            | Self::Basic(BasicShape::Circle { style, .. })
+            | Self::Basic(BasicShape::Triangle { style, .. })
+            | Self::Path { style, .. } => match style {
+                Style::Stroke(stroke) => stroke.width = width,
+                Style::Fill(_) => {
+                    *style = Style::Stroke(Stroke {
+                        width,
+                        ..Stroke::default()
+                    });
+                }
+            },
+            Self::Composite {
+                style_overwrite, ..
+            }
+            | Self::Collection {
+                style_overwrite, ..
+            } => match style_overwrite {
+                Some(Style::Stroke(stroke)) => stroke.width = width,
+                Some(Style::Fill(_)) | None => {
+                    *style_overwrite = Some(Style::Stroke(Stroke {
+                        width,
+                        ..Stroke::default()
+                    }));
+                }
+            },
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_miter_limit(&mut self, miter_limit: f32) {
+        match self {
+            Self::Basic(BasicShape::Square { style, .. })
+            | Self::Basic(BasicShape::Circle { style, .. })
+            | Self::Basic(BasicShape::Triangle { style, .. })
+            | Self::Path { style, .. } => match style {
+                Style::Stroke(stroke) => stroke.miter_limit = miter_limit,
+                Style::Fill(_) => {
+                    *style = Style::Stroke(Stroke {
+                        miter_limit,
+                        ..Stroke::default()
+                    });
+                }
+            },
+            Self::Composite {
+                style_overwrite, ..
+            }
+            | Self::Collection {
+                style_overwrite, ..
+            } => match style_overwrite {
+                Some(Style::Stroke(stroke)) => stroke.miter_limit = miter_limit,
+                Some(Style::Fill(_)) | None => {
+                    *style_overwrite = Some(Style::Stroke(Stroke {
+                        miter_limit,
+                        ..Stroke::default()
+                    }));
+                }
+            },
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_line_cap(&mut self, line_cap: LineCap) {
+        match self {
+            Self::Basic(BasicShape::Square { style, .. })
+            | Self::Basic(BasicShape::Circle { style, .. })
+            | Self::Basic(BasicShape::Triangle { style, .. })
+            | Self::Path { style, .. } => match style {
+                Style::Stroke(stroke) => stroke.line_cap = line_cap,
+                Style::Fill(_) => {
+                    *style = Style::Stroke(Stroke {
+                        line_cap,
+                        ..Stroke::default()
+                    });
+                }
+            },
+            Self::Composite {
+                style_overwrite, ..
+            }
+            | Self::Collection {
+                style_overwrite, ..
+            } => match style_overwrite {
+                Some(Style::Stroke(stroke)) => stroke.line_cap = line_cap,
+                Some(Style::Fill(_)) | None => {
+                    *style_overwrite = Some(Style::Stroke(Stroke {
+                        line_cap,
+                        ..Stroke::default()
+                    }));
+                }
+            },
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_line_join(&mut self, line_join: LineJoin) {
+        match self {
+            Self::Basic(BasicShape::Square { style, .. })
+            | Self::Basic(BasicShape::Circle { style, .. })
+            | Self::Basic(BasicShape::Triangle { style, .. })
+            | Self::Path { style, .. } => match style {
+                Style::Stroke(stroke) => stroke.line_join = line_join,
+                Style::Fill(_) => {
+                    *style = Style::Stroke(Stroke {
+                        line_join,
+                        ..Stroke::default()
+                    });
+                }
+            },
+            Self::Composite {
+                style_overwrite, ..
+            }
+            | Self::Collection {
+                style_overwrite, ..
+            } => match style_overwrite {
+                Some(Style::Stroke(stroke)) => stroke.line_join = line_join,
+                Some(Style::Fill(_)) | None => {
+                    *style_overwrite = Some(Style::Stroke(Stroke {
+                        line_join,
+                        ..Stroke::default()
+                    }));
+                }
+            },
+            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_dash(&mut self, dash: Option<StrokeDash>) {
+        match self {
+            Self::Basic(BasicShape::Square { style, .. })
+            | Self::Basic(BasicShape::Circle { style, .. })
+            | Self::Basic(BasicShape::Triangle { style, .. })
+            | Self::Path { style, .. } => match style {
+                Style::Stroke(stroke) => stroke.dash = dash,
+                Style::Fill(_) => {
+                    *style = Style::Stroke(Stroke {
+                        dash,
+                        ..Stroke::default()
+                    });
+                }
+            },
+            Self::Composite {
+                style_overwrite, ..
+            }
+            | Self::Collection {
+                style_overwrite, ..
+            } => match style_overwrite {
+                Some(Style::Stroke(stroke)) => stroke.dash = dash,
+                Some(Style::Fill(_)) | None => {
+                    *style_overwrite = Some(Style::Stroke(Stroke {
+                        dash,
+                        ..Stroke::default()
+                    }));
+                }
+            },
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
         }
     }

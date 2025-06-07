@@ -7,11 +7,11 @@ use alloc::{rc::Rc, vec::Vec};
 use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::interpreter::{Data, Value};
-use crate::shape::{BasicShape, Color, ColorChange, HslaChange, Shape, IDENTITY, WHITE};
+use crate::shape::{BasicShape, Color, ColorChange, HslaChange, Shape, Style, IDENTITY, WHITE};
 use core::cell::RefCell;
 
 use rand_chacha::ChaCha8Rng;
-use tiny_skia::BlendMode;
+use tiny_skia::{BlendMode, FillRule, StrokeDash};
 
 builtin_function!(compose => {
     [Value::Shape(a), Value::Shape(b)] => {
@@ -24,6 +24,7 @@ builtin_function!(compose => {
                     color,
                     blend_mode,
                     anti_alias,
+                    style,
                 },
                 Shape::Path {
                     segments: b,
@@ -41,6 +42,7 @@ builtin_function!(compose => {
                     color: color.clone(),
                     blend_mode: *blend_mode,
                     anti_alias: *anti_alias,
+                    style: style.clone(),
                 }
             }
             _ => Shape::Composite {
@@ -53,6 +55,7 @@ builtin_function!(compose => {
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
+                style_overwrite: None,
             },
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -85,6 +88,7 @@ builtin_function!(collect => {
             let mut color = Color::Solid(WHITE);
             let mut blend_mode = BlendMode::SourceOver;
             let mut anti_alias = true;
+            let mut style = Style::default();
 
             for path in shapes {
                 match &*path.borrow() {
@@ -95,6 +99,7 @@ builtin_function!(collect => {
                         color: other_color,
                         blend_mode: other_blend_mode,
                         anti_alias: other_anti_alias,
+                        style: other_style,
                     } => {
                         segments.extend(other_segments);
                         transform = transform.post_concat(*other_transform);
@@ -102,6 +107,7 @@ builtin_function!(collect => {
                         color = other_color.clone();
                         blend_mode = *other_blend_mode;
                         anti_alias = *other_anti_alias;
+                        style = other_style.clone();
                     }
                     _ => unreachable!(),
                 }
@@ -114,6 +120,7 @@ builtin_function!(collect => {
                 color,
                 blend_mode,
                 anti_alias,
+                style,
             }
         } else {
             Shape::Collection {
@@ -125,6 +132,7 @@ builtin_function!(collect => {
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
+                style_overwrite: None,
             }
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -137,14 +145,107 @@ builtin_function!(copy => {
 
 builtin_function!(blend => {
     [Value::BlendMode(blend_mode), Value::Shape(shape)] => {
-         shape.borrow_mut().set_blend_mode(*blend_mode);
-         Value::Shape(shape.clone())
+        shape.borrow_mut().set_blend_mode(*blend_mode);
+        Value::Shape(shape.clone())
     }
 });
 
 builtin_function!(anti_alias => {
     [Value::Boolean(anti_alias), Value::Shape(shape)] => {
-         shape.borrow_mut().set_anti_alias(*anti_alias);
+        shape.borrow_mut().set_anti_alias(*anti_alias);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(fill => {
+    [Value::Shape(shape)] => {
+        shape.borrow_mut().set_fill_rule(FillRule::Winding);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(winding => {
+    [Value::Shape(shape)] => {
+        shape.borrow_mut().set_fill_rule(FillRule::Winding);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(even_odd => {
+    [Value::Shape(shape)] => {
+        shape.borrow_mut().set_fill_rule(FillRule::EvenOdd);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(stroke => {
+    [width, Value::Shape(shape)] => {
+        let width = match width {
+            Value::Integer(width) => *width as f32,
+            Value::Float(width)   => *width,
+            _ => return Err(Error::InvalidArgument("stroke".into())),
+        };
+
+        shape.borrow_mut().set_stroke_width(width);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(miter_limit => {
+    [n, Value::Shape(shape)] => {
+        let n = match n {
+            Value::Integer(n) => *n as f32,
+            Value::Float(n)   => *n,
+            _ => return Err(Error::InvalidArgument("miter_limit".into())),
+        };
+
+         shape.borrow_mut().set_miter_limit(n);
          Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(line_cap => {
+    [Value::LineCap(lc), Value::Shape(shape)] => {
+        shape.borrow_mut().set_line_cap(*lc);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(line_join => {
+    [Value::LineJoin(lj), Value::Shape(shape)] => {
+        shape.borrow_mut().set_line_join(*lj);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(dash => {
+    [Value::List(array), offset, Value::Shape(shape)] => {
+        let array = match array.get(0) {
+            Some(Value::Integer(_)) => array.iter().map(|value| match value {
+                Value::Integer(n) => *n as f32,
+                _ => unreachable!(),
+            }).collect(),
+            Some(Value::Float(_)) => array.iter().map(|value| match value {
+                Value::Float(n) => *n,
+                _ => unreachable!(),
+            }).collect(),
+            _ => return Err(Error::InvalidArgument("dash".into())),
+        };
+
+        let offset = match offset {
+            Value::Integer(offset) => *offset as f32,
+            Value::Float(offset)   => *offset,
+            _ => return Err(Error::InvalidArgument("dash".into())),
+        };
+
+        shape.borrow_mut().set_dash(StrokeDash::new(array, offset));
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(no_dash => {
+    [Value::Shape(shape)] => {
+        shape.borrow_mut().set_dash(None);
+        Value::Shape(shape.clone())
     }
 });

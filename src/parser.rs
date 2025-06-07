@@ -18,7 +18,7 @@ use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{Err, IResult, Parser};
 use num::Complex;
-use tiny_skia::BlendMode;
+use tiny_skia::{BlendMode, LineCap, LineJoin};
 
 const KEYWORDS: &[&str] = &["let", "if", "else", "match", "for", "loop"];
 
@@ -52,6 +52,8 @@ pub enum Literal {
     Hex([u8; 3]),
     Shape(ShapeKind),
     BlendMode(BlendMode),
+    LineCap(LineCap),
+    LineJoin(LineJoin),
 }
 
 impl ToString for Literal {
@@ -93,6 +95,17 @@ impl ToString for Literal {
                 BlendMode::Saturation => "BLEND_SATURATION".into(),
                 BlendMode::Color => "BLEND_COLOR".into(),
                 BlendMode::Luminosity => "BLEND_LUMINOSITY".into(),
+            },
+            Literal::LineCap(lc) => match lc {
+                LineCap::Butt => "LINE_CAP_BUTT".into(),
+                LineCap::Round => "LINE_CAP_ROUND".into(),
+                LineCap::Square => "LINE_CAP_SQUARE".into(),
+            },
+            Literal::LineJoin(lj) => match lj {
+                LineJoin::Miter => "LINE_JOIN_MITER".into(),
+                LineJoin::MiterClip => "LINE_JOIN_MITER_CLIP".into(),
+                LineJoin::Round => "LINE_JOIN_ROUND".into(),
+                LineJoin::Bevel => "LINE_JOIN_BEVEL".into(),
             },
         }
     }
@@ -410,8 +423,36 @@ fn blend_mode(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
+fn line_cap(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(LineCap::Butt, tag("LINE_CAP_BUTT")),
+            value(LineCap::Round, tag("LINE_CAP_ROUND")),
+            value(LineCap::Square, tag("LINE_CAP_SQUARE")),
+        )),
+        Literal::LineCap,
+    )
+    .parse(input)
+}
+
+fn line_join(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(LineJoin::MiterClip, tag("LINE_JOIN_MITER_CLIP")),
+            value(LineJoin::Miter, tag("LINE_JOIN_MITER")),
+            value(LineJoin::Round, tag("LINE_JOIN_ROUND")),
+            value(LineJoin::Bevel, tag("LINE_JOIN_BEVEL")),
+        )),
+        Literal::LineJoin,
+    )
+    .parse(input)
+}
+
 fn literal(input: &str) -> IResult<&str, Literal> {
-    alt((hex, complex, float, integer, boolean, shape, blend_mode)).parse(input)
+    alt((
+        hex, complex, float, integer, boolean, shape, blend_mode, line_cap, line_join,
+    ))
+    .parse(input)
 }
 
 fn end(input: &str) -> IResult<&str, &str> {

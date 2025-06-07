@@ -17,7 +17,7 @@ use num::Complex;
 use rand::distr::{weighted::WeightedIndex, Distribution};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use tiny_skia::BlendMode;
+use tiny_skia::{BlendMode, LineCap, LineJoin};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueKind {
@@ -28,7 +28,7 @@ pub enum ValueKind {
     Hex,
     Gradient,
     Shape,
-    BlendMode,
+    Enum,
     Function(usize),
     List(Box<ValueKind>),
     Unknown,
@@ -44,6 +44,8 @@ pub enum Value {
     Gradient(Gradient),
     Shape(Rc<RefCell<Shape>>),
     BlendMode(BlendMode),
+    LineCap(LineCap),
+    LineJoin(LineJoin),
     Function(String, usize, Vec<Value>),
     List(Vec<Value>),
 }
@@ -58,7 +60,7 @@ impl Value {
             Self::Hex(_) => Ok(ValueKind::Hex),
             Self::Gradient(_) => Ok(ValueKind::Gradient),
             Self::Shape(_) => Ok(ValueKind::Shape),
-            Self::BlendMode(_) => Ok(ValueKind::BlendMode),
+            Self::BlendMode(_) | Self::LineCap(_) | Self::LineJoin(_) => Ok(ValueKind::Enum),
             Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
             Self::List(list) => {
                 let kind = list
@@ -203,6 +205,8 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
             Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(shape)))))
         }
         Literal::BlendMode(b) => Ok(Value::BlendMode(*b)),
+        Literal::LineCap(lc) => Ok(Value::LineCap(*lc)),
+        Literal::LineJoin(lj) => Ok(Value::LineJoin(*lj)),
     }
 }
 
@@ -810,7 +814,7 @@ fn gen_seed() -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shape::{BasicShape, Color, ColorChange, HslaChange, IDENTITY, WHITE};
+    use crate::shape::{BasicShape, Color, ColorChange, HslaChange, Style, IDENTITY, WHITE};
     use tiny_skia::Transform;
 
     #[test]
@@ -843,6 +847,7 @@ square = ss (3 + 5) SQUARE
                 color: Color::Solid(WHITE),
                 blend_mode: BlendMode::SourceOver,
                 anti_alias: true,
+                style: Style::default()
             })
         );
     }
@@ -881,6 +886,7 @@ square =
                 color: Color::Solid(WHITE),
                 blend_mode: BlendMode::SourceOver,
                 anti_alias: true,
+                style: Style::default()
             })
         );
     }
@@ -919,6 +925,7 @@ shape is_square =
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
+                style_overwrite: None,
             }
         );
     }
@@ -960,6 +967,7 @@ shape n =
                         color_shift: HslaChange::default(),
                         blend_mode_overwrite: None,
                         anti_alias_overwrite: None,
+                        style_overwrite: None,
                     })),
                     b: Rc::new(RefCell::new(Shape::Basic(TRIANGLE.clone()))),
                     transform: IDENTITY,
@@ -969,6 +977,7 @@ shape n =
                     color_shift: HslaChange::default(),
                     blend_mode_overwrite: None,
                     anti_alias_overwrite: None,
+                    style_overwrite: None,
                 })),
                 b: Rc::new(RefCell::new(Shape::Basic(EMPTY.clone()))),
                 transform: IDENTITY,
@@ -978,6 +987,7 @@ shape n =
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
+                style_overwrite: None,
             }
         );
     }
@@ -1027,6 +1037,7 @@ shapes =
                 color_shift: HslaChange::default(),
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
+                style_overwrite: None,
             }
         );
     }
@@ -1065,6 +1076,7 @@ shapes =
                         color: Color::Solid(WHITE),
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
+                        style: Style::default(),
                     }))),
                     Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
                         x: -1.0,
@@ -1076,6 +1088,7 @@ shapes =
                         color: Color::Solid(WHITE),
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
+                        style: Style::default(),
                     }))),
                     Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
                         x: -1.0,
@@ -1087,6 +1100,7 @@ shapes =
                         color: Color::Solid(WHITE),
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
+                        style: Style::default(),
                     }))),
                 ],
                 transform: IDENTITY,

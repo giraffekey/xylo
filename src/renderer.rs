@@ -6,14 +6,15 @@ use alloc::{rc::Rc, vec::Vec};
 
 use crate::error::Result;
 use crate::shape::{
-    BasicShape, Color, ColorChange, Gradient, HslaChange, PathSegment, Shape, IDENTITY, WHITE,
+    BasicShape, Color, ColorChange, Gradient, HslaChange, PathSegment, Shape, Style, IDENTITY,
+    WHITE,
 };
 
 use core::ops::Add;
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
     BlendMode, FillRule, GradientStop, LinearGradient, Paint, Path, PathBuilder, Pixmap,
-    RadialGradient, Rect, Shader, Transform,
+    RadialGradient, Rect, Shader, Stroke, Transform,
 };
 
 #[derive(Debug)]
@@ -21,16 +22,24 @@ enum ShapeData<'a> {
     FillPath {
         path: Path,
         transform: Transform,
-        zindex: f32,
+        fill_rule: FillRule,
         paint: Paint<'a>,
+        zindex: f32,
+    },
+    StrokePath {
+        path: Path,
+        transform: Transform,
+        stroke: Stroke,
+        paint: Paint<'a>,
+        zindex: f32,
     },
     Fill {
-        zindex: f32,
         color: tiny_skia::Color,
+        zindex: f32,
     },
     FillPaint {
-        zindex: f32,
         paint: Paint<'a>,
+        zindex: f32,
     },
 }
 
@@ -146,6 +155,10 @@ fn overwrite_anti_alias(anti_alias: bool, anti_alias_overwrite: Option<bool>) ->
     anti_alias_overwrite.unwrap_or(anti_alias)
 }
 
+fn overwrite_style(style: Style, style_overwrite: Option<Style>) -> Style {
+    style_overwrite.unwrap_or(style)
+}
+
 fn combine_shift<T: Add<Output = T> + Copy>(shift: Option<T>, curr: Option<T>) -> Option<T> {
     shift.map(|s| curr.map_or(s, |c| c + s)).or(curr)
 }
@@ -217,6 +230,13 @@ fn resolve_anti_alias_overwrite(
     anti_alias_overwrite.or(curr_anti_alias_overwrite)
 }
 
+fn resolve_style_overwrite(
+    style_overwrite: Option<Style>,
+    curr_style_overwrite: Option<Style>,
+) -> Option<Style> {
+    style_overwrite.or(curr_style_overwrite)
+}
+
 fn convert_shape(
     data: &mut Vec<ShapeData>,
     shape: Shape,
@@ -227,6 +247,7 @@ fn convert_shape(
     color_shift: HslaChange,
     blend_mode_overwrite: Option<BlendMode>,
     anti_alias_overwrite: Option<bool>,
+    style_overwrite: Option<Style>,
 ) -> Result<()> {
     match shape {
         Shape::Basic(BasicShape::Square {
@@ -239,6 +260,7 @@ fn convert_shape(
             color,
             blend_mode,
             anti_alias,
+            style,
         }) => {
             let path = PathBuilder::from_rect(Rect::from_xywh(x, y, w, h).unwrap());
             let transform = transform.post_concat(parent_transform);
@@ -246,16 +268,32 @@ fn convert_shape(
             let color = overwrite_color(color, color_overwrite, color_shift);
             let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
             let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+            let style = overwrite_style(style, style_overwrite);
             let paint = match color {
                 Color::Solid(color) => solid_paint(Rgba::from_color(color), blend_mode, anti_alias),
                 Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
             };
-            data.push(ShapeData::FillPath {
-                path,
-                transform,
-                zindex,
-                paint,
-            });
+
+            match style {
+                Style::Fill(fill_rule) => {
+                    data.push(ShapeData::FillPath {
+                        path,
+                        transform,
+                        fill_rule,
+                        paint,
+                        zindex,
+                    });
+                }
+                Style::Stroke(stroke) => {
+                    data.push(ShapeData::StrokePath {
+                        path,
+                        transform,
+                        stroke,
+                        paint,
+                        zindex,
+                    });
+                }
+            }
         }
         Shape::Basic(BasicShape::Circle {
             x,
@@ -266,6 +304,7 @@ fn convert_shape(
             color,
             blend_mode,
             anti_alias,
+            style,
         }) => {
             let path = PathBuilder::from_circle(x, y, radius).unwrap();
             let transform = transform.post_concat(parent_transform);
@@ -273,16 +312,32 @@ fn convert_shape(
             let color = overwrite_color(color, color_overwrite, color_shift);
             let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
             let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+            let style = overwrite_style(style, style_overwrite);
             let paint = match color {
                 Color::Solid(color) => solid_paint(Rgba::from_color(color), blend_mode, anti_alias),
                 Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
             };
-            data.push(ShapeData::FillPath {
-                path,
-                transform,
-                zindex,
-                paint,
-            });
+
+            match style {
+                Style::Fill(fill_rule) => {
+                    data.push(ShapeData::FillPath {
+                        path,
+                        transform,
+                        fill_rule,
+                        paint,
+                        zindex,
+                    });
+                }
+                Style::Stroke(stroke) => {
+                    data.push(ShapeData::StrokePath {
+                        path,
+                        transform,
+                        stroke,
+                        paint,
+                        zindex,
+                    });
+                }
+            }
         }
         Shape::Basic(BasicShape::Triangle {
             points,
@@ -291,6 +346,7 @@ fn convert_shape(
             color,
             blend_mode,
             anti_alias,
+            style,
         }) => {
             let mut pb = PathBuilder::new();
             pb.move_to(points[0], points[1]);
@@ -304,16 +360,32 @@ fn convert_shape(
             let color = overwrite_color(color, color_overwrite, color_shift);
             let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
             let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+            let style = overwrite_style(style, style_overwrite);
             let paint = match color {
                 Color::Solid(color) => solid_paint(Rgba::from_color(color), blend_mode, anti_alias),
                 Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
             };
-            data.push(ShapeData::FillPath {
-                path,
-                transform,
-                zindex,
-                paint,
-            });
+
+            match style {
+                Style::Fill(fill_rule) => {
+                    data.push(ShapeData::FillPath {
+                        path,
+                        transform,
+                        fill_rule,
+                        paint,
+                        zindex,
+                    });
+                }
+                Style::Stroke(stroke) => {
+                    data.push(ShapeData::StrokePath {
+                        path,
+                        transform,
+                        stroke,
+                        paint,
+                        zindex,
+                    });
+                }
+            }
         }
         Shape::Basic(BasicShape::Fill { zindex, color }) => {
             let zindex = zindex.unwrap_or(0.0);
@@ -337,6 +409,7 @@ fn convert_shape(
             color,
             blend_mode,
             anti_alias,
+            style,
         } => {
             let mut pb = PathBuilder::new();
             for segment in segments {
@@ -356,6 +429,7 @@ fn convert_shape(
                 let color = overwrite_color(color, color_overwrite, color_shift);
                 let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
                 let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
+                let style = overwrite_style(style, style_overwrite);
                 let paint = match color {
                     Color::Solid(color) => {
                         solid_paint(Rgba::from_color(color), blend_mode, anti_alias)
@@ -363,12 +437,26 @@ fn convert_shape(
                     Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
                 };
 
-                data.push(ShapeData::FillPath {
-                    path,
-                    transform,
-                    zindex,
-                    paint,
-                });
+                match style {
+                    Style::Fill(fill_rule) => {
+                        data.push(ShapeData::FillPath {
+                            path,
+                            transform,
+                            fill_rule,
+                            paint,
+                            zindex,
+                        });
+                    }
+                    Style::Stroke(stroke) => {
+                        data.push(ShapeData::StrokePath {
+                            path,
+                            transform,
+                            stroke,
+                            paint,
+                            zindex,
+                        });
+                    }
+                }
             }
         }
         Shape::Composite {
@@ -381,6 +469,7 @@ fn convert_shape(
             color_shift: curr_color_shift,
             blend_mode_overwrite: curr_blend_mode_overwrite,
             anti_alias_overwrite: curr_anti_alias_overwrite,
+            style_overwrite: curr_style_overwrite,
         } => {
             let transform = transform.post_concat(parent_transform);
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
@@ -399,6 +488,7 @@ fn convert_shape(
                 resolve_blend_mode_overwrite(blend_mode_overwrite, curr_blend_mode_overwrite);
             let anti_alias_overwrite =
                 resolve_anti_alias_overwrite(anti_alias_overwrite, curr_anti_alias_overwrite);
+            let style_overwrite = resolve_style_overwrite(style_overwrite, curr_style_overwrite);
 
             let a = Rc::try_unwrap(a).unwrap().into_inner();
             convert_shape(
@@ -411,6 +501,7 @@ fn convert_shape(
                 color_shift,
                 blend_mode_overwrite,
                 anti_alias_overwrite,
+                style_overwrite.clone(),
             )?;
             let b = Rc::try_unwrap(b).unwrap().into_inner();
             convert_shape(
@@ -423,6 +514,7 @@ fn convert_shape(
                 color_shift,
                 blend_mode_overwrite,
                 anti_alias_overwrite,
+                style_overwrite,
             )?;
         }
         Shape::Collection {
@@ -434,6 +526,7 @@ fn convert_shape(
             color_shift: curr_color_shift,
             blend_mode_overwrite: curr_blend_mode_overwrite,
             anti_alias_overwrite: curr_anti_alias_overwrite,
+            style_overwrite: curr_style_overwrite,
         } => {
             let transform = transform.post_concat(parent_transform);
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
@@ -452,6 +545,7 @@ fn convert_shape(
                 resolve_blend_mode_overwrite(blend_mode_overwrite, curr_blend_mode_overwrite);
             let anti_alias_overwrite =
                 resolve_anti_alias_overwrite(anti_alias_overwrite, curr_anti_alias_overwrite);
+            let style_overwrite = resolve_style_overwrite(style_overwrite, curr_style_overwrite);
 
             for shape in shapes {
                 let shape = Rc::try_unwrap(shape).unwrap().into_inner();
@@ -465,6 +559,7 @@ fn convert_shape(
                     color_shift,
                     blend_mode_overwrite,
                     anti_alias_overwrite,
+                    style_overwrite.clone(),
                 )?;
             }
         }
@@ -484,15 +579,23 @@ pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
         HslaChange::default(),
         None,
         None,
+        None,
     )?;
     data.sort_by(|a, b| match (a, b) {
         (ShapeData::FillPath { zindex: a, .. }, ShapeData::FillPath { zindex: b, .. })
+        | (ShapeData::FillPath { zindex: a, .. }, ShapeData::StrokePath { zindex: b, .. })
         | (ShapeData::FillPath { zindex: a, .. }, ShapeData::Fill { zindex: b, .. })
         | (ShapeData::FillPath { zindex: a, .. }, ShapeData::FillPaint { zindex: b, .. })
+        | (ShapeData::StrokePath { zindex: a, .. }, ShapeData::FillPath { zindex: b, .. })
+        | (ShapeData::StrokePath { zindex: a, .. }, ShapeData::StrokePath { zindex: b, .. })
+        | (ShapeData::StrokePath { zindex: a, .. }, ShapeData::Fill { zindex: b, .. })
+        | (ShapeData::StrokePath { zindex: a, .. }, ShapeData::FillPaint { zindex: b, .. })
         | (ShapeData::Fill { zindex: a, .. }, ShapeData::FillPath { zindex: b, .. })
+        | (ShapeData::Fill { zindex: a, .. }, ShapeData::StrokePath { zindex: b, .. })
         | (ShapeData::Fill { zindex: a, .. }, ShapeData::Fill { zindex: b, .. })
         | (ShapeData::Fill { zindex: a, .. }, ShapeData::FillPaint { zindex: b, .. })
         | (ShapeData::FillPaint { zindex: a, .. }, ShapeData::FillPath { zindex: b, .. })
+        | (ShapeData::FillPaint { zindex: a, .. }, ShapeData::StrokePath { zindex: b, .. })
         | (ShapeData::FillPaint { zindex: a, .. }, ShapeData::Fill { zindex: b, .. })
         | (ShapeData::FillPaint { zindex: a, .. }, ShapeData::FillPaint { zindex: b, .. }) => {
             a.partial_cmp(b).unwrap()
@@ -508,13 +611,26 @@ pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
             ShapeData::FillPath {
                 path,
                 transform,
+                fill_rule,
                 paint,
                 ..
             } => {
                 let transform = transform
                     .post_scale(1.0, -1.0)
                     .post_translate(half_width, half_height);
-                pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
+                pixmap.fill_path(&path, &paint, fill_rule, transform, None);
+            }
+            ShapeData::StrokePath {
+                path,
+                transform,
+                stroke,
+                paint,
+                ..
+            } => {
+                let transform = transform
+                    .post_scale(1.0, -1.0)
+                    .post_translate(half_width, half_height);
+                pixmap.stroke_path(&path, &paint, &stroke, transform, None);
             }
             ShapeData::Fill { color, .. } => {
                 pixmap.fill(color);
