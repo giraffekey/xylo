@@ -26,6 +26,8 @@ enum Commands {
         #[arg(long)]
         height: Option<u32>,
         #[arg(short, long)]
+        count: Option<u32>,
+        #[arg(short, long)]
         seed: Option<String>,
     },
     Minify {
@@ -56,6 +58,7 @@ fn run_cli() -> Result<()> {
             dest,
             width,
             height,
+            count,
             seed,
         }) => {
             let dest = match dest {
@@ -76,6 +79,7 @@ fn run_cli() -> Result<()> {
 
             let width = width.unwrap_or(400);
             let height = height.unwrap_or(400);
+            let count = count.unwrap_or(1);
 
             let seed = match seed {
                 Some(seed) => {
@@ -93,14 +97,27 @@ fn run_cli() -> Result<()> {
                 seed,
             };
 
-            let now = SystemTime::now();
-            generate_file(source, &dest, config)?;
+            for i in 0..count {
+                let dest = if count == 1 {
+                    dest.clone()
+                } else {
+                    dest.parent().unwrap().join(format!(
+                        "{}_{}.{}",
+                        dest.file_stem().unwrap().to_string_lossy(),
+                        i,
+                        dest.extension().unwrap().to_string_lossy()
+                    ))
+                };
 
-            println!(
-                "Output to {:?} in {:?}",
-                dest,
-                SystemTime::now().duration_since(now).unwrap()
-            );
+                let now = SystemTime::now();
+                generate_file(&source, &dest, config)?;
+
+                println!(
+                    "Output to {:?} in {:?}",
+                    dest,
+                    SystemTime::now().duration_since(now).unwrap()
+                );
+            }
         }
         Some(Commands::Minify { source, dest }) => {
             let dest = dest.unwrap_or(source.clone());
