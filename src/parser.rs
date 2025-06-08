@@ -263,6 +263,8 @@ fn float_value(input: &str) -> IResult<&str, f32> {
         recognize((
             opt(char('-')),
             alt((
+                recognize((digit1, char('%'))),
+                recognize((opt(digit1), opt(char('.')), digit1, char('%'))),
                 recognize((opt(digit1), char('.'), digit1)),
                 recognize((
                     digit1,
@@ -273,7 +275,17 @@ fn float_value(input: &str) -> IResult<&str, f32> {
                 )),
             )),
         )),
-        |s: &str| s.parse(),
+        |s: &str| {
+            if s.chars().last() == Some('%') {
+                let substr = &s[0..s.len() - 1];
+                substr
+                    .parse::<f32>()
+                    .map(|n| n / 100.0)
+                    .or(format!("{}.0", substr).parse::<f32>().map(|n| n / 100.0))
+            } else {
+                s.parse()
+            }
+        },
     )
     .parse(input)
 }
