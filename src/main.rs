@@ -25,6 +25,8 @@ enum Commands {
         width: Option<u32>,
         #[arg(long)]
         height: Option<u32>,
+        #[arg(long)]
+        max_depth: Option<usize>,
         #[arg(short, long)]
         count: Option<u32>,
         #[arg(short, long)]
@@ -58,6 +60,7 @@ fn run_cli() -> Result<()> {
             dest,
             width,
             height,
+            max_depth,
             count,
             seed,
         }) => {
@@ -79,6 +82,7 @@ fn run_cli() -> Result<()> {
 
             let width = width.unwrap_or(400);
             let height = height.unwrap_or(400);
+            let max_depth = max_depth.unwrap_or(1500);
             let count = count.unwrap_or(1);
 
             let seed = match seed {
@@ -94,6 +98,7 @@ fn run_cli() -> Result<()> {
 
             let config = Config {
                 dimensions: (width, height),
+                max_depth,
                 seed,
             };
 

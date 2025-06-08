@@ -19,6 +19,7 @@ use tiny_skia::Pixmap;
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub dimensions: (u32, u32),
+    pub max_depth: usize,
     pub seed: Option<[u8; 32]>,
 }
 
@@ -26,6 +27,7 @@ impl Default for Config {
     fn default() -> Config {
         Config {
             dimensions: (400, 400),
+            max_depth: 1500,
             #[cfg(feature = "std")]
             seed: None,
             #[cfg(feature = "no-std")]

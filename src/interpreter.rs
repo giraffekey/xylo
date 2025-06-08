@@ -113,6 +113,7 @@ impl PartialEq for Value {
 #[derive(Debug)]
 pub struct Data {
     pub dimensions: (u32, u32),
+    pub max_depth: usize,
     pub perlin: Perlin,
 }
 
@@ -377,6 +378,10 @@ fn execute_block<'a>(
     let mut index = start;
 
     'a: while index < block.len() {
+        if stack.calls.len() > data.max_depth {
+            return Err(Error::MaxDepthReached);
+        }
+
         match &block[index] {
             Token::Literal(literal) => {
                 stack.operands.push(reduce_literal(literal)?);
@@ -762,6 +767,7 @@ pub fn execute(tree: Tree, config: Config) -> Result<Shape> {
     let perlin = Perlin::new(rng.random());
     let data = Data {
         dimensions: config.dimensions,
+        max_depth: config.max_depth,
         perlin,
     };
 
@@ -827,8 +833,8 @@ mod tests {
     #[test]
     fn test_binary_operation() {
         let config = Config {
-            dimensions: (400, 400),
             seed: Some([0; 32]),
+            ..Config::default()
         };
         let res = execute(
             parse(
@@ -862,8 +868,8 @@ square = ss (3 + 5) SQUARE
     #[test]
     fn test_let_statement() {
         let config = Config {
-            dimensions: (400, 400),
             seed: Some([0; 32]),
+            ..Config::default()
         };
         let res = execute(
             parse(
@@ -901,8 +907,8 @@ square =
     #[test]
     fn test_if_statement() {
         let config = Config {
-            dimensions: (400, 400),
             seed: Some([0; 32]),
+            ..Config::default()
         };
         let res = execute(
             parse(
@@ -940,8 +946,8 @@ shape is_square =
     #[test]
     fn test_match_statement() {
         let config = Config {
-            dimensions: (400, 400),
             seed: Some([0; 32]),
+            ..Config::default()
         };
         let res = execute(
             parse(
@@ -1002,8 +1008,8 @@ shape n =
     #[test]
     fn test_for_statement() {
         let config = Config {
-            dimensions: (400, 400),
             seed: Some([0; 32]),
+            ..Config::default()
         };
         let res = execute(
             parse(
@@ -1052,8 +1058,8 @@ shapes =
     #[test]
     fn test_loop_statement() {
         let config = Config {
-            dimensions: (400, 400),
             seed: Some([0; 32]),
+            ..Config::default()
         };
         let res = execute(
             parse(

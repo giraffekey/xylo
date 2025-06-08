@@ -20,6 +20,7 @@ pub enum Error {
     NegativeFactorial,
     OutOfBounds,
     NotFound,
+    MaxDepthReached,
     PngError(png::EncodingError),
     #[cfg(feature = "std")]
     FileError(std::io::Error),
@@ -46,6 +47,7 @@ impl ToString for Error {
             Error::NegativeFactorial => "Cannot get factorial of negative number.".into(),
             Error::OutOfBounds => "Index out of bounds.".into(),
             Error::NotFound => "Value not found.".into(),
+            Error::MaxDepthReached => "Max call stack depth reached.".into(),
             Error::PngError(e) => e.to_string(),
             #[cfg(feature = "std")]
             Error::FileError(e) => e.to_string(),
