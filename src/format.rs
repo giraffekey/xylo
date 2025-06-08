@@ -229,7 +229,7 @@ mod tests {
     fn can_execute(output: &str) -> bool {
         let config = Config {
             seed: Some([0; 32]),
-                ..Config::default()
+            ..Config::default()
         };
         parse(output).and_then(|tree| execute(tree, config)).is_ok()
     }

@@ -13,6 +13,7 @@ use crate::parser::parse;
 use crate::renderer::render;
 
 use base64::prelude::*;
+use itertools::Itertools;
 use png::{ColorType, Encoder};
 use tiny_skia::Pixmap;
 
@@ -36,13 +37,17 @@ impl Default for Config {
     }
 }
 
-pub fn generate_pixmap(input: &str, config: Config) -> Result<Pixmap> {
-    let tree = parse(input)?;
+pub fn generate_pixmap(input: String, config: Config) -> Result<Pixmap> {
+    let input: String = input
+        .lines()
+        .map(|line| line.split("#").nth(0).unwrap())
+        .join("\n");
+    let tree = parse(&input)?;
     let shape = execute(tree, config)?;
     Ok(render(shape, config.dimensions.0, config.dimensions.1)?)
 }
 
-pub fn generate_png_data(input: &str, config: Config) -> Result<Vec<u8>> {
+pub fn generate_png_data(input: String, config: Config) -> Result<Vec<u8>> {
     let pixmap = generate_pixmap(input, config)?;
 
     let mut buf = Vec::new();
@@ -57,7 +62,7 @@ pub fn generate_png_data(input: &str, config: Config) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-pub fn generate_data_uri(input: &str, config: Config) -> Result<String> {
+pub fn generate_data_uri(input: String, config: Config) -> Result<String> {
     let data = generate_png_data(input, config)?;
     let uri = format!("data:image/png;base64,{}", BASE64_STANDARD.encode(data));
     Ok(uri)
@@ -66,7 +71,7 @@ pub fn generate_data_uri(input: &str, config: Config) -> Result<String> {
 #[cfg(feature = "std")]
 pub fn generate_pixmap_from_file<I: AsRef<Path>>(input_path: I, config: Config) -> Result<Pixmap> {
     let code = fs::read_to_string(input_path).map_err(|e| Error::FileError(e))?;
-    generate_pixmap(&code, config)
+    generate_pixmap(code, config)
 }
 
 #[cfg(feature = "std")]
@@ -139,7 +144,8 @@ cols =
 rows i =
     for j in 0..10
         t (i * 40) (j * 40) (ss 4 (h (120 + i * 10) (sat 1 (l 0.5 SQUARE))))
-            ",
+            "
+            .into(),
             Config::default(),
         )
         .unwrap();
