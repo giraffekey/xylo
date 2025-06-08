@@ -21,7 +21,7 @@ Documentation: https://xylo-1.gitbook.io/docs
 root =
     l 0 FILL : ss 400 bouquet
 
-quality = 1000
+quality = 750
 
 bouquet =
     r 36 (ss 1.3 flower5)
