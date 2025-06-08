@@ -6,6 +6,8 @@ use alloc::{
     vec::Vec,
 };
 
+use crate::colors::color;
+
 use core::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
@@ -363,6 +365,10 @@ fn hex(input: &str) -> IResult<&str, Literal> {
     Ok((input, Literal::Hex([r, g, b])))
 }
 
+fn hex_color(input: &str) -> IResult<&str, Literal> {
+    map(color, Literal::Hex).parse(input)
+}
+
 fn shape(input: &str) -> IResult<&str, Literal> {
     map(
         alt((
@@ -490,6 +496,7 @@ fn literal(input: &str) -> IResult<&str, Literal> {
         line_cap,
         line_join,
         spread_mode,
+        hex_color,
     ))
     .parse(input)
 }

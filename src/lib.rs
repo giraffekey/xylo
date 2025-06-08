@@ -9,6 +9,7 @@ compile_error!("Enable either `std` or `no-std`, but not both!");
 #[cfg(not(any(feature = "std", feature = "no-std")))]
 compile_error!("Either `std` or `no-std` must be enabled!");
 
+mod colors;
 mod error;
 mod format;
 mod functions;
