@@ -109,18 +109,19 @@ mod tests {
     #[cfg(feature = "std")]
     fn test_generate_file() {
         let res = generate_file(
-            "example.xylo",
-            "test.png",
+            "test.xylo",
+            "test_generate_file.png",
             Config {
-                seed: None,
+                seed: Some([0; 32]),
                 ..Config::default()
             },
         );
         assert!(res.is_ok());
         assert_eq!(
             fs::read("test.png").unwrap(),
-            fs::read("example.png").unwrap()
+            fs::read("test_generate_file.png").unwrap()
         );
+        fs::remove_file("test_generate_file.png").unwrap();
     }
 
     #[test]

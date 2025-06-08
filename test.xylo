@@ -1,0 +1,14 @@
+root = hsl (rand * 360) 0.4 0.2 FILL : grid
+
+grid_size = 10
+
+grid = t (-width / 2.0) (-height / 2.0) (ss (float width / grid_size) (collect rows))
+
+rows =
+    for i in 0..grid_size
+        collect (cols i)
+
+cols i =
+    for j in 0..grid_size
+        hsl (rand * 360) 0.5 0.6 (
+        t (i + 0.5) (j + 0.5) (r (rand * 360) (ss 0.375 SQUARE)))
