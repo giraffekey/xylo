@@ -107,8 +107,8 @@ mod tests {
             "example.xylo",
             "test.png",
             Config {
-                dimensions: (800, 800),
                 seed: None,
+                ..Config::default()
             },
         );
         assert!(res.is_ok());
