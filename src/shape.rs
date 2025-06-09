@@ -32,6 +32,7 @@ pub static SQUARE: BasicShape = BasicShape::Square {
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
     style: Style::Fill(FillRule::Winding),
+    mask: false,
 };
 
 pub static CIRCLE: BasicShape = BasicShape::Circle {
@@ -44,6 +45,7 @@ pub static CIRCLE: BasicShape = BasicShape::Circle {
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
     style: Style::Fill(FillRule::Winding),
+    mask: false,
 };
 
 pub static TRIANGLE: BasicShape = BasicShape::Triangle {
@@ -54,11 +56,13 @@ pub static TRIANGLE: BasicShape = BasicShape::Triangle {
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
     style: Style::Fill(FillRule::Winding),
+    mask: false,
 };
 
 pub static FILL: BasicShape = BasicShape::Fill {
     zindex: None,
     color: Color::Solid(WHITE),
+    mask: false,
 };
 
 pub static EMPTY: BasicShape = BasicShape::Empty;
@@ -222,6 +226,7 @@ pub enum BasicShape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
+        mask: bool,
     },
     Circle {
         x: f32,
@@ -233,6 +238,7 @@ pub enum BasicShape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
+        mask: bool,
     },
     Triangle {
         points: [f32; 6],
@@ -242,10 +248,12 @@ pub enum BasicShape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
+        mask: bool,
     },
     Fill {
         zindex: Option<f32>,
         color: Color,
+        mask: bool,
     },
     Empty,
 }
@@ -261,6 +269,7 @@ pub enum Shape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
+        mask: bool,
     },
     Composite {
         a: Rc<RefCell<Shape>>,
@@ -273,6 +282,7 @@ pub enum Shape {
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
         style_overwrite: Option<Style>,
+        mask_overwrite: Option<bool>,
     },
     Collection {
         shapes: Vec<Rc<RefCell<Shape>>>,
@@ -284,6 +294,7 @@ pub enum Shape {
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
         style_overwrite: Option<Style>,
+        mask_overwrite: Option<bool>,
     },
 }
 
@@ -302,6 +313,7 @@ impl Shape {
                 blend_mode_overwrite,
                 anti_alias_overwrite,
                 style_overwrite,
+                mask_overwrite,
             } => Shape::Composite {
                 a: Rc::new(RefCell::new(a.borrow().deep_clone())),
                 b: Rc::new(RefCell::new(b.borrow().deep_clone())),
@@ -313,6 +325,7 @@ impl Shape {
                 blend_mode_overwrite: *blend_mode_overwrite,
                 anti_alias_overwrite: *anti_alias_overwrite,
                 style_overwrite: style_overwrite.clone(),
+                mask_overwrite: *mask_overwrite,
             },
             Self::Collection {
                 shapes,
@@ -324,6 +337,7 @@ impl Shape {
                 blend_mode_overwrite,
                 anti_alias_overwrite,
                 style_overwrite,
+                mask_overwrite,
             } => Shape::Collection {
                 shapes: shapes
                     .iter()
@@ -337,6 +351,7 @@ impl Shape {
                 blend_mode_overwrite: *blend_mode_overwrite,
                 anti_alias_overwrite: *anti_alias_overwrite,
                 style_overwrite: style_overwrite.clone(),
+                mask_overwrite: *mask_overwrite,
             },
         }
     }
@@ -1127,6 +1142,22 @@ impl Shape {
                 }
             },
             Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+        }
+    }
+
+    pub fn set_mask(&mut self, m: bool) {
+        match self {
+            Self::Basic(BasicShape::Square { mask, .. })
+            | Self::Basic(BasicShape::Circle { mask, .. })
+            | Self::Basic(BasicShape::Triangle { mask, .. })
+            | Self::Basic(BasicShape::Fill { mask, .. })
+            | Self::Path { mask, .. } => {
+                *mask = m;
+            }
+            Self::Composite { mask_overwrite, .. } | Self::Collection { mask_overwrite, .. } => {
+                *mask_overwrite = Some(m);
+            }
+            Self::Basic(BasicShape::Empty) => (),
         }
     }
 }

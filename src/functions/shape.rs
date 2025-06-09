@@ -25,6 +25,7 @@ builtin_function!(compose => {
                     blend_mode,
                     anti_alias,
                     style,
+                    mask,
                 },
                 Shape::Path {
                     segments: b,
@@ -43,6 +44,7 @@ builtin_function!(compose => {
                     blend_mode: *blend_mode,
                     anti_alias: *anti_alias,
                     style: style.clone(),
+                    mask: *mask,
                 }
             }
             _ => Shape::Composite {
@@ -56,6 +58,7 @@ builtin_function!(compose => {
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
                 style_overwrite: None,
+                mask_overwrite: None,
             },
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -89,6 +92,7 @@ builtin_function!(collect => {
             let mut blend_mode = BlendMode::SourceOver;
             let mut anti_alias = true;
             let mut style = Style::default();
+            let mut mask = false;
 
             for path in shapes {
                 match &*path.borrow() {
@@ -100,6 +104,7 @@ builtin_function!(collect => {
                         blend_mode: other_blend_mode,
                         anti_alias: other_anti_alias,
                         style: other_style,
+                        mask: other_mask,
                     } => {
                         segments.extend(other_segments);
                         transform = transform.post_concat(*other_transform);
@@ -108,6 +113,7 @@ builtin_function!(collect => {
                         blend_mode = *other_blend_mode;
                         anti_alias = *other_anti_alias;
                         style = other_style.clone();
+                        mask = *other_mask;
                     }
                     _ => unreachable!(),
                 }
@@ -121,6 +127,7 @@ builtin_function!(collect => {
                 blend_mode,
                 anti_alias,
                 style,
+                mask,
             }
         } else {
             Shape::Collection {
@@ -133,6 +140,7 @@ builtin_function!(collect => {
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
                 style_overwrite: None,
+                mask_overwrite: None,
             }
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -246,6 +254,20 @@ builtin_function!(dash => {
 builtin_function!(no_dash => {
     [Value::Shape(shape)] => {
         shape.borrow_mut().set_dash(None);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(mask => {
+    [Value::Shape(shape)] => {
+        shape.borrow_mut().set_mask(true);
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(unmask => {
+    [Value::Shape(shape)] => {
+        shape.borrow_mut().set_mask(false);
         Value::Shape(shape.clone())
     }
 });

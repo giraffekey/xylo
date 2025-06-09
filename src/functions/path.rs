@@ -36,6 +36,7 @@ builtin_function!(move_to => {
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
             style: Style::default(),
+            mask: false,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -64,6 +65,7 @@ builtin_function!(line_to => {
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
             style: Style::default(),
+            mask: false,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -104,6 +106,7 @@ builtin_function!(quad_to => {
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
             style: Style::default(),
+            mask: false,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -156,6 +159,7 @@ builtin_function!(cubic_to => {
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
             style: Style::default(),
+            mask: false,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -172,6 +176,7 @@ builtin_function!(close => {
             blend_mode: BlendMode::SourceOver,
             anti_alias: true,
             style: Style::default(),
+            mask: false,
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }

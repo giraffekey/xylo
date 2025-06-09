@@ -860,7 +860,8 @@ square = ss (3 + 5) SQUARE
                 color: Color::Solid(WHITE),
                 blend_mode: BlendMode::SourceOver,
                 anti_alias: true,
-                style: Style::default()
+                style: Style::default(),
+                mask: false,
             })
         );
     }
@@ -899,7 +900,8 @@ square =
                 color: Color::Solid(WHITE),
                 blend_mode: BlendMode::SourceOver,
                 anti_alias: true,
-                style: Style::default()
+                style: Style::default(),
+                mask: false,
             })
         );
     }
@@ -939,6 +941,7 @@ shape is_square =
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
                 style_overwrite: None,
+                mask_overwrite: None,
             }
         );
     }
@@ -981,6 +984,7 @@ shape n =
                         blend_mode_overwrite: None,
                         anti_alias_overwrite: None,
                         style_overwrite: None,
+                        mask_overwrite: None,
                     })),
                     b: Rc::new(RefCell::new(Shape::Basic(TRIANGLE.clone()))),
                     transform: IDENTITY,
@@ -991,6 +995,7 @@ shape n =
                     blend_mode_overwrite: None,
                     anti_alias_overwrite: None,
                     style_overwrite: None,
+                    mask_overwrite: None,
                 })),
                 b: Rc::new(RefCell::new(Shape::Basic(EMPTY.clone()))),
                 transform: IDENTITY,
@@ -1001,6 +1006,7 @@ shape n =
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
                 style_overwrite: None,
+                mask_overwrite: None,
             }
         );
     }
@@ -1051,6 +1057,7 @@ shapes =
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
                 style_overwrite: None,
+                mask_overwrite: None,
             }
         );
     }
@@ -1090,6 +1097,7 @@ shapes =
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
                         style: Style::default(),
+                        mask: false,
                     }))),
                     Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
                         x: -1.0,
@@ -1102,6 +1110,7 @@ shapes =
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
                         style: Style::default(),
+                        mask: false,
                     }))),
                     Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
                         x: -1.0,
@@ -1114,6 +1123,7 @@ shapes =
                         blend_mode: BlendMode::SourceOver,
                         anti_alias: true,
                         style: Style::default(),
+                        mask: false,
                     }))),
                 ],
                 transform: IDENTITY,
@@ -1124,6 +1134,7 @@ shapes =
                 blend_mode_overwrite: None,
                 anti_alias_overwrite: None,
                 style_overwrite: None,
+                mask_overwrite: None,
             }
         );
     }
