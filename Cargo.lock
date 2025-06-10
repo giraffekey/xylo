@@ -966,7 +966,7 @@ dependencies = [
 
 [[package]]
 name = "xylo-lang"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ahash",
  "base64",
