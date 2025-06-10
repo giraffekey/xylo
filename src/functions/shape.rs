@@ -7,7 +7,9 @@ use alloc::{rc::Rc, vec::Vec};
 use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::interpreter::{Data, Value};
-use crate::shape::{BasicShape, Color, ColorChange, HslaChange, Shape, Style, IDENTITY, WHITE};
+use crate::shape::{
+    BasicShape, Color, ColorChange, HslaChange, PathSegment, Shape, Style, IDENTITY, WHITE,
+};
 use core::cell::RefCell;
 
 use rand_chacha::ChaCha8Rng;
@@ -258,5 +260,54 @@ builtin_function!(mask => {
     [Value::Shape(mask), Value::Shape(shape)] => {
         shape.borrow_mut().set_mask(mask.clone());
         Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(voronoi data => {
+    [Value::List(sites), boxsize] => |data: &Data| {
+        use voronoi::{voronoi, make_polygons, Point};
+
+        let half_width = data.dimensions.0 as f64 / 2.0;
+        let half_height = data.dimensions.1 as f64 / 2.0;
+
+        let sites = match sites.get(0) {
+            Some(Value::List(_)) => sites.iter().map(|value| match value {
+                Value::List(point) => match point[..] {
+                    [Value::Integer(x), Value::Integer(y)] => Ok(Point::new(x as f64 + half_width, y as f64 + half_height)),
+                    [Value::Float(x), Value::Float(y)] => Ok(Point::new(x as f64 + half_width, y as f64 + half_height)),
+                    _ => Err(Error::InvalidArgument("voronoi".into())),
+                }
+                    _ => Err(Error::InvalidArgument("voronoi".into())),
+            }).collect::<Result<Vec<_>>>()?,
+            _ => return Err(Error::InvalidArgument("voronoi".into())),
+        };
+
+        let boxsize = match boxsize {
+            Value::Integer(boxsize) => *boxsize as f64,
+            Value::Float(boxsize)   => *boxsize as f64,
+            _ => return Err(Error::InvalidArgument("voronoi".into())),
+        };
+
+        let polygons = make_polygons(&voronoi(sites, boxsize));
+        let shapes = polygons.iter().map(|points| {
+            let mut segments = vec![PathSegment::MoveTo((*points[0].x - half_width) as f32, (*points[0].y - half_height) as f32)];
+            for point in &points[1..] {
+                segments.push(PathSegment::LineTo((*point.x - half_width) as f32, (*point.y - half_height) as f32));
+            }
+            segments.push(PathSegment::Close);
+
+            Value::Shape(Rc::new(RefCell::new(Shape::Path {
+                segments,
+                transform: IDENTITY,
+                zindex: None,
+                color: Color::Solid(WHITE),
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+                style: Style::default(),
+                mask: None,
+            })))
+        }).collect();
+
+        Ok(Value::List(shapes))
     }
 });

@@ -209,7 +209,9 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
                 ShapeKind::Fill => FILL.clone(),
                 ShapeKind::Empty => EMPTY.clone(),
             };
-            Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(shape, None)))))
+            Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(
+                shape, None,
+            )))))
         }
         Literal::BlendMode(bm) => Ok(Value::BlendMode(*bm)),
         Literal::LineCap(lc) => Ok(Value::LineCap(*lc)),
@@ -892,18 +894,21 @@ square =
         assert!(res.is_ok());
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
-                x: -1.0,
-                y: -1.0,
-                width: 2.0,
-                height: 2.0,
-                transform: Transform::from_scale(30.0, 30.0),
-                zindex: None,
-                color: Color::Solid(WHITE),
-                blend_mode: BlendMode::SourceOver,
-                anti_alias: true,
-                style: Style::default(),
-            }, None))),
+            Rc::new(RefCell::new(Shape::Basic(
+                BasicShape::Square {
+                    x: -1.0,
+                    y: -1.0,
+                    width: 2.0,
+                    height: 2.0,
+                    transform: Transform::from_scale(30.0, 30.0),
+                    zindex: None,
+                    color: Color::Solid(WHITE),
+                    blend_mode: BlendMode::SourceOver,
+                    anti_alias: true,
+                    style: Style::default(),
+                },
+                None
+            ))),
         );
     }
 
@@ -1087,42 +1092,51 @@ shapes =
             res.unwrap(),
             Rc::new(RefCell::new(Shape::Collection {
                 shapes: vec![
-                    Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
-                        x: -1.0,
-                        y: -1.0,
-                        width: 2.0,
-                        height: 2.0,
-                        transform: Transform::from_scale(83.69197, 83.69197),
-                        zindex: None,
-                        color: Color::Solid(WHITE),
-                        blend_mode: BlendMode::SourceOver,
-                        anti_alias: true,
-                        style: Style::default(),
-                    }, None))),
-                    Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
-                        x: -1.0,
-                        y: -1.0,
-                        width: 2.0,
-                        height: 2.0,
-                        transform: Transform::from_scale(90.9063, 90.9063),
-                        zindex: None,
-                        color: Color::Solid(WHITE),
-                        blend_mode: BlendMode::SourceOver,
-                        anti_alias: true,
-                        style: Style::default(),
-                    }, None))),
-                    Rc::new(RefCell::new(Shape::Basic(BasicShape::Square {
-                        x: -1.0,
-                        y: -1.0,
-                        width: 2.0,
-                        height: 2.0,
-                        transform: Transform::from_scale(63.14245, 63.14245),
-                        zindex: None,
-                        color: Color::Solid(WHITE),
-                        blend_mode: BlendMode::SourceOver,
-                        anti_alias: true,
-                        style: Style::default(),
-                    }, None))),
+                    Rc::new(RefCell::new(Shape::Basic(
+                        BasicShape::Square {
+                            x: -1.0,
+                            y: -1.0,
+                            width: 2.0,
+                            height: 2.0,
+                            transform: Transform::from_scale(83.69197, 83.69197),
+                            zindex: None,
+                            color: Color::Solid(WHITE),
+                            blend_mode: BlendMode::SourceOver,
+                            anti_alias: true,
+                            style: Style::default(),
+                        },
+                        None
+                    ))),
+                    Rc::new(RefCell::new(Shape::Basic(
+                        BasicShape::Square {
+                            x: -1.0,
+                            y: -1.0,
+                            width: 2.0,
+                            height: 2.0,
+                            transform: Transform::from_scale(90.9063, 90.9063),
+                            zindex: None,
+                            color: Color::Solid(WHITE),
+                            blend_mode: BlendMode::SourceOver,
+                            anti_alias: true,
+                            style: Style::default(),
+                        },
+                        None
+                    ))),
+                    Rc::new(RefCell::new(Shape::Basic(
+                        BasicShape::Square {
+                            x: -1.0,
+                            y: -1.0,
+                            width: 2.0,
+                            height: 2.0,
+                            transform: Transform::from_scale(63.14245, 63.14245),
+                            zindex: None,
+                            color: Color::Solid(WHITE),
+                            blend_mode: BlendMode::SourceOver,
+                            anti_alias: true,
+                            style: Style::default(),
+                        },
+                        None
+                    ))),
                 ],
                 transform: IDENTITY,
                 zindex_overwrite: None,
