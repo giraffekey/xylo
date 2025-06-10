@@ -1,8 +1,8 @@
 #[cfg(feature = "std")]
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use alloc::{cell::RefCell, rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 
 use crate::error::Result;
 use crate::shape::{
@@ -10,7 +10,7 @@ use crate::shape::{
     WHITE,
 };
 
-use core::ops::Add;
+use core::{cell::RefCell, ops::Add};
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
     BlendMode, FillRule, GradientStop, LinearGradient, Mask, MaskType, Paint, Path, PathBuilder,
