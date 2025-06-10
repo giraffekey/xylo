@@ -2,7 +2,7 @@
 use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec, vec::Vec};
 
 use crate::builtin_function;
 use crate::error::{Error, Result};
