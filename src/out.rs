@@ -44,7 +44,7 @@ pub fn generate_pixmap(input: String, config: Config) -> Result<Pixmap> {
         .join("\n");
     let tree = parse(&input)?;
     let shape = execute(tree, config)?;
-    Ok(render(shape, config.dimensions.0, config.dimensions.1)?)
+    render(shape, config.dimensions.0, config.dimensions.1)
 }
 
 pub fn generate_png_data(input: String, config: Config) -> Result<Vec<u8>> {

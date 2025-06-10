@@ -1,8 +1,8 @@
 #[cfg(feature = "std")]
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 #[cfg(feature = "no-std")]
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{cell::RefCell, rc::Rc, vec::Vec};
 
 use crate::error::Result;
 use crate::shape::{
@@ -18,13 +18,14 @@ use tiny_skia::{
 };
 
 #[derive(Debug, Clone)]
-enum InnerShapeData<'a> {
+enum ShapeData<'a> {
     FillPath {
         path: Path,
         transform: Transform,
         fill_rule: FillRule,
         paint: Paint<'a>,
         zindex: f32,
+        mask: Option<Vec<ShapeData<'a>>>,
     },
     StrokePath {
         path: Path,
@@ -32,6 +33,7 @@ enum InnerShapeData<'a> {
         stroke: Stroke,
         paint: Paint<'a>,
         zindex: f32,
+        mask: Option<Vec<ShapeData<'a>>>,
     },
     Fill {
         color: tiny_skia::Color,
@@ -43,27 +45,13 @@ enum InnerShapeData<'a> {
     },
 }
 
-impl InnerShapeData<'_> {
-    pub fn zindex(&self) -> f32 {
-        match self {
-            InnerShapeData::FillPath { zindex, .. }
-            | InnerShapeData::StrokePath { zindex, .. }
-            | InnerShapeData::Fill { zindex, .. }
-            | InnerShapeData::FillPaint { zindex, .. } => *zindex,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum ShapeData<'a> {
-    Render(InnerShapeData<'a>),
-    Mask(InnerShapeData<'a>),
-}
-
 impl ShapeData<'_> {
     pub fn zindex(&self) -> f32 {
         match self {
-            ShapeData::Render(inner) | ShapeData::Mask(inner) => inner.zindex(),
+            ShapeData::FillPath { zindex, .. }
+            | ShapeData::StrokePath { zindex, .. }
+            | ShapeData::Fill { zindex, .. }
+            | ShapeData::FillPaint { zindex, .. } => *zindex,
         }
     }
 }
@@ -184,8 +172,11 @@ fn overwrite_style(style: Style, style_overwrite: Option<Style>) -> Style {
     style_overwrite.unwrap_or(style)
 }
 
-fn overwrite_mask(mask: bool, mask_overwrite: Option<bool>) -> bool {
-    mask_overwrite.unwrap_or(mask)
+fn overwrite_mask(
+    mask: Option<Rc<RefCell<Shape>>>,
+    mask_overwrite: Option<Rc<RefCell<Shape>>>,
+) -> Option<Rc<RefCell<Shape>>> {
+    mask_overwrite.or(mask)
 }
 
 fn combine_shift<T: Add<Output = T> + Copy>(shift: Option<T>, curr: Option<T>) -> Option<T> {
@@ -267,15 +258,15 @@ fn resolve_style_overwrite(
 }
 
 fn resolve_mask_overwrite(
-    mask_overwrite: Option<bool>,
-    curr_mask_overwrite: Option<bool>,
-) -> Option<bool> {
+    mask_overwrite: Option<Rc<RefCell<Shape>>>,
+    curr_mask_overwrite: Option<Rc<RefCell<Shape>>>,
+) -> Option<Rc<RefCell<Shape>>> {
     mask_overwrite.or(curr_mask_overwrite)
 }
 
-fn convert_shape(
+fn convert_shape_rec(
     data: &mut Vec<ShapeData>,
-    shape: Shape,
+    shape: Rc<RefCell<Shape>>,
     parent_transform: Transform,
     zindex_overwrite: Option<f32>,
     zindex_shift: Option<f32>,
@@ -284,116 +275,126 @@ fn convert_shape(
     blend_mode_overwrite: Option<BlendMode>,
     anti_alias_overwrite: Option<bool>,
     style_overwrite: Option<Style>,
-    mask_overwrite: Option<bool>,
+    mask_overwrite: Option<Rc<RefCell<Shape>>>,
 ) -> Result<()> {
-    match shape {
-        Shape::Basic(BasicShape::Square {
-            x,
-            y,
-            width: w,
-            height: h,
-            transform,
-            zindex,
-            color,
-            blend_mode,
-            anti_alias,
-            style,
+    match &*shape.borrow() {
+        Shape::Basic(
+            BasicShape::Square {
+                x,
+                y,
+                width: w,
+                height: h,
+                transform,
+                zindex,
+                color,
+                blend_mode,
+                anti_alias,
+                style,
+            },
             mask,
-        }) => {
-            let path = PathBuilder::from_rect(Rect::from_xywh(x, y, w, h).unwrap());
+        ) => {
+            let path = PathBuilder::from_rect(Rect::from_xywh(*x, *y, *w, *h).unwrap());
             let transform = transform.post_concat(parent_transform);
-            let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
-            let color = overwrite_color(color, color_overwrite, color_shift);
-            let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-            let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
-            let style = overwrite_style(style, style_overwrite);
-            let mask = overwrite_mask(mask, mask_overwrite);
+            let zindex = overwrite_zindex(*zindex, zindex_overwrite, zindex_shift);
+            let color = overwrite_color(color.clone(), color_overwrite, color_shift);
+            let blend_mode = overwrite_blend_mode(*blend_mode, blend_mode_overwrite);
+            let anti_alias = overwrite_anti_alias(*anti_alias, anti_alias_overwrite);
+            let style = overwrite_style(style.clone(), style_overwrite);
             let paint = match color {
                 Color::Solid(color) => solid_paint(Rgba::from_color(color), blend_mode, anti_alias),
                 Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
             };
 
-            let inner = match style {
-                Style::Fill(fill_rule) => InnerShapeData::FillPath {
+            let mask = overwrite_mask(mask.clone(), mask_overwrite);
+            let mask = mask.map(|shape| {
+                let mut mask_data = Vec::new();
+                convert_shape(&mut mask_data, shape).unwrap();
+                mask_data
+            });
+
+            data.push(match style {
+                Style::Fill(fill_rule) => ShapeData::FillPath {
                     path,
                     transform,
                     fill_rule,
                     paint,
                     zindex,
+                    mask,
                 },
-                Style::Stroke(stroke) => InnerShapeData::StrokePath {
+                Style::Stroke(stroke) => ShapeData::StrokePath {
                     path,
                     transform,
                     stroke,
                     paint,
                     zindex,
+                    mask,
                 },
-            };
-
-            if mask {
-                data.push(ShapeData::Mask(inner));
-            } else {
-                data.push(ShapeData::Render(inner));
-            }
+            });
         }
-        Shape::Basic(BasicShape::Circle {
-            x,
-            y,
-            radius,
-            transform,
-            zindex,
-            color,
-            blend_mode,
-            anti_alias,
-            style,
+        Shape::Basic(
+            BasicShape::Circle {
+                x,
+                y,
+                radius,
+                transform,
+                zindex,
+                color,
+                blend_mode,
+                anti_alias,
+                style,
+            },
             mask,
-        }) => {
-            let path = PathBuilder::from_circle(x, y, radius).unwrap();
+        ) => {
+            let path = PathBuilder::from_circle(*x, *y, *radius).unwrap();
             let transform = transform.post_concat(parent_transform);
-            let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
-            let color = overwrite_color(color, color_overwrite, color_shift);
-            let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-            let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
-            let style = overwrite_style(style, style_overwrite);
-            let mask = overwrite_mask(mask, mask_overwrite);
+            let zindex = overwrite_zindex(*zindex, zindex_overwrite, zindex_shift);
+            let color = overwrite_color(color.clone(), color_overwrite, color_shift);
+            let blend_mode = overwrite_blend_mode(*blend_mode, blend_mode_overwrite);
+            let anti_alias = overwrite_anti_alias(*anti_alias, anti_alias_overwrite);
+            let style = overwrite_style(style.clone(), style_overwrite);
             let paint = match color {
                 Color::Solid(color) => solid_paint(Rgba::from_color(color), blend_mode, anti_alias),
                 Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
             };
 
-            let inner = match style {
-                Style::Fill(fill_rule) => InnerShapeData::FillPath {
+            let mask = overwrite_mask(mask.clone(), mask_overwrite);
+            let mask = mask.map(|shape| {
+                let mut mask_data = Vec::new();
+                convert_shape(&mut mask_data, shape).unwrap();
+                mask_data
+            });
+
+            data.push(match style {
+                Style::Fill(fill_rule) => ShapeData::FillPath {
                     path,
                     transform,
                     fill_rule,
                     paint,
                     zindex,
+                    mask,
                 },
-                Style::Stroke(stroke) => InnerShapeData::StrokePath {
+                Style::Stroke(stroke) => ShapeData::StrokePath {
                     path,
                     transform,
                     stroke,
                     paint,
                     zindex,
+                    mask,
                 },
-            };
-
-            if mask {
-                data.push(ShapeData::Mask(inner));
-            } else {
-                data.push(ShapeData::Render(inner));
-            }
+            });
         }
-        Shape::Basic(BasicShape::Triangle {
-            points,
-            transform,
-            zindex,
-            color,
-            blend_mode,
-            anti_alias,
-            style,
+        Shape::Basic(
+            BasicShape::Triangle {
+                points,
+                transform,
+                zindex,
+                color,
+                blend_mode,
+                anti_alias,
+                style,
+            },
             mask,
-        }) => {
+        ) => {
             let mut pb = PathBuilder::new();
             pb.move_to(points[0], points[1]);
             pb.line_to(points[2], points[3]);
@@ -402,67 +403,58 @@ fn convert_shape(
             let path = pb.finish().unwrap();
 
             let transform = transform.post_concat(parent_transform);
-            let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
-            let color = overwrite_color(color, color_overwrite, color_shift);
-            let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-            let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
-            let style = overwrite_style(style, style_overwrite);
-            let mask = overwrite_mask(mask, mask_overwrite);
+            let zindex = overwrite_zindex(*zindex, zindex_overwrite, zindex_shift);
+            let color = overwrite_color(color.clone(), color_overwrite, color_shift);
+            let blend_mode = overwrite_blend_mode(*blend_mode, blend_mode_overwrite);
+            let anti_alias = overwrite_anti_alias(*anti_alias, anti_alias_overwrite);
+            let style = overwrite_style(style.clone(), style_overwrite);
             let paint = match color {
                 Color::Solid(color) => solid_paint(Rgba::from_color(color), blend_mode, anti_alias),
                 Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
             };
 
-            let inner = match style {
-                Style::Fill(fill_rule) => InnerShapeData::FillPath {
+            let mask = overwrite_mask(mask.clone(), mask_overwrite);
+            let mask = mask.map(|shape| {
+                let mut mask_data = Vec::new();
+                convert_shape(&mut mask_data, shape).unwrap();
+                mask_data
+            });
+
+            data.push(match style {
+                Style::Fill(fill_rule) => ShapeData::FillPath {
                     path,
                     transform,
                     fill_rule,
                     paint,
                     zindex,
+                    mask,
                 },
-                Style::Stroke(stroke) => InnerShapeData::StrokePath {
+                Style::Stroke(stroke) => ShapeData::StrokePath {
                     path,
                     transform,
                     stroke,
                     paint,
                     zindex,
+                    mask,
                 },
-            };
-
-            if mask {
-                data.push(ShapeData::Mask(inner));
-            } else {
-                data.push(ShapeData::Render(inner));
-            }
+            });
         }
-        Shape::Basic(BasicShape::Fill {
-            zindex,
-            color,
-            mask,
-        }) => {
+        Shape::Basic(BasicShape::Fill { zindex, color }, _) => {
             let zindex = zindex.unwrap_or(0.0);
-            let color = overwrite_color(color, color_overwrite, color_shift);
-            let mask = overwrite_mask(mask, mask_overwrite);
+            let color = overwrite_color(color.clone(), color_overwrite, color_shift);
 
-            let inner = match color {
+            data.push(match color {
                 Color::Solid(color) => {
                     let color = convert_color(Rgba::from_color(color));
-                    InnerShapeData::Fill { zindex, color }
+                    ShapeData::Fill { zindex, color }
                 }
                 Color::Gradient(gradient) => {
                     let paint = gradient_paint(gradient, BlendMode::SourceOver, true);
-                    InnerShapeData::FillPaint { zindex, paint }
+                    ShapeData::FillPaint { zindex, paint }
                 }
-            };
-
-            if mask {
-                data.push(ShapeData::Mask(inner));
-            } else {
-                data.push(ShapeData::Render(inner));
-            }
+            });
         }
-        Shape::Basic(BasicShape::Empty) => (),
+        Shape::Basic(BasicShape::Empty, _) => (),
         Shape::Path {
             segments,
             transform,
@@ -476,10 +468,12 @@ fn convert_shape(
             let mut pb = PathBuilder::new();
             for segment in segments {
                 match segment {
-                    PathSegment::MoveTo(x, y) => pb.move_to(x, y),
-                    PathSegment::LineTo(x, y) => pb.line_to(x, y),
-                    PathSegment::QuadTo(x1, y1, x, y) => pb.quad_to(x1, y1, x, y),
-                    PathSegment::CubicTo(x1, y1, x2, y2, x, y) => pb.cubic_to(x1, y1, x2, y2, x, y),
+                    PathSegment::MoveTo(x, y) => pb.move_to(*x, *y),
+                    PathSegment::LineTo(x, y) => pb.line_to(*x, *y),
+                    PathSegment::QuadTo(x1, y1, x, y) => pb.quad_to(*x1, *y1, *x, *y),
+                    PathSegment::CubicTo(x1, y1, x2, y2, x, y) => {
+                        pb.cubic_to(*x1, *y1, *x2, *y2, *x, *y)
+                    }
                     PathSegment::Close => pb.close(),
                 }
             }
@@ -487,12 +481,11 @@ fn convert_shape(
 
             if let Some(path) = path {
                 let transform = transform.post_concat(parent_transform);
-                let zindex = overwrite_zindex(zindex, zindex_overwrite, zindex_shift);
-                let color = overwrite_color(color, color_overwrite, color_shift);
-                let blend_mode = overwrite_blend_mode(blend_mode, blend_mode_overwrite);
-                let anti_alias = overwrite_anti_alias(anti_alias, anti_alias_overwrite);
-                let style = overwrite_style(style, style_overwrite);
-                let mask = overwrite_mask(mask, mask_overwrite);
+                let zindex = overwrite_zindex(*zindex, zindex_overwrite, zindex_shift);
+                let color = overwrite_color(color.clone(), color_overwrite, color_shift);
+                let blend_mode = overwrite_blend_mode(*blend_mode, blend_mode_overwrite);
+                let anti_alias = overwrite_anti_alias(*anti_alias, anti_alias_overwrite);
+                let style = overwrite_style(style.clone(), style_overwrite);
                 let paint = match color {
                     Color::Solid(color) => {
                         solid_paint(Rgba::from_color(color), blend_mode, anti_alias)
@@ -500,28 +493,31 @@ fn convert_shape(
                     Color::Gradient(gradient) => gradient_paint(gradient, blend_mode, anti_alias),
                 };
 
-                let inner = match style {
-                    Style::Fill(fill_rule) => InnerShapeData::FillPath {
+                let mask = overwrite_mask(mask.clone(), mask_overwrite);
+                let mask = mask.map(|shape| {
+                    let mut mask_data = Vec::new();
+                    convert_shape(&mut mask_data, shape).unwrap();
+                    mask_data
+                });
+
+                data.push(match style {
+                    Style::Fill(fill_rule) => ShapeData::FillPath {
                         path,
                         transform,
                         fill_rule,
                         paint,
                         zindex,
+                        mask,
                     },
-                    Style::Stroke(stroke) => InnerShapeData::StrokePath {
+                    Style::Stroke(stroke) => ShapeData::StrokePath {
                         path,
                         transform,
                         stroke,
                         paint,
                         zindex,
+                        mask,
                     },
-                };
-
-                if mask {
-                    data.push(ShapeData::Mask(inner));
-                } else {
-                    data.push(ShapeData::Render(inner));
-                }
+                });
             }
         }
         Shape::Composite {
@@ -541,26 +537,27 @@ fn convert_shape(
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
                 zindex_overwrite,
                 zindex_shift,
-                curr_zindex_overwrite,
-                curr_zindex_shift,
+                *curr_zindex_overwrite,
+                *curr_zindex_shift,
             );
             let (color_overwrite, color_shift) = resolve_color_overwrites(
                 color_overwrite,
                 color_shift,
-                curr_color_overwrite,
-                curr_color_shift,
+                curr_color_overwrite.clone(),
+                *curr_color_shift,
             );
             let blend_mode_overwrite =
-                resolve_blend_mode_overwrite(blend_mode_overwrite, curr_blend_mode_overwrite);
+                resolve_blend_mode_overwrite(blend_mode_overwrite, *curr_blend_mode_overwrite);
             let anti_alias_overwrite =
-                resolve_anti_alias_overwrite(anti_alias_overwrite, curr_anti_alias_overwrite);
-            let style_overwrite = resolve_style_overwrite(style_overwrite, curr_style_overwrite);
-            let mask_overwrite = resolve_mask_overwrite(mask_overwrite, curr_mask_overwrite);
+                resolve_anti_alias_overwrite(anti_alias_overwrite, *curr_anti_alias_overwrite);
+            let style_overwrite =
+                resolve_style_overwrite(style_overwrite, curr_style_overwrite.clone());
+            let mask_overwrite =
+                resolve_mask_overwrite(mask_overwrite, curr_mask_overwrite.clone());
 
-            let a = Rc::try_unwrap(a).unwrap().into_inner();
-            convert_shape(
+            convert_shape_rec(
                 data,
-                a,
+                a.clone(),
                 transform,
                 zindex_overwrite,
                 zindex_shift,
@@ -569,12 +566,11 @@ fn convert_shape(
                 blend_mode_overwrite,
                 anti_alias_overwrite,
                 style_overwrite.clone(),
-                mask_overwrite,
+                mask_overwrite.clone(),
             )?;
-            let b = Rc::try_unwrap(b).unwrap().into_inner();
-            convert_shape(
+            convert_shape_rec(
                 data,
-                b,
+                b.clone(),
                 transform,
                 zindex_overwrite,
                 zindex_shift,
@@ -602,27 +598,28 @@ fn convert_shape(
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
                 zindex_overwrite,
                 zindex_shift,
-                curr_zindex_overwrite,
-                curr_zindex_shift,
+                *curr_zindex_overwrite,
+                *curr_zindex_shift,
             );
             let (color_overwrite, color_shift) = resolve_color_overwrites(
                 color_overwrite,
                 color_shift,
-                curr_color_overwrite,
-                curr_color_shift,
+                curr_color_overwrite.clone(),
+                *curr_color_shift,
             );
             let blend_mode_overwrite =
-                resolve_blend_mode_overwrite(blend_mode_overwrite, curr_blend_mode_overwrite);
+                resolve_blend_mode_overwrite(blend_mode_overwrite, *curr_blend_mode_overwrite);
             let anti_alias_overwrite =
-                resolve_anti_alias_overwrite(anti_alias_overwrite, curr_anti_alias_overwrite);
-            let style_overwrite = resolve_style_overwrite(style_overwrite, curr_style_overwrite);
-            let mask_overwrite = resolve_mask_overwrite(mask_overwrite, curr_mask_overwrite);
+                resolve_anti_alias_overwrite(anti_alias_overwrite, *curr_anti_alias_overwrite);
+            let style_overwrite =
+                resolve_style_overwrite(style_overwrite, curr_style_overwrite.clone());
+            let mask_overwrite =
+                resolve_mask_overwrite(mask_overwrite, curr_mask_overwrite.clone());
 
             for shape in shapes {
-                let shape = Rc::try_unwrap(shape).unwrap().into_inner();
-                convert_shape(
+                convert_shape_rec(
                     data,
-                    shape,
+                    shape.clone(),
                     transform,
                     zindex_overwrite,
                     zindex_shift,
@@ -631,7 +628,7 @@ fn convert_shape(
                     blend_mode_overwrite,
                     anti_alias_overwrite,
                     style_overwrite.clone(),
-                    mask_overwrite,
+                    mask_overwrite.clone(),
                 )?;
             }
         }
@@ -639,57 +636,9 @@ fn convert_shape(
     Ok(())
 }
 
-fn render_to_pixmap(
-    inner: InnerShapeData,
-    pixmap: &mut Pixmap,
-    width: f32,
-    height: f32,
-    mask: Option<&Mask>,
-) {
-    match inner {
-        InnerShapeData::FillPath {
-            path,
-            transform,
-            fill_rule,
-            paint,
-            ..
-        } => {
-            let transform = transform
-                .post_scale(1.0, -1.0)
-                .post_translate(width / 2.0, height / 2.0);
-            pixmap.fill_path(&path, &paint, fill_rule, transform, mask);
-        }
-        InnerShapeData::StrokePath {
-            path,
-            transform,
-            stroke,
-            paint,
-            ..
-        } => {
-            let transform = transform
-                .post_scale(1.0, -1.0)
-                .post_translate(width / 2.0, height / 2.0);
-            pixmap.stroke_path(&path, &paint, &stroke, transform, mask);
-        }
-        InnerShapeData::Fill { color, .. } => {
-            pixmap.fill(color);
-        }
-        InnerShapeData::FillPaint { paint, .. } => {
-            let path = PathBuilder::from_rect(
-                Rect::from_xywh(-width / 2.0, -height / 2.0, width, height).unwrap(),
-            );
-            let transform = IDENTITY
-                .post_scale(1.0, -1.0)
-                .post_translate(width / 2.0, height / 2.0);
-            pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
-        }
-    }
-}
-
-pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
-    let mut data = Vec::new();
-    convert_shape(
-        &mut data,
+fn convert_shape(data: &mut Vec<ShapeData>, shape: Rc<RefCell<Shape>>) -> Result<()> {
+    convert_shape_rec(
+        data,
         shape,
         IDENTITY,
         None,
@@ -700,40 +649,82 @@ pub fn render(shape: Shape, width: u32, height: u32) -> Result<Pixmap> {
         None,
         None,
         None,
-    )?;
-    data.sort_by(|a, b| a.zindex().partial_cmp(&b.zindex()).unwrap());
+    )
+}
 
-    let mut mask_pixmap = Pixmap::new(width, height).unwrap();
-    let mut found = false;
-    for shape_data in data.clone() {
-        match shape_data {
-            ShapeData::Mask(inner) => {
-                found = true;
-                render_to_pixmap(inner, &mut mask_pixmap, width as f32, height as f32, None);
-            }
-            ShapeData::Render(_) => (),
+fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, height: u32) {
+    match shape_data {
+        ShapeData::FillPath {
+            path,
+            transform,
+            fill_rule,
+            paint,
+            mask,
+            ..
+        } => {
+            let mask = mask.map(|data| {
+                let mut pixmap = Pixmap::new(width, height).unwrap();
+                for shape_data in data {
+                    render_to_pixmap(shape_data, &mut pixmap, width, height);
+                }
+                Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
+            });
+
+            let transform = transform
+                .post_scale(1.0, -1.0)
+                .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+            pixmap.fill_path(&path, &paint, fill_rule, transform, mask.as_ref());
+        }
+        ShapeData::StrokePath {
+            path,
+            transform,
+            stroke,
+            paint,
+            mask,
+            ..
+        } => {
+            let mask = mask.map(|data| {
+                let mut pixmap = Pixmap::new(width, height).unwrap();
+                for shape_data in data {
+                    render_to_pixmap(shape_data, &mut pixmap, width, height);
+                }
+                Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
+            });
+
+            let transform = transform
+                .post_scale(1.0, -1.0)
+                .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+            pixmap.stroke_path(&path, &paint, &stroke, transform, mask.as_ref());
+        }
+        ShapeData::Fill { color, .. } => {
+            pixmap.fill(color);
+        }
+        ShapeData::FillPaint { paint, .. } => {
+            let path = PathBuilder::from_rect(
+                Rect::from_xywh(
+                    -(width as f32) / 2.0,
+                    -(height as f32) / 2.0,
+                    width as f32,
+                    height as f32,
+                )
+                .unwrap(),
+            );
+            let transform = IDENTITY
+                .post_scale(1.0, -1.0)
+                .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+            pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
         }
     }
-    let mask = if found {
-        Some(Mask::from_pixmap(mask_pixmap.as_ref(), MaskType::Luminance))
-    } else {
-        None
-    };
+}
+
+pub fn render(shape: Rc<RefCell<Shape>>, width: u32, height: u32) -> Result<Pixmap> {
+    let mut data = Vec::new();
+    convert_shape(&mut data, shape)?;
+    data.sort_by(|a, b| a.zindex().partial_cmp(&b.zindex()).unwrap());
 
     let mut pixmap = Pixmap::new(width, height).unwrap();
     for shape_data in data {
-        match shape_data {
-            ShapeData::Render(inner) => {
-                render_to_pixmap(
-                    inner,
-                    &mut pixmap,
-                    width as f32,
-                    height as f32,
-                    mask.as_ref(),
-                );
-            }
-            ShapeData::Mask(_) => (),
-        }
+        render_to_pixmap(shape_data, &mut pixmap, width, height);
     }
 
     Ok(pixmap)

@@ -32,7 +32,6 @@ pub static SQUARE: BasicShape = BasicShape::Square {
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
     style: Style::Fill(FillRule::Winding),
-    mask: false,
 };
 
 pub static CIRCLE: BasicShape = BasicShape::Circle {
@@ -45,7 +44,6 @@ pub static CIRCLE: BasicShape = BasicShape::Circle {
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
     style: Style::Fill(FillRule::Winding),
-    mask: false,
 };
 
 pub static TRIANGLE: BasicShape = BasicShape::Triangle {
@@ -56,13 +54,11 @@ pub static TRIANGLE: BasicShape = BasicShape::Triangle {
     blend_mode: BlendMode::SourceOver,
     anti_alias: true,
     style: Style::Fill(FillRule::Winding),
-    mask: false,
 };
 
 pub static FILL: BasicShape = BasicShape::Fill {
     zindex: None,
     color: Color::Solid(WHITE),
-    mask: false,
 };
 
 pub static EMPTY: BasicShape = BasicShape::Empty;
@@ -226,7 +222,6 @@ pub enum BasicShape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
-        mask: bool,
     },
     Circle {
         x: f32,
@@ -238,7 +233,6 @@ pub enum BasicShape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
-        mask: bool,
     },
     Triangle {
         points: [f32; 6],
@@ -248,19 +242,17 @@ pub enum BasicShape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
-        mask: bool,
     },
     Fill {
         zindex: Option<f32>,
         color: Color,
-        mask: bool,
     },
     Empty,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Shape {
-    Basic(BasicShape),
+    Basic(BasicShape, Option<Rc<RefCell<Shape>>>),
     Path {
         segments: Vec<PathSegment>,
         transform: Transform,
@@ -269,7 +261,7 @@ pub enum Shape {
         blend_mode: BlendMode,
         anti_alias: bool,
         style: Style,
-        mask: bool,
+        mask: Option<Rc<RefCell<Shape>>>,
     },
     Composite {
         a: Rc<RefCell<Shape>>,
@@ -282,7 +274,7 @@ pub enum Shape {
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
         style_overwrite: Option<Style>,
-        mask_overwrite: Option<bool>,
+        mask_overwrite: Option<Rc<RefCell<Shape>>>,
     },
     Collection {
         shapes: Vec<Rc<RefCell<Shape>>>,
@@ -294,143 +286,131 @@ pub enum Shape {
         blend_mode_overwrite: Option<BlendMode>,
         anti_alias_overwrite: Option<bool>,
         style_overwrite: Option<Style>,
-        mask_overwrite: Option<bool>,
+        mask_overwrite: Option<Rc<RefCell<Shape>>>,
     },
 }
 
 impl Shape {
-    pub fn deep_clone(&self) -> Shape {
-        match self {
-            Self::Basic(_) | Self::Path { .. } => self.clone(),
-            Self::Composite {
-                a,
-                b,
-                transform,
-                zindex_overwrite,
-                zindex_shift,
-                color_overwrite,
-                color_shift,
-                blend_mode_overwrite,
-                anti_alias_overwrite,
-                style_overwrite,
-                mask_overwrite,
-            } => Shape::Composite {
-                a: Rc::new(RefCell::new(a.borrow().deep_clone())),
-                b: Rc::new(RefCell::new(b.borrow().deep_clone())),
-                transform: *transform,
-                zindex_overwrite: *zindex_overwrite,
-                zindex_shift: *zindex_shift,
-                color_overwrite: color_overwrite.clone(),
-                color_shift: *color_shift,
-                blend_mode_overwrite: *blend_mode_overwrite,
-                anti_alias_overwrite: *anti_alias_overwrite,
-                style_overwrite: style_overwrite.clone(),
-                mask_overwrite: *mask_overwrite,
-            },
-            Self::Collection {
-                shapes,
-                transform,
-                zindex_overwrite,
-                zindex_shift,
-                color_overwrite,
-                color_shift,
-                blend_mode_overwrite,
-                anti_alias_overwrite,
-                style_overwrite,
-                mask_overwrite,
-            } => Shape::Collection {
-                shapes: shapes
-                    .iter()
-                    .map(|shape| Rc::new(RefCell::new(shape.borrow().deep_clone())))
-                    .collect(),
-                transform: *transform,
-                zindex_overwrite: *zindex_overwrite,
-                zindex_shift: *zindex_shift,
-                color_overwrite: color_overwrite.clone(),
-                color_shift: *color_shift,
-                blend_mode_overwrite: *blend_mode_overwrite,
-                anti_alias_overwrite: *anti_alias_overwrite,
-                style_overwrite: style_overwrite.clone(),
-                mask_overwrite: *mask_overwrite,
-            },
-        }
-    }
-
     pub fn translate(&mut self, tx: f32, ty: f32) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_translate(tx, ty);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().translate(tx, ty);
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn rotate(&mut self, r: f32) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate(r);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().rotate(r);
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn rotate_at(&mut self, r: f32, tx: f32, ty: f32) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate_at(r, tx, ty);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().rotate_at(r, tx, ty);
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn scale(&mut self, sx: f32, sy: f32) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(sx, sy);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().scale(sx, sy);
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn skew(&mut self, kx: f32, ky: f32) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_concat(Transform::from_skew(kx, ky));
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().skew(kx, ky);
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn flip(&mut self, f: f32) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
@@ -439,58 +419,94 @@ impl Shape {
                     .post_scale(-1.0, 1.0)
                     .post_rotate(-f);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().flip(f);
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn fliph(&mut self) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, 1.0);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().fliph();
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn flipv(&mut self) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(1.0, -1.0);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().flipv();
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn flipd(&mut self) {
         match self {
-            Self::Basic(BasicShape::Square { transform, .. })
-            | Self::Basic(BasicShape::Circle { transform, .. })
-            | Self::Basic(BasicShape::Triangle { transform, .. })
+            Self::Basic(BasicShape::Square { transform, .. }, _)
+            | Self::Basic(BasicShape::Circle { transform, .. }, _)
+            | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, -1.0);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+        }
+
+        match self {
+            Self::Basic(_, mask) => {
+                if let Some(shape) = mask {
+                    shape.borrow_mut().flipd();
+                }
+            }
+            _ => (),
         }
     }
 
     pub fn set_zindex(&mut self, z: f32) {
         match self {
-            Self::Basic(BasicShape::Square { zindex, .. })
-            | Self::Basic(BasicShape::Circle { zindex, .. })
-            | Self::Basic(BasicShape::Triangle { zindex, .. })
-            | Self::Basic(BasicShape::Fill { zindex, .. })
+            Self::Basic(BasicShape::Square { zindex, .. }, _)
+            | Self::Basic(BasicShape::Circle { zindex, .. }, _)
+            | Self::Basic(BasicShape::Triangle { zindex, .. }, _)
+            | Self::Basic(BasicShape::Fill { zindex, .. }, _)
             | Self::Path { zindex, .. } => {
                 *zindex = Some(z);
             }
@@ -507,32 +523,32 @@ impl Shape {
                 *zindex_overwrite = Some(z);
                 *zindex_shift = None;
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn shift_zindex(&mut self, z: f32) {
         match self {
-            Self::Basic(BasicShape::Square { zindex, .. })
-            | Self::Basic(BasicShape::Circle { zindex, .. })
-            | Self::Basic(BasicShape::Triangle { zindex, .. })
-            | Self::Basic(BasicShape::Fill { zindex, .. })
+            Self::Basic(BasicShape::Square { zindex, .. }, _)
+            | Self::Basic(BasicShape::Circle { zindex, .. }, _)
+            | Self::Basic(BasicShape::Triangle { zindex, .. }, _)
+            | Self::Basic(BasicShape::Fill { zindex, .. }, _)
             | Self::Path { zindex, .. } => {
                 *zindex.get_or_insert(0.0) += z;
             }
             Self::Composite { zindex_shift, .. } | Self::Collection { zindex_shift, .. } => {
                 *zindex_shift.get_or_insert(0.0) += z;
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_color(&mut self, c: Color) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => {
                 *color = c;
             }
@@ -559,16 +575,16 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_hsl(&mut self, h: f32, s: f32, l: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.hue = h.into();
@@ -603,16 +619,16 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_hsla(&mut self, h: f32, s: f32, l: f32, a: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.hue = h.into();
@@ -650,16 +666,16 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_hue(&mut self, h: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.hue = h.into();
@@ -692,16 +708,16 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_saturation(&mut self, s: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.saturation = s;
@@ -734,16 +750,16 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_lightness(&mut self, l: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.lightness = l;
@@ -776,16 +792,16 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_alpha(&mut self, a: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.alpha = a;
@@ -818,16 +834,16 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn shift_hue(&mut self, n: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.hue += n;
@@ -841,16 +857,16 @@ impl Shape {
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.hue.get_or_insert(RgbHue::new(0.0)) += n;
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn shift_saturation(&mut self, n: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.saturation += n;
@@ -864,16 +880,16 @@ impl Shape {
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.saturation.get_or_insert(0.0) += n;
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn shift_lightness(&mut self, n: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.lightness += n;
@@ -887,16 +903,16 @@ impl Shape {
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.lightness.get_or_insert(0.0) += n;
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn shift_alpha(&mut self, n: f32) {
         match self {
-            Self::Basic(BasicShape::Square { color, .. })
-            | Self::Basic(BasicShape::Circle { color, .. })
-            | Self::Basic(BasicShape::Triangle { color, .. })
-            | Self::Basic(BasicShape::Fill { color, .. })
+            Self::Basic(BasicShape::Square { color, .. }, _)
+            | Self::Basic(BasicShape::Circle { color, .. }, _)
+            | Self::Basic(BasicShape::Triangle { color, .. }, _)
+            | Self::Basic(BasicShape::Fill { color, .. }, _)
             | Self::Path { color, .. } => match color {
                 Color::Solid(color) => {
                     color.alpha += n;
@@ -910,7 +926,7 @@ impl Shape {
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.alpha.get_or_insert(0.0) += n;
             }
-            Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
@@ -923,9 +939,9 @@ impl Shape {
 
     pub fn set_blend_mode(&mut self, b: BlendMode) {
         match self {
-            Self::Basic(BasicShape::Square { blend_mode, .. })
-            | Self::Basic(BasicShape::Circle { blend_mode, .. })
-            | Self::Basic(BasicShape::Triangle { blend_mode, .. })
+            Self::Basic(BasicShape::Square { blend_mode, .. }, _)
+            | Self::Basic(BasicShape::Circle { blend_mode, .. }, _)
+            | Self::Basic(BasicShape::Triangle { blend_mode, .. }, _)
             | Self::Path { blend_mode, .. } => {
                 *blend_mode = b;
             }
@@ -939,15 +955,15 @@ impl Shape {
             } => {
                 *blend_mode_overwrite = Some(b);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_anti_alias(&mut self, a: bool) {
         match self {
-            Self::Basic(BasicShape::Square { anti_alias, .. })
-            | Self::Basic(BasicShape::Circle { anti_alias, .. })
-            | Self::Basic(BasicShape::Triangle { anti_alias, .. })
+            Self::Basic(BasicShape::Square { anti_alias, .. }, _)
+            | Self::Basic(BasicShape::Circle { anti_alias, .. }, _)
+            | Self::Basic(BasicShape::Triangle { anti_alias, .. }, _)
             | Self::Path { anti_alias, .. } => {
                 *anti_alias = a;
             }
@@ -961,15 +977,15 @@ impl Shape {
             } => {
                 *anti_alias_overwrite = Some(a);
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_fill_rule(&mut self, fill_rule: FillRule) {
         match self {
-            Self::Basic(BasicShape::Square { style, .. })
-            | Self::Basic(BasicShape::Circle { style, .. })
-            | Self::Basic(BasicShape::Triangle { style, .. })
+            Self::Basic(BasicShape::Square { style, .. }, _)
+            | Self::Basic(BasicShape::Circle { style, .. }, _)
+            | Self::Basic(BasicShape::Triangle { style, .. }, _)
             | Self::Path { style, .. } => {
                 *style = Style::Fill(fill_rule);
             }
@@ -981,15 +997,15 @@ impl Shape {
             } => {
                 *style_overwrite = Some(Style::Fill(fill_rule));
             }
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_stroke_width(&mut self, width: f32) {
         match self {
-            Self::Basic(BasicShape::Square { style, .. })
-            | Self::Basic(BasicShape::Circle { style, .. })
-            | Self::Basic(BasicShape::Triangle { style, .. })
+            Self::Basic(BasicShape::Square { style, .. }, _)
+            | Self::Basic(BasicShape::Circle { style, .. }, _)
+            | Self::Basic(BasicShape::Triangle { style, .. }, _)
             | Self::Path { style, .. } => match style {
                 Style::Stroke(stroke) => stroke.width = width,
                 Style::Fill(_) => {
@@ -1013,15 +1029,15 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_miter_limit(&mut self, miter_limit: f32) {
         match self {
-            Self::Basic(BasicShape::Square { style, .. })
-            | Self::Basic(BasicShape::Circle { style, .. })
-            | Self::Basic(BasicShape::Triangle { style, .. })
+            Self::Basic(BasicShape::Square { style, .. }, _)
+            | Self::Basic(BasicShape::Circle { style, .. }, _)
+            | Self::Basic(BasicShape::Triangle { style, .. }, _)
             | Self::Path { style, .. } => match style {
                 Style::Stroke(stroke) => stroke.miter_limit = miter_limit,
                 Style::Fill(_) => {
@@ -1045,15 +1061,15 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_line_cap(&mut self, line_cap: LineCap) {
         match self {
-            Self::Basic(BasicShape::Square { style, .. })
-            | Self::Basic(BasicShape::Circle { style, .. })
-            | Self::Basic(BasicShape::Triangle { style, .. })
+            Self::Basic(BasicShape::Square { style, .. }, _)
+            | Self::Basic(BasicShape::Circle { style, .. }, _)
+            | Self::Basic(BasicShape::Triangle { style, .. }, _)
             | Self::Path { style, .. } => match style {
                 Style::Stroke(stroke) => stroke.line_cap = line_cap,
                 Style::Fill(_) => {
@@ -1077,15 +1093,15 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_line_join(&mut self, line_join: LineJoin) {
         match self {
-            Self::Basic(BasicShape::Square { style, .. })
-            | Self::Basic(BasicShape::Circle { style, .. })
-            | Self::Basic(BasicShape::Triangle { style, .. })
+            Self::Basic(BasicShape::Square { style, .. }, _)
+            | Self::Basic(BasicShape::Circle { style, .. }, _)
+            | Self::Basic(BasicShape::Triangle { style, .. }, _)
             | Self::Path { style, .. } => match style {
                 Style::Stroke(stroke) => stroke.line_join = line_join,
                 Style::Fill(_) => {
@@ -1109,15 +1125,15 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
     pub fn set_dash(&mut self, dash: Option<StrokeDash>) {
         match self {
-            Self::Basic(BasicShape::Square { style, .. })
-            | Self::Basic(BasicShape::Circle { style, .. })
-            | Self::Basic(BasicShape::Triangle { style, .. })
+            Self::Basic(BasicShape::Square { style, .. }, _)
+            | Self::Basic(BasicShape::Circle { style, .. }, _)
+            | Self::Basic(BasicShape::Triangle { style, .. }, _)
             | Self::Path { style, .. } => match style {
                 Style::Stroke(stroke) => stroke.dash = dash,
                 Style::Fill(_) => {
@@ -1141,23 +1157,18 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }) | Self::Basic(BasicShape::Empty) => (),
+            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
         }
     }
 
-    pub fn set_mask(&mut self, m: bool) {
+    pub fn set_mask(&mut self, shape: Rc<RefCell<Shape>>) {
         match self {
-            Self::Basic(BasicShape::Square { mask, .. })
-            | Self::Basic(BasicShape::Circle { mask, .. })
-            | Self::Basic(BasicShape::Triangle { mask, .. })
-            | Self::Basic(BasicShape::Fill { mask, .. })
-            | Self::Path { mask, .. } => {
-                *mask = m;
+            Self::Basic(_, mask) | Self::Path { mask, .. } => {
+                *mask = Some(shape);
             }
             Self::Composite { mask_overwrite, .. } | Self::Collection { mask_overwrite, .. } => {
-                *mask_overwrite = Some(m);
+                *mask_overwrite = Some(shape);
             }
-            Self::Basic(BasicShape::Empty) => (),
         }
     }
 }

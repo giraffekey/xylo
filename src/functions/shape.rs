@@ -44,7 +44,7 @@ builtin_function!(compose => {
                     blend_mode: *blend_mode,
                     anti_alias: *anti_alias,
                     style: style.clone(),
-                    mask: *mask,
+                    mask: mask.clone(),
                 }
             }
             _ => Shape::Composite {
@@ -77,7 +77,7 @@ builtin_function!(collect => {
         let shapes = shapes?;
 
         if shapes.len() < 1 {
-            return Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(BasicShape::Empty)))));
+            return Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(BasicShape::Empty, None)))));
         }
 
         let is_path = shapes.iter().all(|shape| match &*shape.borrow() {
@@ -92,7 +92,7 @@ builtin_function!(collect => {
             let mut blend_mode = BlendMode::SourceOver;
             let mut anti_alias = true;
             let mut style = Style::default();
-            let mut mask = false;
+            let mut mask = None;
 
             for path in shapes {
                 match &*path.borrow() {
@@ -113,7 +113,7 @@ builtin_function!(collect => {
                         blend_mode = *other_blend_mode;
                         anti_alias = *other_anti_alias;
                         style = other_style.clone();
-                        mask = *other_mask;
+                        mask = other_mask.clone();
                     }
                     _ => unreachable!(),
                 }
@@ -145,10 +145,6 @@ builtin_function!(collect => {
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
-});
-
-builtin_function!(copy => {
-    [Value::Shape(shape)] => Value::Shape(Rc::new(RefCell::new(shape.borrow().deep_clone()))),
 });
 
 builtin_function!(blend => {
@@ -259,15 +255,8 @@ builtin_function!(no_dash => {
 });
 
 builtin_function!(mask => {
-    [Value::Shape(shape)] => {
-        shape.borrow_mut().set_mask(true);
-        Value::Shape(shape.clone())
-    }
-});
-
-builtin_function!(unmask => {
-    [Value::Shape(shape)] => {
-        shape.borrow_mut().set_mask(false);
+    [Value::Shape(mask), Value::Shape(shape)] => {
+        shape.borrow_mut().set_mask(mask.clone());
         Value::Shape(shape.clone())
     }
 });
