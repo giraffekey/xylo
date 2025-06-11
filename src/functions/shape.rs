@@ -284,18 +284,15 @@ builtin_function!(mask => {
     }
 });
 
-builtin_function!(voronoi data => {
-    [Value::List(sites), boxsize] => |data: &Data| {
+builtin_function!(voronoi => {
+    [Value::List(sites), boxsize] => {
         use voronoi::{voronoi, make_polygons, Point};
-
-        let half_width = data.dimensions.0 as f64 / 2.0;
-        let half_height = data.dimensions.1 as f64 / 2.0;
 
         let sites = match sites.get(0) {
             Some(Value::List(_)) => sites.iter().map(|value| match value {
                 Value::List(point) => match point[..] {
-                    [Value::Integer(x), Value::Integer(y)] => Ok(Point::new(x as f64 + half_width, y as f64 + half_height)),
-                    [Value::Float(x), Value::Float(y)] => Ok(Point::new(x as f64 + half_width, y as f64 + half_height)),
+                    [Value::Integer(x), Value::Integer(y)] => Ok(Point::new(x as f64, y as f64)),
+                    [Value::Float(x), Value::Float(y)] => Ok(Point::new(x as f64, y as f64)),
                     _ => Err(Error::InvalidArgument("voronoi".into())),
                 }
                     _ => Err(Error::InvalidArgument("voronoi".into())),
@@ -311,24 +308,36 @@ builtin_function!(voronoi data => {
 
         let polygons = make_polygons(&voronoi(sites, boxsize));
         let shapes = polygons.iter().map(|points| {
-            let mut segments = vec![PathSegment::MoveTo((*points[0].x - half_width) as f32, (*points[0].y - half_height) as f32)];
+            let mut segments = vec![PathSegment::MoveTo((*points[0].x) as f32, (*points[0].y) as f32)];
             for point in &points[1..] {
-                segments.push(PathSegment::LineTo((*point.x - half_width) as f32, (*point.y - half_height) as f32));
+                segments.push(PathSegment::LineTo((*point.x) as f32, (*point.y) as f32));
             }
             segments.push(PathSegment::Close);
 
-            Value::Shape(Rc::new(RefCell::new(Shape::Path {
-                segments,
-                transform: IDENTITY,
-                zindex: None,
-                color: Color::Solid(WHITE),
-                blend_mode: BlendMode::SourceOver,
-                anti_alias: true,
-                style: Style::default(),
-                mask: None,
+            Value::Shape(Rc::new(RefCell::new(Shape::Composite {
+                a: Rc::new(RefCell::new(Shape::Basic(BasicShape::Empty, None))),
+                b: Rc::new(RefCell::new(Shape::Path {
+                    segments,
+                    transform: IDENTITY,
+                    zindex: None,
+                    color: Color::Solid(WHITE),
+                    blend_mode: BlendMode::SourceOver,
+                    anti_alias: true,
+                    style: Style::default(),
+                    mask: None,
+                })),
+                transform: IDENTITY.post_translate(-boxsize as f32 / 2.0, -boxsize as f32 / 2.0),
+                zindex_overwrite: None,
+                zindex_shift: None,
+                color_overwrite: ColorChange::default(),
+                color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
+                style_overwrite: None,
+                mask_overwrite: None,
             })))
         }).collect();
 
-        Ok(Value::List(shapes))
+        Value::List(shapes)
     }
 });
