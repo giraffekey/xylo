@@ -1,6 +1,14 @@
+#[cfg(feature = "std")]
+use std::rc::Rc;
+
+#[cfg(feature = "no-std")]
+use alloc::rc::Rc;
+
 use crate::error::{Error, Result};
 use crate::interpreter::{Data, Value};
+use crate::shape::Shape;
 
+use core::cell::RefCell;
 use rand_chacha::ChaCha8Rng;
 
 mod color;
@@ -324,4 +332,12 @@ macro_rules! builtin_function {
             }
         }
     };
+}
+
+fn dedup_shape(shape: &Rc<RefCell<Shape>>) -> Rc<RefCell<Shape>> {
+    if Rc::strong_count(shape) > 2 {
+        Rc::new(RefCell::new(shape.borrow().clone()))
+    } else {
+        shape.clone()
+    }
 }

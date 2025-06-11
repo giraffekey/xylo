@@ -636,7 +636,11 @@ fn convert_shape_rec(
     Ok(())
 }
 
-fn convert_shape(data: &mut Vec<ShapeData>, shape: Rc<RefCell<Shape>>, transform: Transform) -> Result<()> {
+fn convert_shape(
+    data: &mut Vec<ShapeData>,
+    shape: Rc<RefCell<Shape>>,
+    transform: Transform,
+) -> Result<()> {
     convert_shape_rec(
         data,
         shape,

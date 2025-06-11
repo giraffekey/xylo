@@ -6,6 +6,7 @@ use alloc::{rc::Rc, vec, vec::Vec};
 
 use crate::builtin_function;
 use crate::error::{Error, Result};
+use crate::functions::dedup_shape;
 use crate::interpreter::{Data, Value};
 use crate::shape::{
     BasicShape, Color, ColorChange, HslaChange, PathSegment, Shape, Style, IDENTITY, WHITE,
@@ -49,18 +50,26 @@ builtin_function!(compose => {
                     mask: mask.clone(),
                 }
             }
-            _ => Shape::Composite {
-                a: a.clone(),
-                b: b.clone(),
-                transform: IDENTITY,
-                zindex_overwrite: None,
-                zindex_shift: None,
-                color_overwrite: ColorChange::default(),
-                color_shift: HslaChange::default(),
-                blend_mode_overwrite: None,
-                anti_alias_overwrite: None,
-                style_overwrite: None,
-                mask_overwrite: None,
+            _ => {
+                let b = if Rc::ptr_eq(a, b) {
+                    Rc::new(RefCell::new(b.borrow().clone()))
+                } else {
+                    b.clone()
+                };
+
+                Shape::Composite {
+                    a: a.clone(),
+                    b,
+                    transform: IDENTITY,
+                    zindex_overwrite: None,
+                    zindex_shift: None,
+                    color_overwrite: ColorChange::default(),
+                    color_shift: HslaChange::default(),
+                    blend_mode_overwrite: None,
+                    anti_alias_overwrite: None,
+                    style_overwrite: None,
+                    mask_overwrite: None,
+                }
             },
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -151,6 +160,7 @@ builtin_function!(collect => {
 
 builtin_function!(blend => {
     [Value::BlendMode(blend_mode), Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_blend_mode(*blend_mode);
         Value::Shape(shape.clone())
     }
@@ -158,6 +168,7 @@ builtin_function!(blend => {
 
 builtin_function!(anti_alias => {
     [Value::Boolean(anti_alias), Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_anti_alias(*anti_alias);
         Value::Shape(shape.clone())
     }
@@ -165,6 +176,7 @@ builtin_function!(anti_alias => {
 
 builtin_function!(fill => {
     [Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_fill_rule(FillRule::Winding);
         Value::Shape(shape.clone())
     }
@@ -172,6 +184,7 @@ builtin_function!(fill => {
 
 builtin_function!(winding => {
     [Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_fill_rule(FillRule::Winding);
         Value::Shape(shape.clone())
     }
@@ -179,6 +192,7 @@ builtin_function!(winding => {
 
 builtin_function!(even_odd => {
     [Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_fill_rule(FillRule::EvenOdd);
         Value::Shape(shape.clone())
     }
@@ -192,6 +206,7 @@ builtin_function!(stroke => {
             _ => return Err(Error::InvalidArgument("stroke".into())),
         };
 
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_stroke_width(width);
         Value::Shape(shape.clone())
     }
@@ -205,13 +220,15 @@ builtin_function!(miter_limit => {
             _ => return Err(Error::InvalidArgument("miter_limit".into())),
         };
 
-         shape.borrow_mut().set_miter_limit(n);
-         Value::Shape(shape.clone())
+        let shape = dedup_shape(shape);
+        shape.borrow_mut().set_miter_limit(n);
+        Value::Shape(shape.clone())
     }
 });
 
 builtin_function!(line_cap => {
     [Value::LineCap(lc), Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_line_cap(*lc);
         Value::Shape(shape.clone())
     }
@@ -219,6 +236,7 @@ builtin_function!(line_cap => {
 
 builtin_function!(line_join => {
     [Value::LineJoin(lj), Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_line_join(*lj);
         Value::Shape(shape.clone())
     }
@@ -244,6 +262,7 @@ builtin_function!(dash => {
             _ => return Err(Error::InvalidArgument("dash".into())),
         };
 
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_dash(StrokeDash::new(array, offset));
         Value::Shape(shape.clone())
     }
@@ -251,6 +270,7 @@ builtin_function!(dash => {
 
 builtin_function!(no_dash => {
     [Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_dash(None);
         Value::Shape(shape.clone())
     }
@@ -258,6 +278,7 @@ builtin_function!(no_dash => {
 
 builtin_function!(mask => {
     [Value::Shape(mask), Value::Shape(shape)] => {
+        let shape = dedup_shape(shape);
         shape.borrow_mut().set_mask(mask.clone());
         Value::Shape(shape.clone())
     }
