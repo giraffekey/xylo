@@ -308,7 +308,7 @@ fn convert_shape_rec(
             let mask = overwrite_mask(mask.clone(), mask_overwrite);
             let mask = mask.map(|shape| {
                 let mut mask_data = Vec::new();
-                convert_shape(&mut mask_data, shape).unwrap();
+                convert_shape(&mut mask_data, shape, parent_transform).unwrap();
                 mask_data
             });
 
@@ -360,7 +360,7 @@ fn convert_shape_rec(
             let mask = overwrite_mask(mask.clone(), mask_overwrite);
             let mask = mask.map(|shape| {
                 let mut mask_data = Vec::new();
-                convert_shape(&mut mask_data, shape).unwrap();
+                convert_shape(&mut mask_data, shape, parent_transform).unwrap();
                 mask_data
             });
 
@@ -416,7 +416,7 @@ fn convert_shape_rec(
             let mask = overwrite_mask(mask.clone(), mask_overwrite);
             let mask = mask.map(|shape| {
                 let mut mask_data = Vec::new();
-                convert_shape(&mut mask_data, shape).unwrap();
+                convert_shape(&mut mask_data, shape, parent_transform).unwrap();
                 mask_data
             });
 
@@ -496,7 +496,7 @@ fn convert_shape_rec(
                 let mask = overwrite_mask(mask.clone(), mask_overwrite);
                 let mask = mask.map(|shape| {
                     let mut mask_data = Vec::new();
-                    convert_shape(&mut mask_data, shape).unwrap();
+                    convert_shape(&mut mask_data, shape, parent_transform).unwrap();
                     mask_data
                 });
 
@@ -636,11 +636,11 @@ fn convert_shape_rec(
     Ok(())
 }
 
-fn convert_shape(data: &mut Vec<ShapeData>, shape: Rc<RefCell<Shape>>) -> Result<()> {
+fn convert_shape(data: &mut Vec<ShapeData>, shape: Rc<RefCell<Shape>>, transform: Transform) -> Result<()> {
     convert_shape_rec(
         data,
         shape,
-        IDENTITY,
+        transform,
         None,
         None,
         ColorChange::default(),
@@ -719,7 +719,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
 
 pub fn render(shape: Rc<RefCell<Shape>>, width: u32, height: u32) -> Result<Pixmap> {
     let mut data = Vec::new();
-    convert_shape(&mut data, shape)?;
+    convert_shape(&mut data, shape, IDENTITY)?;
     data.sort_by(|a, b| a.zindex().partial_cmp(&b.zindex()).unwrap());
 
     let mut pixmap = Pixmap::new(width, height).unwrap();
