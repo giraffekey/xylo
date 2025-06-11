@@ -103,14 +103,17 @@ builtin_function!(bitright => {
 
 builtin_function!(int => {
     [Value::Float(n)] => Value::Integer(*n as i32),
+    [Value::String(s)] => Value::Integer(s.parse().unwrap()),
 });
 
 builtin_function!(float => {
     [Value::Integer(n)] => Value::Float(*n as f32),
+    [Value::String(s)] => Value::Float(s.parse().unwrap()),
 });
 
 builtin_function!(complex => {
     [Value::Float(re), Value::Float(im)] => Value::Complex(Complex::new(*re, *im)),
+    [Value::String(s)] => Value::Complex(s.parse().unwrap()),
 });
 
 builtin_function!(real => {

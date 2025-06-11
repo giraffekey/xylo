@@ -12,7 +12,8 @@ use core::str::FromStr;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::{
-    alpha1, alphanumeric1, char, digit1, i32, line_ending, multispace0, multispace1, space0, space1,
+    alpha1, alphanumeric1, char, digit1, i32, line_ending, multispace0, multispace1, none_of,
+    space0, space1,
 };
 use nom::combinator::{eof, map, map_res, not, opt, peek, recognize, value, verify};
 use nom::error::{Error, ErrorKind};
@@ -52,6 +53,8 @@ pub enum Literal {
     Complex(Complex<f32>),
     Boolean(bool),
     Hex([u8; 3]),
+    Char(char),
+    String(String),
     Shape(ShapeKind),
     BlendMode(BlendMode),
     LineCap(LineCap),
@@ -67,6 +70,8 @@ impl ToString for Literal {
             Literal::Complex(n) => n.to_string(),
             Literal::Boolean(b) => b.to_string(),
             Literal::Hex([r, g, b]) => format!("0x{}{}{}", r, g, b),
+            Literal::Char(c) => format!("'{}'", c),
+            Literal::String(s) => format!("\"{}\"", s),
             Literal::Shape(kind) => kind.to_string(),
             Literal::BlendMode(bm) => match bm {
                 BlendMode::Clear => "BLEND_CLEAR".into(),
@@ -369,6 +374,22 @@ fn hex_color(input: &str) -> IResult<&str, Literal> {
     map(color, Literal::Hex).parse(input)
 }
 
+fn character(input: &str) -> IResult<&str, Literal> {
+    map(
+        delimited(char('\''), none_of("'\\"), char('\'')),
+        Literal::Char,
+    )
+    .parse(input)
+}
+
+fn string(input: &str) -> IResult<&str, Literal> {
+    map(
+        delimited(char('"'), many0(none_of("\"\\")), char('"')),
+        |chars| Literal::String(chars.into_iter().collect()),
+    )
+    .parse(input)
+}
+
 fn shape(input: &str) -> IResult<&str, Literal> {
     map(
         alt((
@@ -497,6 +518,8 @@ fn literal(input: &str) -> IResult<&str, Literal> {
         line_join,
         spread_mode,
         hex_color,
+        character,
+        string,
     ))
     .parse(input)
 }

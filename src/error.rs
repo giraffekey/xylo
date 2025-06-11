@@ -7,6 +7,7 @@ use alloc::{
 #[derive(Debug)]
 pub enum Error {
     ParseError,
+    NotDigit(String),
     InvalidList,
     InvalidRoot,
     MissingSeed,
@@ -30,6 +31,7 @@ impl ToString for Error {
     fn to_string(&self) -> String {
         match self {
             Error::ParseError => "Could not parse file.".into(),
+            Error::NotDigit(name) => format!("Value passed to `{}` was not a digit.", name),
             Error::InvalidList => "Type mismatch in list.".into(),
             Error::InvalidRoot => "The `root` function must return a shape.".into(),
             Error::MissingSeed => "Seed required for rng.".into(),

@@ -20,28 +20,32 @@ builtin_function!(lt => {
     [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a < b),
     [Value::Float(a), Value::Float(b)] => Value::Boolean(a < b),
     [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) < *b),
-    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a < *b as f32)
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a < *b as f32),
+    [Value::Char(a), Value::Char(b)] => Value::Boolean(a < b),
 });
 
 builtin_function!(lte => {
     [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a <= b),
     [Value::Float(a), Value::Float(b)] => Value::Boolean(a <= b),
     [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) <= *b),
-    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a <= *b as f32)
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a <= *b as f32),
+    [Value::Char(a), Value::Char(b)] => Value::Boolean(a <= b),
 });
 
 builtin_function!(gt => {
     [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a > b),
     [Value::Float(a), Value::Float(b)] => Value::Boolean(a > b),
     [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) > *b),
-    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a > *b as f32)
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a > *b as f32),
+    [Value::Char(a), Value::Char(b)] => Value::Boolean(a > b),
 });
 
 builtin_function!(gte => {
     [Value::Integer(a), Value::Integer(b)] => Value::Boolean(a >= b),
     [Value::Float(a), Value::Float(b)] => Value::Boolean(a >= b),
     [Value::Integer(a), Value::Float(b)] => Value::Boolean((*a as f32) >= *b),
-    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a >= *b as f32)
+    [Value::Float(a), Value::Integer(b)] => Value::Boolean(*a >= *b as f32),
+    [Value::Char(a), Value::Char(b)] => Value::Boolean(a >= b),
 });
 
 builtin_function!(and => {

@@ -26,6 +26,8 @@ pub enum ValueKind {
     Complex,
     Boolean,
     Hex,
+    Char,
+    String,
     Gradient,
     Shape,
     Enum,
@@ -41,6 +43,8 @@ pub enum Value {
     Complex(Complex<f32>),
     Boolean(bool),
     Hex([u8; 3]),
+    Char(char),
+    String(String),
     Gradient(Gradient),
     Shape(Rc<RefCell<Shape>>),
     BlendMode(BlendMode),
@@ -59,6 +63,8 @@ impl Value {
             Self::Complex(_) => Ok(ValueKind::Complex),
             Self::Boolean(_) => Ok(ValueKind::Boolean),
             Self::Hex(_) => Ok(ValueKind::Hex),
+            Self::Char(_) => Ok(ValueKind::Char),
+            Self::String(_) => Ok(ValueKind::String),
             Self::Gradient(_) => Ok(ValueKind::Gradient),
             Self::Shape(_) => Ok(ValueKind::Shape),
             Self::BlendMode(_) | Self::LineCap(_) | Self::LineJoin(_) | Self::SpreadMode(_) => {
@@ -95,6 +101,8 @@ impl PartialEq for Value {
             (Value::Complex(a), Value::Complex(b)) => a == b,
             (Value::Boolean(a), Value::Boolean(b)) => a == b,
             (Value::Hex(a), Value::Hex(b)) => a == b,
+            (Value::Char(a), Value::Char(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
             (Value::Gradient(a), Value::Gradient(b)) => a == b,
             (Value::Shape(a), Value::Shape(b)) => *a.borrow() == *b.borrow(),
             (Value::BlendMode(a), Value::BlendMode(b)) => a == b,
@@ -201,6 +209,8 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
         Literal::Complex(n) => Ok(Value::Complex(*n)),
         Literal::Boolean(b) => Ok(Value::Boolean(*b)),
         Literal::Hex(hex) => Ok(Value::Hex(*hex)),
+        Literal::Char(c) => Ok(Value::Char(*c)),
+        Literal::String(s) => Ok(Value::String(s.clone())),
         Literal::Shape(kind) => {
             let shape = match kind {
                 ShapeKind::Square => SQUARE.clone(),
@@ -394,7 +404,28 @@ fn execute_block<'a>(
                     .iter()
                     .map(|block| execute_block(stack, rng, data, block, 0))
                     .collect();
-                stack.operands.push(Value::List(values?));
+                let values = values?;
+
+                let list = match values.get(0).map(Value::kind) {
+                    Some(Ok(ValueKind::Char)) => {
+                        let s: Result<String> = values
+                            .iter()
+                            .map(|value| match value {
+                                Value::Char(c) => Ok(*c),
+                                _ => Err(Error::InvalidList),
+                            })
+                            .collect();
+
+                        Value::String(s?)
+                    }
+                    _ => {
+                        let list = Value::List(values);
+                        list.kind()?;
+                        list
+                    }
+                };
+
+                stack.operands.push(list);
                 index += 1;
             }
             Token::UnaryOperator(op) => {
