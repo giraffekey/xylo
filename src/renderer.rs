@@ -10,8 +10,9 @@ use crate::shape::{
     Style, IDENTITY, WHITE,
 };
 
+use asdf_pixel_sort::{sort_with_options, Options};
 use core::{cell::RefCell, ops::Add};
-use image::{imageops, DynamicImage, ImageFormat, ImageReader, Pixel};
+use image::{imageops, ImageFormat, ImageReader, Pixel};
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
     BlendMode, FillRule, GradientStop, IntSize, LinearGradient, Mask, MaskType, Paint, Path,
@@ -840,6 +841,12 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                         }
                         ImageOp::Unsharpen(sigma, threshold) => {
                             image = image.unsharpen(sigma, threshold)
+                        }
+                        ImageOp::PixelSort(mode, direction) => {
+                            let mut rgb_image = image.into_rgb8();
+                            sort_with_options(&mut rgb_image, &Options { mode, direction });
+                            image = rgb_image.into();
+                            image = image.into_rgba8().into();
                         }
                     }
                 }

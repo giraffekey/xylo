@@ -54,6 +54,8 @@ pub enum Value {
     SpreadMode(SpreadMode),
     FilterQuality(FilterQuality),
     FilterType(FilterType),
+    SortMode(asdf_pixel_sort::Mode),
+    SortDirection(asdf_pixel_sort::Direction),
     Function(String, usize, Vec<Value>),
     List(Vec<Value>),
 }
@@ -75,7 +77,9 @@ impl Value {
             | Self::LineJoin(_)
             | Self::SpreadMode(_)
             | Self::FilterQuality(_)
-            | Self::FilterType(_) => Ok(ValueKind::Enum),
+            | Self::FilterType(_)
+            | Self::SortMode(_)
+            | Self::SortDirection(_) => Ok(ValueKind::Enum),
             Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
             Self::List(list) => {
                 let kind = list
@@ -117,6 +121,8 @@ impl PartialEq for Value {
             (Value::SpreadMode(a), Value::SpreadMode(b)) => a == b,
             (Value::FilterQuality(a), Value::FilterQuality(b)) => a == b,
             (Value::FilterType(a), Value::FilterType(b)) => a == b,
+            (Value::SortMode(a), Value::SortMode(b)) => a == b,
+            (Value::SortDirection(a), Value::SortDirection(b)) => a == b,
             (Value::Function(a_name, a_argc, a_args), Value::Function(b_name, b_argc, b_args)) => {
                 a_name == b_name && a_argc == b_argc && a_args == b_args
             }
@@ -235,6 +241,8 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
         Literal::SpreadMode(sm) => Ok(Value::SpreadMode(*sm)),
         Literal::FilterQuality(fq) => Ok(Value::FilterQuality(*fq)),
         Literal::FilterType(ft) => Ok(Value::FilterType(*ft)),
+        Literal::SortMode(sm) => Ok(Value::SortMode(sm.clone())),
+        Literal::SortDirection(sd) => Ok(Value::SortDirection(sd.clone())),
     }
 }
 

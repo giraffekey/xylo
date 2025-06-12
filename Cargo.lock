@@ -130,6 +130,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
+name = "asdf-pixel-sort"
+version = "0.2.1"
+source = "git+https://github.com/giraffekey/asdf-pixel-sort#622e5d9bfd54f0e073c1c2f9cdba06ae71de84d3"
+dependencies = [
+ "image",
+ "once_cell",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1704,6 +1713,7 @@ name = "xylo-lang"
 version = "0.1.2"
 dependencies = [
  "ahash",
+ "asdf-pixel-sort",
  "base64",
  "clap",
  "factorial",

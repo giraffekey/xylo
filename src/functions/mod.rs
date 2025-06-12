@@ -328,6 +328,7 @@ define_builtins! {
     "thumbnail" => {image::thumbnail, 3},
     "tile" => {image::tile, 2},
     "unsharpen" => {image::unsharpen, 3},
+    "pixel_sort" => {image::pixel_sort, 3},
 }
 
 #[macro_export]

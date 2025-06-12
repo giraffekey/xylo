@@ -289,3 +289,11 @@ builtin_function!(unsharpen => {
         Value::Shape(image)
     }
 });
+
+builtin_function!(pixel_sort => {
+    [Value::SortMode(mode), Value::SortDirection(direction), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::PixelSort(mode.clone(), direction.clone()));
+        Value::Shape(image)
+    }
+});

@@ -8,6 +8,7 @@ use alloc::{
 
 use crate::colors::color;
 
+use asdf_pixel_sort::{DEFAULT_BLACK, DEFAULT_BRIGHTNESS, DEFAULT_WHITE};
 use core::str::FromStr;
 use image::imageops::FilterType;
 use nom::branch::alt;
@@ -25,6 +26,10 @@ use num::Complex;
 use tiny_skia::{BlendMode, FilterQuality, LineCap, LineJoin, SpreadMode};
 
 const KEYWORDS: &[&str] = &["let", "if", "else", "match", "for", "loop"];
+
+pub type SortMode = asdf_pixel_sort::Mode;
+
+pub type SortDirection = asdf_pixel_sort::Direction;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShapeKind {
@@ -63,6 +68,8 @@ pub enum Literal {
     SpreadMode(SpreadMode),
     FilterQuality(FilterQuality),
     FilterType(FilterType),
+    SortMode(SortMode),
+    SortDirection(SortDirection),
 }
 
 impl ToString for Literal {
@@ -134,6 +141,16 @@ impl ToString for Literal {
                 FilterType::CatmullRom => "FILTER_CATMULL_ROM".into(),
                 FilterType::Gaussian => "FILTER_GAUSSIAN".into(),
                 FilterType::Lanczos3 => "FILTER_LANCZOS3".into(),
+            },
+            Literal::SortMode(sm) => match sm {
+                SortMode::Black(_) => "SORT_BLACK".into(),
+                SortMode::Brightness(_) => "SORT_BRIGHTNESS".into(),
+                SortMode::White(_) => "SORT_WHITE".into(),
+            },
+            Literal::SortDirection(sd) => match sd {
+                SortDirection::Both => "DIRECTION_BOTH".into(),
+                SortDirection::Column => "DIRECTION_COLUMN".into(),
+                SortDirection::Row => "DIRECTION_ROW".into(),
             },
         }
     }
@@ -546,6 +563,33 @@ fn filter_type(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
+fn sort_mode(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(SortMode::Black(DEFAULT_BLACK.clone()), tag("SORT_BLACK")),
+            value(
+                SortMode::Brightness(DEFAULT_BRIGHTNESS),
+                tag("SORT_BRIGHTNESS"),
+            ),
+            value(SortMode::White(DEFAULT_WHITE.clone()), tag("SORT_WHITE")),
+        )),
+        Literal::SortMode,
+    )
+    .parse(input)
+}
+
+fn sort_direction(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(SortDirection::Both, tag("DIRECTION_BOTH")),
+            value(SortDirection::Column, tag("DIRECTION_COLUMN")),
+            value(SortDirection::Row, tag("DIRECTION_ROW")),
+        )),
+        Literal::SortDirection,
+    )
+    .parse(input)
+}
+
 fn literal(input: &str) -> IResult<&str, Literal> {
     alt((
         hex,
@@ -563,6 +607,8 @@ fn literal(input: &str) -> IResult<&str, Literal> {
         spread_mode,
         filter_quality,
         filter_type,
+        sort_mode,
+        sort_direction,
     ))
     .parse(input)
 }
