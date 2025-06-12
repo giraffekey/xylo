@@ -2,12 +2,14 @@
 use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
 use core::cell::RefCell;
+use image::imageops::FilterType;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
 use tiny_skia::{
-    BlendMode, FillRule, LineCap, LineJoin, SpreadMode, Stroke, StrokeDash, Transform,
+    BlendMode, FillRule, FilterQuality, LineCap, LineJoin, SpreadMode, Stroke, StrokeDash,
+    Transform,
 };
 
 pub static IDENTITY: Transform = Transform {
@@ -210,6 +212,41 @@ pub enum PathSegment {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ImagePath {
+    File(String),
+    Shape(Rc<RefCell<Shape>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImageOp {
+    Brighten(i32),
+    Contrast(f32),
+    Grayscale,
+    GrayscaleAlpha,
+    Huerotate(i32),
+    Invert,
+    Blur(f32),
+    Crop(u32, u32, u32, u32),
+    FastBlur(f32),
+    Filter3x3(Vec<f32>),
+    FlipHorizontal,
+    FlipVertical,
+    HorizontalGradient([u8; 4], [u8; 4]),
+    InterpolateBilinear(f32, f32),
+    InterpolateNearest(f32, f32),
+    Overlay(Rc<RefCell<Shape>>, i64, i64),
+    Replace(Rc<RefCell<Shape>>, i64, i64),
+    Resize(u32, u32, FilterType),
+    Rotate180,
+    Rotate270,
+    Rotate90,
+    Thumbnail(u32, u32),
+    Tile(Rc<RefCell<Shape>>),
+    Unsharpen(f32, i32),
+    VerticalGradient([u8; 4], [u8; 4]),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum BasicShape {
     Square {
         x: f32,
@@ -263,6 +300,16 @@ pub enum Shape {
         style: Style,
         mask: Option<Rc<RefCell<Shape>>>,
     },
+    Image {
+        path: ImagePath,
+        ops: Vec<ImageOp>,
+        transform: Transform,
+        zindex: Option<f32>,
+        opacity: f32,
+        blend_mode: BlendMode,
+        quality: FilterQuality,
+        mask: Option<Rc<RefCell<Shape>>>,
+    },
     Composite {
         a: Rc<RefCell<Shape>>,
         b: Rc<RefCell<Shape>>,
@@ -291,12 +338,46 @@ pub enum Shape {
 }
 
 impl Shape {
+    pub fn square() -> Self {
+        Self::Basic(SQUARE.clone(), None)
+    }
+
+    pub fn circle() -> Self {
+        Self::Basic(CIRCLE.clone(), None)
+    }
+
+    pub fn triangle() -> Self {
+        Self::Basic(TRIANGLE.clone(), None)
+    }
+
+    pub fn fill() -> Self {
+        Self::Basic(FILL.clone(), None)
+    }
+
+    pub fn empty() -> Self {
+        Self::Basic(EMPTY.clone(), None)
+    }
+
+    pub fn image(path: ImagePath) -> Self {
+        Self::Image {
+            path,
+            ops: Vec::new(),
+            transform: IDENTITY,
+            zindex: None,
+            opacity: 1.0,
+            blend_mode: BlendMode::SourceOver,
+            quality: FilterQuality::Nearest,
+            mask: None,
+        }
+    }
+
     pub fn translate(&mut self, tx: f32, ty: f32) {
         match self {
             Self::Basic(BasicShape::Square { transform, .. }, _)
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_translate(tx, ty);
@@ -320,6 +401,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate(r);
@@ -343,6 +425,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_rotate_at(r, tx, ty);
@@ -366,6 +449,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(sx, sy);
@@ -389,6 +473,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_concat(Transform::from_skew(kx, ky));
@@ -412,6 +497,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform
@@ -438,6 +524,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, 1.0);
@@ -461,6 +548,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(1.0, -1.0);
@@ -484,6 +572,7 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { transform, .. }, _)
             | Self::Basic(BasicShape::Triangle { transform, .. }, _)
             | Self::Path { transform, .. }
+            | Self::Image { transform, .. }
             | Self::Composite { transform, .. }
             | Self::Collection { transform, .. } => {
                 *transform = transform.post_scale(-1.0, -1.0);
@@ -507,7 +596,8 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { zindex, .. }, _)
             | Self::Basic(BasicShape::Triangle { zindex, .. }, _)
             | Self::Basic(BasicShape::Fill { zindex, .. }, _)
-            | Self::Path { zindex, .. } => {
+            | Self::Path { zindex, .. }
+            | Self::Image { zindex, .. } => {
                 *zindex = Some(z);
             }
             Self::Composite {
@@ -533,7 +623,8 @@ impl Shape {
             | Self::Basic(BasicShape::Circle { zindex, .. }, _)
             | Self::Basic(BasicShape::Triangle { zindex, .. }, _)
             | Self::Basic(BasicShape::Fill { zindex, .. }, _)
-            | Self::Path { zindex, .. } => {
+            | Self::Path { zindex, .. }
+            | Self::Image { zindex, .. } => {
                 *zindex.get_or_insert(0.0) += z;
             }
             Self::Composite { zindex_shift, .. } | Self::Collection { zindex_shift, .. } => {
@@ -575,7 +666,7 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -619,7 +710,7 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -666,7 +757,7 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -708,7 +799,7 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -750,7 +841,7 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -792,7 +883,7 @@ impl Shape {
                 }
                 *color_shift = HslaChange::default();
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -812,6 +903,7 @@ impl Shape {
                     }
                 }
             },
+            Self::Image { opacity, .. } => *opacity = a,
             Self::Composite {
                 color_overwrite,
                 color_shift,
@@ -857,7 +949,7 @@ impl Shape {
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.hue.get_or_insert(RgbHue::new(0.0)) += n;
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -880,7 +972,7 @@ impl Shape {
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.saturation.get_or_insert(0.0) += n;
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -903,7 +995,7 @@ impl Shape {
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.lightness.get_or_insert(0.0) += n;
             }
-            Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Empty, _) | Self::Image { .. } => (),
         }
     }
 
@@ -923,6 +1015,7 @@ impl Shape {
                     }
                 }
             },
+            Self::Image { opacity, .. } => *opacity += n,
             Self::Composite { color_shift, .. } | Self::Collection { color_shift, .. } => {
                 *color_shift.alpha.get_or_insert(0.0) += n;
             }
@@ -942,7 +1035,8 @@ impl Shape {
             Self::Basic(BasicShape::Square { blend_mode, .. }, _)
             | Self::Basic(BasicShape::Circle { blend_mode, .. }, _)
             | Self::Basic(BasicShape::Triangle { blend_mode, .. }, _)
-            | Self::Path { blend_mode, .. } => {
+            | Self::Path { blend_mode, .. }
+            | Self::Image { blend_mode, .. } => {
                 *blend_mode = b;
             }
             Self::Composite {
@@ -977,7 +1071,9 @@ impl Shape {
             } => {
                 *anti_alias_overwrite = Some(a);
             }
-            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Fill { .. }, _)
+            | Self::Basic(BasicShape::Empty, _)
+            | Self::Image { .. } => (),
         }
     }
 
@@ -997,7 +1093,9 @@ impl Shape {
             } => {
                 *style_overwrite = Some(Style::Fill(fill_rule));
             }
-            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Fill { .. }, _)
+            | Self::Basic(BasicShape::Empty, _)
+            | Self::Image { .. } => (),
         }
     }
 
@@ -1029,7 +1127,9 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Fill { .. }, _)
+            | Self::Basic(BasicShape::Empty, _)
+            | Self::Image { .. } => (),
         }
     }
 
@@ -1061,7 +1161,9 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Fill { .. }, _)
+            | Self::Basic(BasicShape::Empty, _)
+            | Self::Image { .. } => (),
         }
     }
 
@@ -1093,7 +1195,9 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Fill { .. }, _)
+            | Self::Basic(BasicShape::Empty, _)
+            | Self::Image { .. } => (),
         }
     }
 
@@ -1125,7 +1229,9 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Fill { .. }, _)
+            | Self::Basic(BasicShape::Empty, _)
+            | Self::Image { .. } => (),
         }
     }
 
@@ -1157,17 +1263,44 @@ impl Shape {
                     }));
                 }
             },
-            Self::Basic(BasicShape::Fill { .. }, _) | Self::Basic(BasicShape::Empty, _) => (),
+            Self::Basic(BasicShape::Fill { .. }, _)
+            | Self::Basic(BasicShape::Empty, _)
+            | Self::Image { .. } => (),
         }
     }
 
     pub fn set_mask(&mut self, shape: Rc<RefCell<Shape>>) {
         match self {
-            Self::Basic(_, mask) | Self::Path { mask, .. } => {
+            Self::Basic(_, mask) | Self::Path { mask, .. } | Self::Image { mask, .. } => {
                 *mask = Some(shape);
             }
             Self::Composite { mask_overwrite, .. } | Self::Collection { mask_overwrite, .. } => {
                 *mask_overwrite = Some(shape);
+            }
+        }
+    }
+
+    pub fn set_image_quality(&mut self, q: FilterQuality) {
+        match self {
+            Self::Image { quality, .. } => *quality = q,
+            _ => (),
+        }
+    }
+
+    pub fn add_image_op(&mut self, op: ImageOp) {
+        match self {
+            Self::Image { ops, .. } => ops.push(op),
+            _ => {
+                *self = Self::Image {
+                    path: ImagePath::Shape(Rc::new(RefCell::new(self.clone()))),
+                    ops: vec![op],
+                    transform: IDENTITY,
+                    zindex: None,
+                    opacity: 1.0,
+                    blend_mode: BlendMode::SourceOver,
+                    quality: FilterQuality::Nearest,
+                    mask: None,
+                };
             }
         }
     }

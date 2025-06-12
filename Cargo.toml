@@ -34,6 +34,7 @@ base64 = { version = "0.22", default-features = false }
 clap = { version = "4.5", features = ["derive"] }
 factorial = "0.4"
 hashbrown = "0.15"
+image = "0.25"
 itertools = { version = "0.14", default-features = false }
 noise = "0.9"
 nom = { version = "8.0", default-features = false }

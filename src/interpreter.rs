@@ -8,16 +8,17 @@ use crate::error::{Error, Result};
 use crate::functions::{builtin_param_count, handle_builtin, BUILTIN_FUNCTIONS};
 use crate::out::Config;
 use crate::parser::*;
-use crate::shape::{Gradient, Shape, CIRCLE, EMPTY, FILL, SQUARE, TRIANGLE};
+use crate::shape::{Gradient, Shape};
 
 use core::cell::RefCell;
 use hashbrown::HashMap;
+use image::imageops::FilterType;
 use noise::Perlin;
 use num::Complex;
 use rand::distr::{weighted::WeightedIndex, Distribution};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use tiny_skia::{BlendMode, LineCap, LineJoin, SpreadMode};
+use tiny_skia::{BlendMode, FilterQuality, LineCap, LineJoin, SpreadMode};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValueKind {
@@ -51,6 +52,8 @@ pub enum Value {
     LineCap(LineCap),
     LineJoin(LineJoin),
     SpreadMode(SpreadMode),
+    FilterQuality(FilterQuality),
+    FilterType(FilterType),
     Function(String, usize, Vec<Value>),
     List(Vec<Value>),
 }
@@ -67,9 +70,12 @@ impl Value {
             Self::String(_) => Ok(ValueKind::String),
             Self::Gradient(_) => Ok(ValueKind::Gradient),
             Self::Shape(_) => Ok(ValueKind::Shape),
-            Self::BlendMode(_) | Self::LineCap(_) | Self::LineJoin(_) | Self::SpreadMode(_) => {
-                Ok(ValueKind::Enum)
-            }
+            Self::BlendMode(_)
+            | Self::LineCap(_)
+            | Self::LineJoin(_)
+            | Self::SpreadMode(_)
+            | Self::FilterQuality(_)
+            | Self::FilterType(_) => Ok(ValueKind::Enum),
             Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
             Self::List(list) => {
                 let kind = list
@@ -109,6 +115,8 @@ impl PartialEq for Value {
             (Value::LineCap(a), Value::LineCap(b)) => a == b,
             (Value::LineJoin(a), Value::LineJoin(b)) => a == b,
             (Value::SpreadMode(a), Value::SpreadMode(b)) => a == b,
+            (Value::FilterQuality(a), Value::FilterQuality(b)) => a == b,
+            (Value::FilterType(a), Value::FilterType(b)) => a == b,
             (Value::Function(a_name, a_argc, a_args), Value::Function(b_name, b_argc, b_args)) => {
                 a_name == b_name && a_argc == b_argc && a_args == b_args
             }
@@ -213,15 +221,13 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
         Literal::String(s) => Ok(Value::String(s.clone())),
         Literal::Shape(kind) => {
             let shape = match kind {
-                ShapeKind::Square => SQUARE.clone(),
-                ShapeKind::Circle => CIRCLE.clone(),
-                ShapeKind::Triangle => TRIANGLE.clone(),
-                ShapeKind::Fill => FILL.clone(),
-                ShapeKind::Empty => EMPTY.clone(),
+                ShapeKind::Square => Shape::square(),
+                ShapeKind::Circle => Shape::circle(),
+                ShapeKind::Triangle => Shape::triangle(),
+                ShapeKind::Fill => Shape::fill(),
+                ShapeKind::Empty => Shape::empty(),
             };
-            Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(
-                shape, None,
-            )))))
+            Ok(Value::Shape(Rc::new(RefCell::new(shape))))
         }
         Literal::BlendMode(bm) => Ok(Value::BlendMode(*bm)),
         Literal::LineCap(lc) => Ok(Value::LineCap(*lc)),
@@ -860,7 +866,10 @@ fn gen_seed() -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shape::{BasicShape, Color, ColorChange, HslaChange, Style, IDENTITY, WHITE};
+    use crate::shape::{
+        BasicShape, Color, ColorChange, HslaChange, Style, CIRCLE, EMPTY, IDENTITY, SQUARE,
+        TRIANGLE, WHITE,
+    };
     use tiny_skia::Transform;
 
     #[test]

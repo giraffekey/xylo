@@ -1,20 +1,21 @@
 #[cfg(feature = "std")]
-use std::rc::Rc;
+use std::{io::Cursor, rc::Rc};
 
 #[cfg(feature = "no-std")]
 use alloc::{rc::Rc, vec::Vec};
 
 use crate::error::Result;
 use crate::shape::{
-    BasicShape, Color, ColorChange, Gradient, HslaChange, PathSegment, Shape, Style, IDENTITY,
-    WHITE,
+    BasicShape, Color, ColorChange, Gradient, HslaChange, ImageOp, ImagePath, PathSegment, Shape,
+    Style, IDENTITY, WHITE,
 };
 
 use core::{cell::RefCell, ops::Add};
+use image::{ImageFormat, ImageReader};
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
-    BlendMode, FillRule, GradientStop, LinearGradient, Mask, MaskType, Paint, Path, PathBuilder,
-    Pixmap, RadialGradient, Rect, Shader, Stroke, Transform,
+    BlendMode, FillRule, GradientStop, IntSize, LinearGradient, Mask, MaskType, Paint, Path,
+    PathBuilder, Pixmap, PixmapPaint, RadialGradient, Rect, Shader, Stroke, Transform,
 };
 
 #[derive(Debug, Clone)]
@@ -35,6 +36,14 @@ enum ShapeData<'a> {
         zindex: f32,
         mask: Option<Vec<ShapeData<'a>>>,
     },
+    Image {
+        path: ImagePath,
+        ops: Vec<ImageOp>,
+        transform: Transform,
+        paint: PixmapPaint,
+        zindex: f32,
+        mask: Option<Vec<ShapeData<'a>>>,
+    },
     Fill {
         color: tiny_skia::Color,
         zindex: f32,
@@ -50,6 +59,7 @@ impl ShapeData<'_> {
         match self {
             ShapeData::FillPath { zindex, .. }
             | ShapeData::StrokePath { zindex, .. }
+            | ShapeData::Image { zindex, .. }
             | ShapeData::Fill { zindex, .. }
             | ShapeData::FillPaint { zindex, .. } => *zindex,
         }
@@ -439,6 +449,41 @@ fn convert_shape_rec(
                 },
             });
         }
+        Shape::Image {
+            path,
+            ops,
+            transform,
+            zindex,
+            opacity,
+            blend_mode,
+            quality,
+            mask,
+        } => {
+            let transform = transform.post_concat(parent_transform);
+            let zindex = overwrite_zindex(*zindex, zindex_overwrite, zindex_shift);
+            let blend_mode = overwrite_blend_mode(*blend_mode, blend_mode_overwrite);
+            let paint = PixmapPaint {
+                opacity: *opacity,
+                blend_mode,
+                quality: *quality,
+            };
+
+            let mask = overwrite_mask(mask.clone(), mask_overwrite);
+            let mask = mask.map(|shape| {
+                let mut mask_data = Vec::new();
+                convert_shape(&mut mask_data, shape, parent_transform).unwrap();
+                mask_data
+            });
+
+            data.push(ShapeData::Image {
+                path: path.clone(),
+                ops: ops.clone(),
+                transform,
+                paint,
+                zindex,
+                mask,
+            });
+        }
         Shape::Basic(BasicShape::Fill { zindex, color }, _) => {
             let zindex = zindex.unwrap_or(0.0);
             let color = overwrite_color(color.clone(), color_overwrite, color_shift);
@@ -699,6 +744,93 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                 .post_scale(1.0, -1.0)
                 .post_translate(width as f32 / 2.0, height as f32 / 2.0);
             pixmap.stroke_path(&path, &paint, &stroke, transform, mask.as_ref());
+        }
+        ShapeData::Image {
+            path,
+            ops,
+            transform,
+            paint,
+            mask,
+            ..
+        } => {
+            #[cfg(feature = "std")]
+            {
+                let mut image = match path {
+                    ImagePath::File(path) =>
+                    {
+                        #[cfg(feature = "std")]
+                        ImageReader::open(path).unwrap().decode().unwrap()
+                    }
+                    ImagePath::Shape(shape) => {
+                        let pixmap = render(shape.clone(), width, height).unwrap();
+                        ImageReader::with_format(
+                            Cursor::new(pixmap.encode_png().unwrap()),
+                            ImageFormat::Png,
+                        )
+                        .decode()
+                        .unwrap()
+                    }
+                };
+
+                for op in ops {
+                    match op {
+                        ImageOp::Brighten(value) => image = image.brighten(value),
+                        // Contrast(f32),
+                        // Grayscale,
+                        // GrayscaleAlpha,
+                        // Huerotate(i32),
+                        // Invert,
+                        // Blur(f32),
+                        // Crop(u32, u32, u32, u32),
+                        // FastBlur(f32),
+                        // Filter3x3(Vec<f32>),
+                        // FlipHorizontal,
+                        // FlipVertical,
+                        // HorizontalGradient([u8; 4], [u8; 4]),
+                        // VerticalGradient([u8; 4], [u8; 4]),
+                        // InterpolateBilinear(f32, f32),
+                        // InterpolateNearest(f32, f32),
+                        // Overlay(Rc<RefCell<Shape>>, i64, i64),
+                        // Replace(Rc<RefCell<Shape>>, i64, i64),
+                        // Resize(u32, u32, FilterType),
+                        // Rotate90,
+                        // Rotate180,
+                        // Rotate270,
+                        // Thumbnail(u32, u32),
+                        // Tile(Rc<RefCell<Shape>>),
+                        // Unsharpen(f32, i32),
+                        _ => todo!(),
+                    }
+                }
+
+                let image_width = image.width();
+                let image_height = image.height();
+                let image = Pixmap::from_vec(
+                    image.into_bytes(),
+                    IntSize::from_wh(image_width, image_height).unwrap(),
+                )
+                .unwrap();
+
+                let mask = mask.map(|data| {
+                    let mut pixmap = Pixmap::new(width, height).unwrap();
+                    for shape_data in data {
+                        render_to_pixmap(shape_data, &mut pixmap, width, height);
+                    }
+                    Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
+                });
+
+                let transform = transform
+                    .post_scale(1.0, -1.0)
+                    .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+                pixmap.draw_pixmap(
+                    -(image_width as i32 / 2),
+                    -(image_height as i32 / 2),
+                    image.as_ref(),
+                    &paint,
+                    transform,
+                    mask.as_ref(),
+                );
+            }
         }
         ShapeData::Fill { color, .. } => {
             pixmap.fill(color);

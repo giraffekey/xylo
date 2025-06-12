@@ -1,5 +1,5 @@
 #[cfg(feature = "no-std")]
-use alloc::{string::ToString, vec, vec::Vec};
+use alloc::string::ToString;
 
 use crate::builtin_function;
 use crate::error::{Error, Result};

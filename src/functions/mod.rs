@@ -15,6 +15,7 @@ mod character;
 mod color;
 mod compare;
 mod func;
+mod image;
 mod list;
 mod math;
 mod path;
@@ -301,6 +302,31 @@ define_builtins! {
     "quad_to" => {path::quad_to, 4},
     "cubic_to" => {path::cubic_to, 6},
     "close" => {path::close, 0},
+    "import_image" => {image::import_image, 1},
+    "image_quality" => {image::image_quality, 2},
+    "brighten" => {image::brighten, 2},
+    "contrast" => {image::contrast, 2},
+    "grayscale" => {image::grayscale, 1},
+    "grayscale_alpha" => {image::grayscale_alpha, 1},
+    "huerotate" => {image::huerotate, 2},
+    "invert" => {image::invert, 1},
+    "blur" => {image::blur, 2},
+    "crop" => {image::crop, 5},
+    "fast_blur" => {image::fast_blur, 2},
+    "filter3x3" => {image::filter3x3, 2},
+    "gradienth" => {image::gradienth, 5},
+    "gradientv" => {image::gradientv, 5},
+    "interpolate_bilinear" => {image::interpolate_bilinear, 3},
+    "interpolate_nearest" => {image::interpolate_nearest, 3},
+    "overlay" => {image::overlay, 4},
+    "replace" => {image::replace, 4},
+    "resize" => {image::resize, 4},
+    "rotate90" => {image::rotate90, 1},
+    "rotate180" => {image::rotate180, 1},
+    "rotate270" => {image::rotate270, 1},
+    "thumbnail" => {image::thumbnail, 3},
+    "tile" => {image::tile, 2},
+    "unsharpen" => {image::unsharpen, 3},
 }
 
 #[macro_export]

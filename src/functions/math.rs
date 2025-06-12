@@ -281,13 +281,13 @@ builtin_function!(cbrt => {
 builtin_function!(fact => {
     [Value::Integer(n)] => {
         if *n < 0 {
-            return Err(Error::NegativeFactorial);
+            return Err(Error::NegativeNumber);
         }
         Value::Integer(((*n) as u32).factorial() as i32)
     },
     [Value::Float(n)] => {
          if *n < 0.0 {
-            return Err(Error::NegativeFactorial);
+            return Err(Error::NegativeNumber);
         }
         Value::Integer(((*n) as u32).factorial() as i32)
     },
@@ -296,13 +296,13 @@ builtin_function!(fact => {
 builtin_function!(fact2 => {
     [Value::Integer(n)] => {
         if *n < 0 {
-            return Err(Error::NegativeFactorial);
+            return Err(Error::NegativeNumber);
         }
         Value::Integer(((*n) as u32).double_factorial() as i32)
     },
     [Value::Float(n)] => {
         if *n < 0.0 {
-            return Err(Error::NegativeFactorial);
+            return Err(Error::NegativeNumber);
         }
         Value::Integer(((*n) as u32).double_factorial() as i32)
     },
