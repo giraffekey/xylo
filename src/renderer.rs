@@ -11,7 +11,7 @@ use crate::shape::{
 };
 
 use core::{cell::RefCell, ops::Add};
-use image::{ImageFormat, ImageReader};
+use image::{imageops, DynamicImage, ImageFormat, ImageReader, Pixel};
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
     BlendMode, FillRule, GradientStop, IntSize, LinearGradient, Mask, MaskType, Paint, Path,
@@ -775,31 +775,72 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                 for op in ops {
                     match op {
                         ImageOp::Brighten(value) => image = image.brighten(value),
-                        // Contrast(f32),
-                        // Grayscale,
-                        // GrayscaleAlpha,
-                        // Huerotate(i32),
-                        // Invert,
-                        // Blur(f32),
-                        // Crop(u32, u32, u32, u32),
-                        // FastBlur(f32),
-                        // Filter3x3(Vec<f32>),
-                        // FlipHorizontal,
-                        // FlipVertical,
-                        // HorizontalGradient([u8; 4], [u8; 4]),
-                        // VerticalGradient([u8; 4], [u8; 4]),
-                        // InterpolateBilinear(f32, f32),
-                        // InterpolateNearest(f32, f32),
-                        // Overlay(Rc<RefCell<Shape>>, i64, i64),
-                        // Replace(Rc<RefCell<Shape>>, i64, i64),
-                        // Resize(u32, u32, FilterType),
-                        // Rotate90,
-                        // Rotate180,
-                        // Rotate270,
-                        // Thumbnail(u32, u32),
-                        // Tile(Rc<RefCell<Shape>>),
-                        // Unsharpen(f32, i32),
-                        _ => todo!(),
+                        ImageOp::Contrast(c) => image = image.adjust_contrast(c),
+                        ImageOp::Grayscale => image = image.grayscale().into_rgba8().into(),
+                        ImageOp::GrayscaleAlpha => {
+                            image = imageops::colorops::grayscale_alpha(&image).into();
+                            image = image.into_rgba8().into();
+                        }
+                        ImageOp::Huerotate(value) => image = image.huerotate(value),
+                        ImageOp::Invert => image.invert(),
+                        ImageOp::Blur(sigma) => image = image.blur(sigma),
+                        ImageOp::FastBlur(sigma) => image = image.fast_blur(sigma),
+                        ImageOp::Crop(x, y, width, height) => {
+                            image = image.crop_imm(x, y, width, height);
+                        }
+                        ImageOp::Filter3x3(kernel) => image = image.filter3x3(&kernel),
+                        ImageOp::FlipHorizontal => image = image.fliph(),
+                        ImageOp::FlipVertical => image = image.flipv(),
+                        ImageOp::HorizontalGradient(start, end) => imageops::horizontal_gradient(
+                            &mut image,
+                            image::Rgba::from_slice(&start),
+                            image::Rgba::from_slice(&end),
+                        ),
+                        ImageOp::VerticalGradient(start, end) => imageops::vertical_gradient(
+                            &mut image,
+                            image::Rgba::from_slice(&start),
+                            image::Rgba::from_slice(&end),
+                        ),
+                        ImageOp::Overlay(top, x, y) => {
+                            let top = render(top, width, height).unwrap();
+                            let top = ImageReader::with_format(
+                                Cursor::new(top.encode_png().unwrap()),
+                                ImageFormat::Png,
+                            )
+                            .decode()
+                            .unwrap();
+                            imageops::overlay(&mut image, &top, x, y);
+                        }
+                        ImageOp::Replace(top, x, y) => {
+                            let top = render(top, width, height).unwrap();
+                            let top = ImageReader::with_format(
+                                Cursor::new(top.encode_png().unwrap()),
+                                ImageFormat::Png,
+                            )
+                            .decode()
+                            .unwrap();
+                            imageops::replace(&mut image, &top, x, y);
+                        }
+                        ImageOp::Resize(width, height, filter) => {
+                            image = image.resize(width, height, filter);
+                        }
+                        ImageOp::Rotate90 => image = image.rotate90(),
+                        ImageOp::Rotate180 => image = image.rotate180(),
+                        ImageOp::Rotate270 => image = image.rotate270(),
+                        ImageOp::Thumbnail(width, height) => image = image.thumbnail(width, height),
+                        ImageOp::Tile(top) => {
+                            let top = render(top, width, height).unwrap();
+                            let top = ImageReader::with_format(
+                                Cursor::new(top.encode_png().unwrap()),
+                                ImageFormat::Png,
+                            )
+                            .decode()
+                            .unwrap();
+                            imageops::tile(&mut image, &top);
+                        }
+                        ImageOp::Unsharpen(sigma, threshold) => {
+                            image = image.unsharpen(sigma, threshold)
+                        }
                     }
                 }
 

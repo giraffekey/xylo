@@ -95,18 +95,6 @@ builtin_function!(blur => {
     }
 });
 
-builtin_function!(crop => {
-    [Value::Integer(x), Value::Integer(y), Value::Integer(width), Value::Integer(height), Value::Shape(image)] => {
-        if *x < 0 || *y < 0 || *width < 0 || *height < 0 {
-            return Err(Error::NegativeNumber);
-        }
-
-        let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::Crop(*x as u32, *y as u32, *width as u32, *height as u32));
-        Value::Shape(image)
-    }
-});
-
 builtin_function!(fast_blur => {
     [sigma, Value::Shape(image)] => {
         let sigma = match sigma {
@@ -117,6 +105,18 @@ builtin_function!(fast_blur => {
 
         let image = dedup_shape(image);
         image.borrow_mut().add_image_op(ImageOp::FastBlur(sigma));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(crop => {
+    [Value::Integer(x), Value::Integer(y), Value::Integer(width), Value::Integer(height), Value::Shape(image)] => {
+        if *x < 0 || *y < 0 || *width < 0 || *height < 0 {
+            return Err(Error::NegativeNumber);
+        }
+
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Crop(*x as u32, *y as u32, *width as u32, *height as u32));
         Value::Shape(image)
     }
 });
@@ -138,10 +138,47 @@ builtin_function!(filter3x3 => {
     }
 });
 
+builtin_function!(fliph_image => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::FlipHorizontal);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(flipv_image => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::FlipVertical);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(flipd_image => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::FlipHorizontal);
+        image.borrow_mut().add_image_op(ImageOp::FlipVertical);
+        Value::Shape(image)
+    }
+});
+
 builtin_function!(gradienth => {
-    [Value::Hex(start_color), Value::Integer(start_alpha), Value::Hex(end_color), Value::Integer(end_alpha), Value::Shape(image)] => {
-        let start = [start_color[0], start_color[1], start_color[2], (*start_alpha).clamp(0, 255) as u8];
-        let end = [end_color[0], end_color[1], end_color[2], (*end_alpha).clamp(0, 255) as u8];
+    [Value::Hex(start_color), start_alpha, Value::Hex(end_color), end_alpha, Value::Shape(image)] => {
+        let start_alpha = match start_alpha {
+            Value::Integer(start_alpha) => *start_alpha as f32,
+            Value::Float(start_alpha)   => *start_alpha,
+            _ => return Err(Error::InvalidArgument("gradienth".into())),
+        };
+
+        let end_alpha = match end_alpha {
+            Value::Integer(end_alpha) => *end_alpha as f32,
+            Value::Float(end_alpha)   => *end_alpha,
+            _ => return Err(Error::InvalidArgument("gradienth".into())),
+        };
+
+        let start = [start_color[0], start_color[1], start_color[2], (start_alpha * 255.0).clamp(0.0, 255.0) as u8];
+        let end = [end_color[0], end_color[1], end_color[2], (end_alpha * 255.0).clamp(0.0, 255.0) as u8];
 
         let image = dedup_shape(image);
         image.borrow_mut().add_image_op(ImageOp::HorizontalGradient(start, end));
@@ -150,52 +187,24 @@ builtin_function!(gradienth => {
 });
 
 builtin_function!(gradientv => {
-    [Value::Hex(start_color), Value::Integer(start_alpha), Value::Hex(end_color), Value::Integer(end_alpha), Value::Shape(image)] => {
-        let start = [start_color[0], start_color[1], start_color[2], (*start_alpha).clamp(0, 255) as u8];
-        let end = [end_color[0], end_color[1], end_color[2], (*end_alpha).clamp(0, 255) as u8];
+    [Value::Hex(start_color), start_alpha, Value::Hex(end_color), end_alpha, Value::Shape(image)] => {
+        let start_alpha = match start_alpha {
+            Value::Integer(start_alpha) => *start_alpha as f32,
+            Value::Float(start_alpha)   => *start_alpha,
+            _ => return Err(Error::InvalidArgument("gradientv".into())),
+        };
+
+        let end_alpha = match end_alpha {
+            Value::Integer(end_alpha) => *end_alpha as f32,
+            Value::Float(end_alpha)   => *end_alpha,
+            _ => return Err(Error::InvalidArgument("gradientv".into())),
+        };
+
+        let start = [start_color[0], start_color[1], start_color[2], (start_alpha * 255.0).clamp(0.0, 255.0) as u8];
+        let end = [end_color[0], end_color[1], end_color[2], (end_alpha * 255.0).clamp(0.0, 255.0) as u8];
 
         let image = dedup_shape(image);
         image.borrow_mut().add_image_op(ImageOp::VerticalGradient(start, end));
-        Value::Shape(image)
-    }
-});
-
-builtin_function!(interpolate_bilinear => {
-    [x, y, Value::Shape(image)] => {
-        let x = match x {
-            Value::Integer(x) => *x as f32,
-            Value::Float(x)   => *x,
-            _ => return Err(Error::InvalidArgument("interpolate_bilinear".into())),
-        };
-
-        let y = match y {
-            Value::Integer(y) => *y as f32,
-            Value::Float(y)   => *y,
-            _ => return Err(Error::InvalidArgument("interpolate_bilinear".into())),
-        };
-
-        let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::InterpolateBilinear(x, y));
-        Value::Shape(image)
-    }
-});
-
-builtin_function!(interpolate_nearest => {
-    [x, y, Value::Shape(image)] => {
-        let x = match x {
-            Value::Integer(x) => *x as f32,
-            Value::Float(x)   => *x,
-            _ => return Err(Error::InvalidArgument("interpolate_nearest".into())),
-        };
-
-        let y = match y {
-            Value::Integer(y) => *y as f32,
-            Value::Float(y)   => *y,
-            _ => return Err(Error::InvalidArgument("interpolate_nearest".into())),
-        };
-
-        let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::InterpolateNearest(x, y));
         Value::Shape(image)
     }
 });

@@ -233,6 +233,8 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
         Literal::LineCap(lc) => Ok(Value::LineCap(*lc)),
         Literal::LineJoin(lj) => Ok(Value::LineJoin(*lj)),
         Literal::SpreadMode(sm) => Ok(Value::SpreadMode(*sm)),
+        Literal::FilterQuality(fq) => Ok(Value::FilterQuality(*fq)),
+        Literal::FilterType(ft) => Ok(Value::FilterType(*ft)),
     }
 }
 

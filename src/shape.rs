@@ -232,8 +232,6 @@ pub enum ImageOp {
     FlipHorizontal,
     FlipVertical,
     HorizontalGradient([u8; 4], [u8; 4]),
-    InterpolateBilinear(f32, f32),
-    InterpolateNearest(f32, f32),
     Overlay(Rc<RefCell<Shape>>, i64, i64),
     Replace(Rc<RefCell<Shape>>, i64, i64),
     Resize(u32, u32, FilterType),

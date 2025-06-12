@@ -9,6 +9,7 @@ use alloc::{
 use crate::colors::color;
 
 use core::str::FromStr;
+use image::imageops::FilterType;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::{
@@ -21,7 +22,7 @@ use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{Err, IResult, Parser};
 use num::Complex;
-use tiny_skia::{BlendMode, LineCap, LineJoin, SpreadMode};
+use tiny_skia::{BlendMode, FilterQuality, LineCap, LineJoin, SpreadMode};
 
 const KEYWORDS: &[&str] = &["let", "if", "else", "match", "for", "loop"];
 
@@ -60,6 +61,8 @@ pub enum Literal {
     LineCap(LineCap),
     LineJoin(LineJoin),
     SpreadMode(SpreadMode),
+    FilterQuality(FilterQuality),
+    FilterType(FilterType),
 }
 
 impl ToString for Literal {
@@ -119,6 +122,18 @@ impl ToString for Literal {
                 SpreadMode::Pad => "SPREAD_MODE_PAD".into(),
                 SpreadMode::Reflect => "SPREAD_MODE_REFLECT".into(),
                 SpreadMode::Repeat => "SPREAD_MODE_REPEAT".into(),
+            },
+            Literal::FilterQuality(fq) => match fq {
+                FilterQuality::Nearest => "QUALITY_NEAREST".into(),
+                FilterQuality::Bilinear => "QUALITY_BILINEAR".into(),
+                FilterQuality::Bicubic => "QUALITY_BICUBIC".into(),
+            },
+            Literal::FilterType(ft) => match ft {
+                FilterType::Nearest => "FILTER_NEAREST".into(),
+                FilterType::Triangle => "FILTER_TRIANGLE".into(),
+                FilterType::CatmullRom => "FILTER_CATMULL_ROM".into(),
+                FilterType::Gaussian => "FILTER_GAUSSIAN".into(),
+                FilterType::Lanczos3 => "FILTER_LANCZOS3".into(),
             },
         }
     }
@@ -505,6 +520,32 @@ fn spread_mode(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
+fn filter_quality(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(FilterQuality::Nearest, tag("QUALITY_NEAREST")),
+            value(FilterQuality::Bilinear, tag("QUALITY_BILINEAR")),
+            value(FilterQuality::Bicubic, tag("QUALITY_BICUBIC")),
+        )),
+        Literal::FilterQuality,
+    )
+    .parse(input)
+}
+
+fn filter_type(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(FilterType::Nearest, tag("FILTER_NEAREST")),
+            value(FilterType::Triangle, tag("FILTER_TRIANGLE")),
+            value(FilterType::CatmullRom, tag("FILTER_CATMULL_ROM")),
+            value(FilterType::Gaussian, tag("FILTER_GAUSSIAN")),
+            value(FilterType::Lanczos3, tag("FILTER_LANCZOS3")),
+        )),
+        Literal::FilterType,
+    )
+    .parse(input)
+}
+
 fn literal(input: &str) -> IResult<&str, Literal> {
     alt((
         hex,
@@ -513,13 +554,15 @@ fn literal(input: &str) -> IResult<&str, Literal> {
         integer,
         boolean,
         shape,
+        hex_color,
+        character,
+        string,
         blend_mode,
         line_cap,
         line_join,
         spread_mode,
-        hex_color,
-        character,
-        string,
+        filter_quality,
+        filter_type,
     ))
     .parse(input)
 }
