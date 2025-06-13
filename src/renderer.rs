@@ -2,7 +2,7 @@
 use std::{io::Cursor, rc::Rc};
 
 #[cfg(feature = "no-std")]
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec, string::String};
 
 use crate::error::Result;
 use crate::shape::{
@@ -13,7 +13,7 @@ use crate::shape::{
 use asdf_pixel_sort::{sort_with_options, Options};
 use core::{cell::RefCell, ops::Add};
 use fontdue::{Font, FontSettings};
-use image::{imageops, DynamicImage, ImageBuffer, ImageFormat, ImageReader, Pixel};
+use image::{imageops, ImageBuffer, ImageFormat, ImageReader, Pixel};
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
     BlendMode, FillRule, GradientStop, IntSize, LinearGradient, Mask, MaskType, Paint, Path,

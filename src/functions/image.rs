@@ -19,12 +19,6 @@ builtin_function!(import_image => {
     }
 });
 
-builtin_function!(import_font => {
-    [Value::String(path)] => {
-        todo!()
-    }
-});
-
 builtin_function!(text => {
     [Value::String(text), Value::String(font), size] => {
         let size = match size {
