@@ -12,7 +12,8 @@ use crate::shape::{
 
 use asdf_pixel_sort::{sort_with_options, Options};
 use core::{cell::RefCell, ops::Add};
-use image::{imageops, ImageFormat, ImageReader, Pixel};
+use fontdue::{Font, FontSettings};
+use image::{imageops, DynamicImage, ImageBuffer, ImageFormat, ImageReader, Pixel};
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
     BlendMode, FillRule, GradientStop, IntSize, LinearGradient, Mask, MaskType, Paint, Path,
@@ -45,6 +46,16 @@ enum ShapeData<'a> {
         zindex: f32,
         mask: Option<Vec<ShapeData<'a>>>,
     },
+    Text {
+        font: String,
+        text: String,
+        size: f32,
+        ops: Vec<ImageOp>,
+        transform: Transform,
+        paint: PixmapPaint,
+        zindex: f32,
+        mask: Option<Vec<ShapeData<'a>>>,
+    },
     Fill {
         color: tiny_skia::Color,
         zindex: f32,
@@ -61,6 +72,7 @@ impl ShapeData<'_> {
             ShapeData::FillPath { zindex, .. }
             | ShapeData::StrokePath { zindex, .. }
             | ShapeData::Image { zindex, .. }
+            | ShapeData::Text { zindex, .. }
             | ShapeData::Fill { zindex, .. }
             | ShapeData::FillPaint { zindex, .. } => *zindex,
         }
@@ -485,6 +497,45 @@ fn convert_shape_rec(
                 mask,
             });
         }
+        Shape::Text {
+            font,
+            text,
+            size,
+            ops,
+            transform,
+            zindex,
+            opacity,
+            blend_mode,
+            quality,
+            mask,
+        } => {
+            let transform = transform.post_concat(parent_transform);
+            let zindex = overwrite_zindex(*zindex, zindex_overwrite, zindex_shift);
+            let blend_mode = overwrite_blend_mode(*blend_mode, blend_mode_overwrite);
+            let paint = PixmapPaint {
+                opacity: *opacity,
+                blend_mode,
+                quality: *quality,
+            };
+
+            let mask = overwrite_mask(mask.clone(), mask_overwrite);
+            let mask = mask.map(|shape| {
+                let mut mask_data = Vec::new();
+                convert_shape(&mut mask_data, shape, parent_transform).unwrap();
+                mask_data
+            });
+
+            data.push(ShapeData::Text {
+                font: font.clone(),
+                text: text.clone(),
+                size: *size,
+                ops: ops.clone(),
+                transform,
+                paint,
+                zindex,
+                mask,
+            });
+        }
         Shape::Basic(BasicShape::Fill { zindex, color }, _) => {
             let zindex = zindex.unwrap_or(0.0);
             let color = overwrite_color(color.clone(), color_overwrite, color_shift);
@@ -703,7 +754,7 @@ fn convert_shape(
 }
 
 fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, height: u32) {
-    match shape_data {
+    match shape_data.clone() {
         ShapeData::FillPath {
             path,
             transform,
@@ -747,7 +798,13 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
             pixmap.stroke_path(&path, &paint, &stroke, transform, mask.as_ref());
         }
         ShapeData::Image {
-            path,
+            ops,
+            transform,
+            paint,
+            mask,
+            ..
+        }
+        | ShapeData::Text {
             ops,
             transform,
             paint,
@@ -756,21 +813,64 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
         } => {
             #[cfg(feature = "std")]
             {
-                let mut image = match path {
-                    ImagePath::File(path) =>
-                    {
-                        #[cfg(feature = "std")]
-                        ImageReader::open(path).unwrap().decode().unwrap()
+                let mut image = match shape_data {
+                    ShapeData::Image { path, .. } => match path {
+                        ImagePath::File(path) =>
+                        {
+                            #[cfg(feature = "std")]
+                            ImageReader::open(path).unwrap().decode().unwrap()
+                        }
+                        ImagePath::Shape(shape) => {
+                            let pixmap = render(shape.clone(), width, height).unwrap();
+                            ImageReader::with_format(
+                                Cursor::new(pixmap.encode_png().unwrap()),
+                                ImageFormat::Png,
+                            )
+                            .decode()
+                            .unwrap()
+                        }
+                    },
+                    ShapeData::Text {
+                        font, text, size, ..
+                    } => {
+                        use std::fs;
+
+                        let font = fs::read(font).unwrap();
+                        let font = Font::from_bytes(font, FontSettings::default()).unwrap();
+
+                        let mut bitmaps = Vec::new();
+                        let mut width = 0;
+                        let mut height = 0;
+
+                        for c in text.chars() {
+                            let (metrics, bitmap) = font.rasterize(c, size);
+                            width += (metrics.width as u32).max(metrics.advance_width as u32);
+                            height = height.max(metrics.height as u32);
+                            bitmaps.push((metrics, bitmap));
+                        }
+
+                        let mut image = ImageBuffer::new(width, height);
+
+                        let mut x_offset = 0;
+                        for (metrics, bitmap) in bitmaps {
+                            for (i, &value) in bitmap.iter().enumerate() {
+                                let x = (x_offset as i32
+                                    + metrics.xmin
+                                    + i as i32 % metrics.width as i32)
+                                    .max(0) as u32;
+                                let y = height
+                                    - (metrics.ymin + i as i32 / metrics.width as i32).max(0)
+                                        as u32
+                                    - 1;
+                                image.put_pixel(x, y, image::Rgba([value as u8; 4]));
+                            }
+
+                            x_offset += metrics.advance_width as u32;
+                        }
+
+                        image.into()
                     }
-                    ImagePath::Shape(shape) => {
-                        let pixmap = render(shape.clone(), width, height).unwrap();
-                        ImageReader::with_format(
-                            Cursor::new(pixmap.encode_png().unwrap()),
-                            ImageFormat::Png,
-                        )
-                        .decode()
-                        .unwrap()
-                    }
+                    _ => unreachable!(),
                 };
 
                 for op in ops {

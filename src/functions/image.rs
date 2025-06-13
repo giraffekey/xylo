@@ -19,6 +19,24 @@ builtin_function!(import_image => {
     }
 });
 
+builtin_function!(import_font => {
+    [Value::String(path)] => {
+        todo!()
+    }
+});
+
+builtin_function!(text => {
+    [Value::String(text), Value::String(font), size] => {
+        let size = match size {
+            Value::Integer(size) => *size as f32,
+            Value::Float(size)   => *size,
+            _ => return Err(Error::InvalidArgument("text".into())),
+        };
+
+        Value::Shape(Rc::new(RefCell::new(Shape::text(font.clone(), text.clone(), size))))
+    }
+});
+
 builtin_function!(image_quality => {
     [Value::FilterQuality(quality), Value::Shape(image)] => {
         let image = dedup_shape(image);

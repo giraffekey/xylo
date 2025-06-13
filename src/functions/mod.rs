@@ -303,6 +303,8 @@ define_builtins! {
     "cubic_to" => {path::cubic_to, 6},
     "close" => {path::close, 0},
     "import_image" => {image::import_image, 1},
+    "import_font" => {image::import_font, 1},
+    "text" => {image::text, 3},
     "image_quality" => {image::image_quality, 2},
     "brighten" => {image::brighten, 2},
     "contrast" => {image::contrast, 2},

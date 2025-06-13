@@ -30,16 +30,19 @@ strip = true
 
 [dependencies]
 ahash = { version = "0.8", default-features = false }
+argon2 = { version = "0.5.3", features = ["std"] }
 asdf-pixel-sort = { version = "0.2.1", git = "https://github.com/giraffekey/asdf-pixel-sort" }
 base64 = { version = "0.22", default-features = false }
 clap = { version = "4.5", features = ["derive"] }
 factorial = "0.4"
+fontdue = "0.9"
 hashbrown = "0.15"
 image = "0.25"
 itertools = { version = "0.14", default-features = false }
 noise = "0.9"
 nom = { version = "8.0", default-features = false }
 num = "0.4"
+num-bigint = "0.4.6"
 palette = { version = "0.7", default-features = false }
 png = "0.17"
 rand = { version = "0.9", default-features = false }
@@ -53,6 +56,7 @@ default = ["std", "simd"]
 std = [
 	"ahash/std",
 	"base64/std",
+	"fontdue/std",
 	"itertools/use_std",
 	"nom/std",
 	"palette/std",
