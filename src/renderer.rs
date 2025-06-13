@@ -2,12 +2,12 @@
 use std::{io::Cursor, rc::Rc};
 
 #[cfg(feature = "no-std")]
-use alloc::{rc::Rc, vec::Vec, string::String};
+use alloc::{rc::Rc, string::String, vec::Vec};
 
 use crate::error::Result;
 use crate::shape::{
-    BasicShape, Color, ColorChange, Gradient, HslaChange, ImageOp, ImagePath, PathSegment, Shape,
-    Style, IDENTITY, WHITE,
+    BasicShape, Color, ColorChange, Gradient, HslaChange, ImageOp, ImagePath, PathSegment, Pattern,
+    Shape, Style, IDENTITY, WHITE,
 };
 
 use asdf_pixel_sort::{sort_with_options, Options};
@@ -16,8 +16,9 @@ use fontdue::{Font, FontSettings};
 use image::{imageops, ImageBuffer, ImageFormat, ImageReader, Pixel};
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
-    BlendMode, FillRule, GradientStop, IntSize, LinearGradient, Mask, MaskType, Paint, Path,
-    PathBuilder, Pixmap, PixmapPaint, RadialGradient, Rect, Shader, Stroke, Transform,
+    BlendMode, FillRule, FilterQuality, GradientStop, IntSize, LinearGradient, Mask, MaskType,
+    Paint, Path, PathBuilder, Pixmap, PixmapPaint, RadialGradient, Rect, Shader, SpreadMode,
+    Stroke, Transform,
 };
 
 #[derive(Debug, Clone)]
@@ -29,6 +30,7 @@ enum ShapeData<'a> {
         paint: Paint<'a>,
         zindex: f32,
         mask: Option<Vec<ShapeData<'a>>>,
+        pattern: Option<(Vec<ShapeData<'a>>, SpreadMode)>,
     },
     StrokePath {
         path: Path,
@@ -37,6 +39,7 @@ enum ShapeData<'a> {
         paint: Paint<'a>,
         zindex: f32,
         mask: Option<Vec<ShapeData<'a>>>,
+        pattern: Option<(Vec<ShapeData<'a>>, SpreadMode)>,
     },
     Image {
         path: ImagePath,
@@ -202,6 +205,13 @@ fn overwrite_mask(
     mask_overwrite.or(mask)
 }
 
+fn overwrite_pattern(
+    pattern: Option<Pattern>,
+    pattern_overwrite: Option<Pattern>,
+) -> Option<Pattern> {
+    pattern_overwrite.or(pattern)
+}
+
 fn combine_shift<T: Add<Output = T> + Copy>(shift: Option<T>, curr: Option<T>) -> Option<T> {
     shift.map(|s| curr.map_or(s, |c| c + s)).or(curr)
 }
@@ -287,6 +297,13 @@ fn resolve_mask_overwrite(
     mask_overwrite.or(curr_mask_overwrite)
 }
 
+fn resolve_pattern_overwrite(
+    pattern_overwrite: Option<Pattern>,
+    curr_pattern_overwrite: Option<Pattern>,
+) -> Option<Pattern> {
+    pattern_overwrite.or(curr_pattern_overwrite)
+}
+
 fn convert_shape_rec(
     data: &mut Vec<ShapeData>,
     shape: Rc<RefCell<Shape>>,
@@ -299,6 +316,7 @@ fn convert_shape_rec(
     anti_alias_overwrite: Option<bool>,
     style_overwrite: Option<Style>,
     mask_overwrite: Option<Rc<RefCell<Shape>>>,
+    pattern_overwrite: Option<Pattern>,
 ) -> Result<()> {
     match &*shape.borrow() {
         Shape::Basic(
@@ -315,6 +333,7 @@ fn convert_shape_rec(
                 style,
             },
             mask,
+            pattern,
         ) => {
             let path = PathBuilder::from_rect(Rect::from_xywh(*x, *y, *w, *h).unwrap());
             let transform = transform.post_concat(parent_transform);
@@ -335,6 +354,13 @@ fn convert_shape_rec(
                 mask_data
             });
 
+            let pattern = overwrite_pattern(pattern.clone(), pattern_overwrite);
+            let pattern = pattern.map(|pattern| {
+                let mut pattern_data = Vec::new();
+                convert_shape(&mut pattern_data, pattern.pattern, parent_transform).unwrap();
+                (pattern_data, pattern.spread_mode)
+            });
+
             data.push(match style {
                 Style::Fill(fill_rule) => ShapeData::FillPath {
                     path,
@@ -343,6 +369,7 @@ fn convert_shape_rec(
                     paint,
                     zindex,
                     mask,
+                    pattern,
                 },
                 Style::Stroke(stroke) => ShapeData::StrokePath {
                     path,
@@ -351,6 +378,7 @@ fn convert_shape_rec(
                     paint,
                     zindex,
                     mask,
+                    pattern,
                 },
             });
         }
@@ -367,6 +395,7 @@ fn convert_shape_rec(
                 style,
             },
             mask,
+            pattern,
         ) => {
             let path = PathBuilder::from_circle(*x, *y, *radius).unwrap();
             let transform = transform.post_concat(parent_transform);
@@ -387,6 +416,13 @@ fn convert_shape_rec(
                 mask_data
             });
 
+            let pattern = overwrite_pattern(pattern.clone(), pattern_overwrite);
+            let pattern = pattern.map(|pattern| {
+                let mut pattern_data = Vec::new();
+                convert_shape(&mut pattern_data, pattern.pattern, parent_transform).unwrap();
+                (pattern_data, pattern.spread_mode)
+            });
+
             data.push(match style {
                 Style::Fill(fill_rule) => ShapeData::FillPath {
                     path,
@@ -395,6 +431,7 @@ fn convert_shape_rec(
                     paint,
                     zindex,
                     mask,
+                    pattern,
                 },
                 Style::Stroke(stroke) => ShapeData::StrokePath {
                     path,
@@ -403,6 +440,7 @@ fn convert_shape_rec(
                     paint,
                     zindex,
                     mask,
+                    pattern,
                 },
             });
         }
@@ -417,6 +455,7 @@ fn convert_shape_rec(
                 style,
             },
             mask,
+            pattern,
         ) => {
             let mut pb = PathBuilder::new();
             pb.move_to(points[0], points[1]);
@@ -443,6 +482,13 @@ fn convert_shape_rec(
                 mask_data
             });
 
+            let pattern = overwrite_pattern(pattern.clone(), pattern_overwrite);
+            let pattern = pattern.map(|pattern| {
+                let mut pattern_data = Vec::new();
+                convert_shape(&mut pattern_data, pattern.pattern, parent_transform).unwrap();
+                (pattern_data, pattern.spread_mode)
+            });
+
             data.push(match style {
                 Style::Fill(fill_rule) => ShapeData::FillPath {
                     path,
@@ -451,6 +497,7 @@ fn convert_shape_rec(
                     paint,
                     zindex,
                     mask,
+                    pattern,
                 },
                 Style::Stroke(stroke) => ShapeData::StrokePath {
                     path,
@@ -459,6 +506,7 @@ fn convert_shape_rec(
                     paint,
                     zindex,
                     mask,
+                    pattern,
                 },
             });
         }
@@ -536,7 +584,7 @@ fn convert_shape_rec(
                 mask,
             });
         }
-        Shape::Basic(BasicShape::Fill { zindex, color }, _) => {
+        Shape::Basic(BasicShape::Fill { zindex, color }, _, _) => {
             let zindex = zindex.unwrap_or(0.0);
             let color = overwrite_color(color.clone(), color_overwrite, color_shift);
 
@@ -551,7 +599,7 @@ fn convert_shape_rec(
                 }
             });
         }
-        Shape::Basic(BasicShape::Empty, _) => (),
+        Shape::Basic(BasicShape::Empty, _, _) => (),
         Shape::Path {
             segments,
             transform,
@@ -561,6 +609,7 @@ fn convert_shape_rec(
             anti_alias,
             style,
             mask,
+            pattern,
         } => {
             let mut pb = PathBuilder::new();
             for segment in segments {
@@ -597,6 +646,13 @@ fn convert_shape_rec(
                     mask_data
                 });
 
+                let pattern = overwrite_pattern(pattern.clone(), pattern_overwrite);
+                let pattern = pattern.map(|pattern| {
+                    let mut pattern_data = Vec::new();
+                    convert_shape(&mut pattern_data, pattern.pattern, parent_transform).unwrap();
+                    (pattern_data, pattern.spread_mode)
+                });
+
                 data.push(match style {
                     Style::Fill(fill_rule) => ShapeData::FillPath {
                         path,
@@ -605,6 +661,7 @@ fn convert_shape_rec(
                         paint,
                         zindex,
                         mask,
+                        pattern,
                     },
                     Style::Stroke(stroke) => ShapeData::StrokePath {
                         path,
@@ -613,6 +670,7 @@ fn convert_shape_rec(
                         paint,
                         zindex,
                         mask,
+                        pattern,
                     },
                 });
             }
@@ -629,6 +687,7 @@ fn convert_shape_rec(
             anti_alias_overwrite: curr_anti_alias_overwrite,
             style_overwrite: curr_style_overwrite,
             mask_overwrite: curr_mask_overwrite,
+            pattern_overwrite: curr_pattern_overwrite,
         } => {
             let transform = transform.post_concat(parent_transform);
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
@@ -651,6 +710,8 @@ fn convert_shape_rec(
                 resolve_style_overwrite(style_overwrite, curr_style_overwrite.clone());
             let mask_overwrite =
                 resolve_mask_overwrite(mask_overwrite, curr_mask_overwrite.clone());
+            let pattern_overwrite =
+                resolve_pattern_overwrite(pattern_overwrite, curr_pattern_overwrite.clone());
 
             convert_shape_rec(
                 data,
@@ -664,6 +725,7 @@ fn convert_shape_rec(
                 anti_alias_overwrite,
                 style_overwrite.clone(),
                 mask_overwrite.clone(),
+                pattern_overwrite.clone(),
             )?;
             convert_shape_rec(
                 data,
@@ -677,6 +739,7 @@ fn convert_shape_rec(
                 anti_alias_overwrite,
                 style_overwrite,
                 mask_overwrite,
+                pattern_overwrite,
             )?;
         }
         Shape::Collection {
@@ -690,6 +753,7 @@ fn convert_shape_rec(
             anti_alias_overwrite: curr_anti_alias_overwrite,
             style_overwrite: curr_style_overwrite,
             mask_overwrite: curr_mask_overwrite,
+            pattern_overwrite: curr_pattern_overwrite,
         } => {
             let transform = transform.post_concat(parent_transform);
             let (zindex_overwrite, zindex_shift) = resolve_zindex_overwrites(
@@ -712,6 +776,8 @@ fn convert_shape_rec(
                 resolve_style_overwrite(style_overwrite, curr_style_overwrite.clone());
             let mask_overwrite =
                 resolve_mask_overwrite(mask_overwrite, curr_mask_overwrite.clone());
+            let pattern_overwrite =
+                resolve_pattern_overwrite(pattern_overwrite, curr_pattern_overwrite.clone());
 
             for shape in shapes {
                 convert_shape_rec(
@@ -726,6 +792,7 @@ fn convert_shape_rec(
                     anti_alias_overwrite,
                     style_overwrite.clone(),
                     mask_overwrite.clone(),
+                    pattern_overwrite.clone(),
                 )?;
             }
         }
@@ -750,6 +817,7 @@ fn convert_shape(
         None,
         None,
         None,
+        None,
     )
 }
 
@@ -761,6 +829,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
             fill_rule,
             paint,
             mask,
+            pattern,
             ..
         } => {
             let mask = mask.map(|data| {
@@ -771,10 +840,33 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                 Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
             });
 
-            let transform = transform
-                .post_scale(1.0, -1.0)
-                .post_translate(width as f32 / 2.0, height as f32 / 2.0);
-            pixmap.fill_path(&path, &paint, fill_rule, transform, mask.as_ref());
+            match pattern {
+                Some((data, spread_mode)) => {
+                    let mut pattern_pixmap = Pixmap::new(width, height).unwrap();
+                    for shape_data in data {
+                        render_to_pixmap(shape_data, &mut pattern_pixmap, width, height);
+                    }
+                    let shader = tiny_skia::Pattern::new(
+                        pattern_pixmap.as_ref(),
+                        spread_mode,
+                        FilterQuality::Nearest,
+                        1.0,
+                        IDENTITY,
+                    );
+                    let paint = Paint { shader, ..paint };
+
+                    let transform = transform
+                        .post_scale(1.0, -1.0)
+                        .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+                    pixmap.fill_path(&path, &paint, fill_rule, transform, mask.as_ref());
+                }
+                None => {
+                    let transform = transform
+                        .post_scale(1.0, -1.0)
+                        .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+                    pixmap.fill_path(&path, &paint, fill_rule, transform, mask.as_ref());
+                }
+            }
         }
         ShapeData::StrokePath {
             path,
@@ -782,6 +874,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
             stroke,
             paint,
             mask,
+            pattern,
             ..
         } => {
             let mask = mask.map(|data| {
@@ -792,10 +885,33 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                 Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
             });
 
-            let transform = transform
-                .post_scale(1.0, -1.0)
-                .post_translate(width as f32 / 2.0, height as f32 / 2.0);
-            pixmap.stroke_path(&path, &paint, &stroke, transform, mask.as_ref());
+            match pattern {
+                Some((data, spread_mode)) => {
+                    let mut pattern_pixmap = Pixmap::new(width, height).unwrap();
+                    for shape_data in data {
+                        render_to_pixmap(shape_data, &mut pattern_pixmap, width, height);
+                    }
+                    let shader = tiny_skia::Pattern::new(
+                        pattern_pixmap.as_ref(),
+                        spread_mode,
+                        FilterQuality::Nearest,
+                        1.0,
+                        IDENTITY,
+                    );
+                    let paint = Paint { shader, ..paint };
+
+                    let transform = transform
+                        .post_scale(1.0, -1.0)
+                        .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+                    pixmap.stroke_path(&path, &paint, &stroke, transform, mask.as_ref());
+                }
+                None => {
+                    let transform = transform
+                        .post_scale(1.0, -1.0)
+                        .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+                    pixmap.stroke_path(&path, &paint, &stroke, transform, mask.as_ref());
+                }
+            }
         }
         ShapeData::Image {
             ops,

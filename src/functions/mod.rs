@@ -229,6 +229,7 @@ define_builtins! {
     "dash" => {shape::dash, 3},
     "no_dash" => {shape::no_dash, 1},
     "mask" => {shape::mask, 2},
+    "pattern" => {shape::pattern, 3},
     "voronoi" => {shape::voronoi, 2},
     "t" => {transform::translate, 3},
     "translate" => {transform::translate, 3},

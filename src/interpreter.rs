@@ -876,10 +876,7 @@ fn gen_seed() -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shape::{
-        BasicShape, Color, ColorChange, HslaChange, Style, CIRCLE, EMPTY, IDENTITY, SQUARE,
-        TRIANGLE, WHITE,
-    };
+    use crate::shape::{BasicShape, Color, Style, WHITE};
     use tiny_skia::Transform;
 
     #[test]
@@ -915,7 +912,8 @@ square = ss (3 + 5) SQUARE
                     anti_alias: true,
                     style: Style::default(),
                 },
-                None
+                None,
+                None,
             )))
         );
     }
@@ -957,7 +955,8 @@ square =
                     anti_alias: true,
                     style: Style::default(),
                 },
-                None
+                None,
+                None,
             ))),
         );
     }
@@ -986,19 +985,10 @@ shape is_square =
         assert!(res.is_ok());
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::Composite {
-                a: Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None))),
-                b: Rc::new(RefCell::new(Shape::Basic(EMPTY.clone(), None))),
-                transform: IDENTITY,
-                zindex_overwrite: None,
-                zindex_shift: None,
-                color_overwrite: ColorChange::default(),
-                color_shift: HslaChange::default(),
-                blend_mode_overwrite: None,
-                anti_alias_overwrite: None,
-                style_overwrite: None,
-                mask_overwrite: None,
-            }))
+            Rc::new(RefCell::new(Shape::composite(
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::empty())),
+            )))
         );
     }
 
@@ -1027,43 +1017,16 @@ shape n =
         assert!(res.is_ok());
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::Composite {
-                a: Rc::new(RefCell::new(Shape::Composite {
-                    a: Rc::new(RefCell::new(Shape::Composite {
-                        a: Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None))),
-                        b: Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone(), None))),
-                        transform: IDENTITY,
-                        zindex_overwrite: None,
-                        zindex_shift: None,
-                        color_overwrite: ColorChange::default(),
-                        color_shift: HslaChange::default(),
-                        blend_mode_overwrite: None,
-                        anti_alias_overwrite: None,
-                        style_overwrite: None,
-                        mask_overwrite: None,
-                    })),
-                    b: Rc::new(RefCell::new(Shape::Basic(TRIANGLE.clone(), None))),
-                    transform: IDENTITY,
-                    zindex_overwrite: None,
-                    zindex_shift: None,
-                    color_overwrite: ColorChange::default(),
-                    color_shift: HslaChange::default(),
-                    blend_mode_overwrite: None,
-                    anti_alias_overwrite: None,
-                    style_overwrite: None,
-                    mask_overwrite: None,
-                })),
-                b: Rc::new(RefCell::new(Shape::Basic(EMPTY.clone(), None))),
-                transform: IDENTITY,
-                zindex_overwrite: None,
-                zindex_shift: None,
-                color_overwrite: ColorChange::default(),
-                color_shift: HslaChange::default(),
-                blend_mode_overwrite: None,
-                anti_alias_overwrite: None,
-                style_overwrite: None,
-                mask_overwrite: None,
-            }))
+            Rc::new(RefCell::new(Shape::composite(
+                Rc::new(RefCell::new(Shape::composite(
+                    Rc::new(RefCell::new(Shape::composite(
+                        Rc::new(RefCell::new(Shape::square())),
+                        Rc::new(RefCell::new(Shape::circle())),
+                    ))),
+                    Rc::new(RefCell::new(Shape::triangle())),
+                ))),
+                Rc::new(RefCell::new(Shape::empty())),
+            )))
         );
     }
 
@@ -1092,29 +1055,18 @@ shapes =
         assert!(res.is_ok());
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::Collection {
-                shapes: vec![
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None))),
-                    Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone(), None))),
-                ],
-                transform: IDENTITY,
-                zindex_overwrite: None,
-                zindex_shift: None,
-                color_overwrite: ColorChange::default(),
-                color_shift: HslaChange::default(),
-                blend_mode_overwrite: None,
-                anti_alias_overwrite: None,
-                style_overwrite: None,
-                mask_overwrite: None,
-            }))
+            Rc::new(RefCell::new(Shape::collection(vec![
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::circle())),
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::circle())),
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::circle())),
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::circle())),
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::circle())),
+            ],)))
         );
     }
 
@@ -1140,64 +1092,56 @@ shapes =
         assert!(res.is_ok());
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::Collection {
-                shapes: vec![
-                    Rc::new(RefCell::new(Shape::Basic(
-                        BasicShape::Square {
-                            x: -1.0,
-                            y: -1.0,
-                            width: 2.0,
-                            height: 2.0,
-                            transform: Transform::from_scale(83.69197, 83.69197),
-                            zindex: None,
-                            color: Color::Solid(WHITE),
-                            blend_mode: BlendMode::SourceOver,
-                            anti_alias: true,
-                            style: Style::default(),
-                        },
-                        None
-                    ))),
-                    Rc::new(RefCell::new(Shape::Basic(
-                        BasicShape::Square {
-                            x: -1.0,
-                            y: -1.0,
-                            width: 2.0,
-                            height: 2.0,
-                            transform: Transform::from_scale(90.9063, 90.9063),
-                            zindex: None,
-                            color: Color::Solid(WHITE),
-                            blend_mode: BlendMode::SourceOver,
-                            anti_alias: true,
-                            style: Style::default(),
-                        },
-                        None
-                    ))),
-                    Rc::new(RefCell::new(Shape::Basic(
-                        BasicShape::Square {
-                            x: -1.0,
-                            y: -1.0,
-                            width: 2.0,
-                            height: 2.0,
-                            transform: Transform::from_scale(63.14245, 63.14245),
-                            zindex: None,
-                            color: Color::Solid(WHITE),
-                            blend_mode: BlendMode::SourceOver,
-                            anti_alias: true,
-                            style: Style::default(),
-                        },
-                        None
-                    ))),
-                ],
-                transform: IDENTITY,
-                zindex_overwrite: None,
-                zindex_shift: None,
-                color_overwrite: ColorChange::default(),
-                color_shift: HslaChange::default(),
-                blend_mode_overwrite: None,
-                anti_alias_overwrite: None,
-                style_overwrite: None,
-                mask_overwrite: None,
-            }))
+            Rc::new(RefCell::new(Shape::collection(vec![
+                Rc::new(RefCell::new(Shape::Basic(
+                    BasicShape::Square {
+                        x: -1.0,
+                        y: -1.0,
+                        width: 2.0,
+                        height: 2.0,
+                        transform: Transform::from_scale(83.69197, 83.69197),
+                        zindex: None,
+                        color: Color::Solid(WHITE),
+                        blend_mode: BlendMode::SourceOver,
+                        anti_alias: true,
+                        style: Style::default(),
+                    },
+                    None,
+                    None,
+                ))),
+                Rc::new(RefCell::new(Shape::Basic(
+                    BasicShape::Square {
+                        x: -1.0,
+                        y: -1.0,
+                        width: 2.0,
+                        height: 2.0,
+                        transform: Transform::from_scale(90.9063, 90.9063),
+                        zindex: None,
+                        color: Color::Solid(WHITE),
+                        blend_mode: BlendMode::SourceOver,
+                        anti_alias: true,
+                        style: Style::default(),
+                    },
+                    None,
+                    None,
+                ))),
+                Rc::new(RefCell::new(Shape::Basic(
+                    BasicShape::Square {
+                        x: -1.0,
+                        y: -1.0,
+                        width: 2.0,
+                        height: 2.0,
+                        transform: Transform::from_scale(63.14245, 63.14245),
+                        zindex: None,
+                        color: Color::Solid(WHITE),
+                        blend_mode: BlendMode::SourceOver,
+                        anti_alias: true,
+                        style: Style::default(),
+                    },
+                    None,
+                    None,
+                ))),
+            ],)))
         );
     }
 }

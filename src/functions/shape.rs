@@ -8,9 +8,7 @@ use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::functions::dedup_shape;
 use crate::interpreter::{Data, Value};
-use crate::shape::{
-    BasicShape, Color, ColorChange, HslaChange, PathSegment, Shape, Style, IDENTITY, WHITE,
-};
+use crate::shape::{Color, ColorChange, HslaChange, PathSegment, Shape, Style, IDENTITY, WHITE};
 use core::cell::RefCell;
 
 use rand_chacha::ChaCha8Rng;
@@ -29,6 +27,7 @@ builtin_function!(compose => {
                     anti_alias,
                     style,
                     mask,
+                    pattern,
                 },
                 Shape::Path {
                     segments: b,
@@ -48,6 +47,7 @@ builtin_function!(compose => {
                     anti_alias: *anti_alias,
                     style: style.clone(),
                     mask: mask.clone(),
+                    pattern: pattern.clone(),
                 }
             }
             _ => {
@@ -57,19 +57,7 @@ builtin_function!(compose => {
                     b.clone()
                 };
 
-                Shape::Composite {
-                    a: a.clone(),
-                    b,
-                    transform: IDENTITY,
-                    zindex_overwrite: None,
-                    zindex_shift: None,
-                    color_overwrite: ColorChange::default(),
-                    color_shift: HslaChange::default(),
-                    blend_mode_overwrite: None,
-                    anti_alias_overwrite: None,
-                    style_overwrite: None,
-                    mask_overwrite: None,
-                }
+                Shape::composite(a.clone(), b)
             },
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
@@ -88,7 +76,7 @@ builtin_function!(collect => {
         let shapes = shapes?;
 
         if shapes.len() < 1 {
-            return Ok(Value::Shape(Rc::new(RefCell::new(Shape::Basic(BasicShape::Empty, None)))));
+            return Ok(Value::Shape(Rc::new(RefCell::new(Shape::empty()))));
         }
 
         let is_path = shapes.iter().all(|shape| match &*shape.borrow() {
@@ -104,6 +92,7 @@ builtin_function!(collect => {
             let mut anti_alias = true;
             let mut style = Style::default();
             let mut mask = None;
+            let mut pattern = None;
 
             for path in shapes {
                 match &*path.borrow() {
@@ -116,6 +105,7 @@ builtin_function!(collect => {
                         anti_alias: other_anti_alias,
                         style: other_style,
                         mask: other_mask,
+                        pattern: other_pattern,
                     } => {
                         segments.extend(other_segments);
                         transform = transform.post_concat(*other_transform);
@@ -125,6 +115,7 @@ builtin_function!(collect => {
                         anti_alias = *other_anti_alias;
                         style = other_style.clone();
                         mask = other_mask.clone();
+                        pattern = other_pattern.clone();
                     }
                     _ => unreachable!(),
                 }
@@ -139,20 +130,10 @@ builtin_function!(collect => {
                 anti_alias,
                 style,
                 mask,
+                pattern,
             }
         } else {
-            Shape::Collection {
-                shapes,
-                transform: IDENTITY,
-                zindex_overwrite: None,
-                zindex_shift: None,
-                color_overwrite: ColorChange::default(),
-                color_shift: HslaChange::default(),
-                blend_mode_overwrite: None,
-                anti_alias_overwrite: None,
-                style_overwrite: None,
-                mask_overwrite: None,
-            }
+            Shape::collection(shapes)
         };
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
@@ -278,8 +259,18 @@ builtin_function!(no_dash => {
 
 builtin_function!(mask => {
     [Value::Shape(mask), Value::Shape(shape)] => {
+        let mask = dedup_shape(mask);
         let shape = dedup_shape(shape);
         shape.borrow_mut().set_mask(mask.clone());
+        Value::Shape(shape.clone())
+    }
+});
+
+builtin_function!(pattern => {
+    [Value::Shape(pattern), Value::SpreadMode(sm), Value::Shape(shape)] => {
+        let pattern = dedup_shape(pattern);
+        let shape = dedup_shape(shape);
+        shape.borrow_mut().set_pattern(pattern.clone(), *sm);
         Value::Shape(shape.clone())
     }
 });
@@ -315,17 +306,8 @@ builtin_function!(voronoi => {
             segments.push(PathSegment::Close);
 
             Value::Shape(Rc::new(RefCell::new(Shape::Composite {
-                a: Rc::new(RefCell::new(Shape::Basic(BasicShape::Empty, None))),
-                b: Rc::new(RefCell::new(Shape::Path {
-                    segments,
-                    transform: IDENTITY,
-                    zindex: None,
-                    color: Color::Solid(WHITE),
-                    blend_mode: BlendMode::SourceOver,
-                    anti_alias: true,
-                    style: Style::default(),
-                    mask: None,
-                })),
+                a: Rc::new(RefCell::new(Shape::empty())),
+                b: Rc::new(RefCell::new(Shape::path(segments))),
                 transform: IDENTITY.post_translate(-boxsize as f32 / 2.0, -boxsize as f32 / 2.0),
                 zindex_overwrite: None,
                 zindex_shift: None,
@@ -335,6 +317,7 @@ builtin_function!(voronoi => {
                 anti_alias_overwrite: None,
                 style_overwrite: None,
                 mask_overwrite: None,
+                pattern_overwrite: None,
             })))
         }).collect();
 

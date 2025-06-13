@@ -7,11 +7,10 @@ use alloc::{rc::Rc, vec};
 use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::interpreter::{Data, Value};
-use crate::shape::{Color, PathSegment, Shape, Style, IDENTITY, WHITE};
+use crate::shape::{PathSegment, Shape};
 use core::cell::RefCell;
 
 use rand_chacha::ChaCha8Rng;
-use tiny_skia::BlendMode;
 
 builtin_function!(move_to => {
     [x, y] => {
@@ -28,16 +27,7 @@ builtin_function!(move_to => {
         };
 
         let segments = vec![PathSegment::MoveTo(x, y)];
-        let shape = Shape::Path {
-            segments,
-            transform: IDENTITY,
-            zindex: None,
-            color: Color::Solid(WHITE),
-            blend_mode: BlendMode::SourceOver,
-            anti_alias: true,
-            style: Style::default(),
-            mask: None,
-        };
+        let shape = Shape::path(segments);
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
 });
@@ -57,16 +47,7 @@ builtin_function!(line_to => {
         };
 
         let segments = vec![PathSegment::LineTo(x, y)];
-        let shape = Shape::Path {
-            segments,
-            transform: IDENTITY,
-            zindex: None,
-            color: Color::Solid(WHITE),
-            blend_mode: BlendMode::SourceOver,
-            anti_alias: true,
-            style: Style::default(),
-            mask: None,
-        };
+        let shape = Shape::path(segments);
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
 });
@@ -98,16 +79,7 @@ builtin_function!(quad_to => {
         };
 
         let segments = vec![PathSegment::QuadTo(x1, y1, x, y)];
-        let shape = Shape::Path {
-            segments,
-            transform: IDENTITY,
-            zindex: None,
-            color: Color::Solid(WHITE),
-            blend_mode: BlendMode::SourceOver,
-            anti_alias: true,
-            style: Style::default(),
-            mask: None,
-        };
+        let shape = Shape::path(segments);
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
 });
@@ -151,16 +123,7 @@ builtin_function!(cubic_to => {
         };
 
         let segments = vec![PathSegment::CubicTo(x1, y1, x2, y2, x, y)];
-        let shape = Shape::Path {
-            segments,
-            transform: IDENTITY,
-            zindex: None,
-            color: Color::Solid(WHITE),
-            blend_mode: BlendMode::SourceOver,
-            anti_alias: true,
-            style: Style::default(),
-            mask: None,
-        };
+        let shape = Shape::path(segments);
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
 });
@@ -168,16 +131,7 @@ builtin_function!(cubic_to => {
 builtin_function!(close => {
     [] => {
         let segments = vec![PathSegment::Close];
-        let shape = Shape::Path {
-            segments,
-            transform: IDENTITY,
-            zindex: None,
-            color: Color::Solid(WHITE),
-            blend_mode: BlendMode::SourceOver,
-            anti_alias: true,
-            style: Style::default(),
-            mask: None,
-        };
+        let shape = Shape::path(segments);
         Value::Shape(Rc::new(RefCell::new(shape)))
     }
 });
