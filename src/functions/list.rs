@@ -14,24 +14,42 @@ use rand_chacha::ChaCha8Rng;
 
 builtin_function!(range => {
     [Value::Integer(from), Value::Integer(to)] => {
+        if from >= to {
+            return Err(Error::InvalidRange);
+        }
         Value::List((*from..*to).map(Value::Integer).collect())
     },
     [Value::Float(from), Value::Float(to)] => {
+        if from >= to {
+            return Err(Error::InvalidRange);
+        }
         Value::List((*from as i32..*to as i32).map(|i| Value::Float(i as f32)).collect())
     },
     [Value::Char(from), Value::Char(to)] => {
+        if from >= to {
+            return Err(Error::InvalidRange);
+        }
         Value::String((*from..*to).collect())
     },
 });
 
 builtin_function!(rangei => {
     [Value::Integer(from), Value::Integer(to)] => {
+        if from > to {
+            return Err(Error::InvalidRange);
+        }
         Value::List((*from..=*to).map(Value::Integer).collect())
     },
     [Value::Float(from), Value::Float(to)] => {
+        if from > to {
+            return Err(Error::InvalidRange);
+        }
         Value::List((*from as i32..=*to as i32).map(|i| Value::Float(i as f32)).collect())
     },
     [Value::Char(from), Value::Char(to)] => {
+        if from > to {
+            return Err(Error::InvalidRange);
+        }
         Value::String((*from..=*to).collect())
     },
 });
@@ -216,7 +234,7 @@ builtin_function!(take => {
         } else {
             Value::List(
                 list.iter()
-                    .skip(list.len().saturating_sub(*count as usize))
+                    .skip(list.len().saturating_sub(-count as usize))
                     .cloned()
                     .collect(),
             )
@@ -228,7 +246,7 @@ builtin_function!(take => {
         } else {
             Value::String(
                 s.chars()
-                    .skip(s.chars().count().saturating_sub(*count as usize))
+                    .skip(s.chars().count().saturating_sub(-count as usize))
                     .collect(),
             )
         }
@@ -241,7 +259,7 @@ builtin_function!(drop => {
             Value::List(list.iter().skip(*count as usize).cloned().collect())
         } else {
             Value::List(
-                list.iter().take(list.len() - *count as usize)
+                list.iter().take(list.len() - -count as usize)
                     .cloned()
                     .collect(),
             )
@@ -252,7 +270,7 @@ builtin_function!(drop => {
             Value::String(s.chars().skip(*count as usize).collect())
         } else {
             Value::String(
-                s.chars().take(s.chars().count() - *count as usize).collect(),
+                s.chars().take(s.chars().count() - -count as usize).collect(),
             )
         }
     },
@@ -705,3 +723,916 @@ builtin_function!(intersperse => {
     [value, Value::List(list)] => Value::List(list.iter().intersperse(value).cloned().collect()),
     [Value::Char(c), Value::String(s)] => Value::String(s.chars().intersperse(*c).collect()),
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+
+    #[test]
+    fn test_range() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            range(&mut rng, &data, &[Value::Integer(0), Value::Integer(3)]).ok(),
+            Some(Value::List(vec![
+                Value::Integer(0),
+                Value::Integer(1),
+                Value::Integer(2)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_rangei() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            rangei(&mut rng, &data, &[Value::Integer(0), Value::Integer(3)]).ok(),
+            Some(Value::List(vec![
+                Value::Integer(0),
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(3)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_concat() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List concatenation
+        assert_eq!(
+            concat(
+                &mut rng,
+                &data,
+                &[
+                    Value::List(vec![Value::Integer(1), Value::Integer(2)]),
+                    Value::List(vec![Value::Integer(3), Value::Integer(4)])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(3),
+                Value::Integer(4)
+            ]))
+        );
+
+        // String concatenation
+        assert_eq!(
+            concat(
+                &mut rng,
+                &data,
+                &[Value::String("hello".into()), Value::String("world".into())]
+            )
+            .ok(),
+            Some(Value::String("helloworld".into()))
+        );
+    }
+
+    #[test]
+    fn test_prepend() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List prepend
+        assert_eq!(
+            prepend(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(0),
+                    Value::List(vec![Value::Integer(1), Value::Integer(2)])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(0),
+                Value::Integer(1),
+                Value::Integer(2)
+            ]))
+        );
+
+        // String prepend
+        assert_eq!(
+            prepend(
+                &mut rng,
+                &data,
+                &[Value::Char('h'), Value::String("ello".into())]
+            )
+            .ok(),
+            Some(Value::String("hello".into()))
+        );
+    }
+
+    #[test]
+    fn test_append() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List append
+        assert_eq!(
+            append(
+                &mut rng,
+                &data,
+                &[
+                    Value::List(vec![Value::Integer(1), Value::Integer(2)]),
+                    Value::Integer(3)
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(3)
+            ]))
+        );
+
+        // String append
+        assert_eq!(
+            append(
+                &mut rng,
+                &data,
+                &[Value::String("hell".into()), Value::Char('o')]
+            )
+            .ok(),
+            Some(Value::String("hello".into()))
+        );
+    }
+
+    #[test]
+    fn test_nth() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List indexing
+        assert_eq!(
+            nth(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(1),
+                    Value::List(vec![
+                        Value::Integer(10),
+                        Value::Integer(20),
+                        Value::Integer(30)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::Integer(20))
+        );
+
+        // Negative index
+        assert_eq!(
+            nth(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(-1),
+                    Value::List(vec![
+                        Value::Integer(10),
+                        Value::Integer(20),
+                        Value::Integer(30)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::Integer(30))
+        );
+
+        // String indexing
+        assert_eq!(
+            nth(
+                &mut rng,
+                &data,
+                &[Value::Integer(2), Value::String("hello".into())]
+            )
+            .ok(),
+            Some(Value::Char('l'))
+        );
+
+        // Out of bounds
+        assert_eq!(
+            nth(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(5),
+                    Value::List(vec![Value::Integer(10), Value::Integer(20)])
+                ]
+            )
+            .ok(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_set() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List set
+        assert_eq!(
+            set(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(1),
+                    Value::Integer(99),
+                    Value::List(vec![
+                        Value::Integer(10),
+                        Value::Integer(20),
+                        Value::Integer(30)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(10),
+                Value::Integer(99),
+                Value::Integer(30)
+            ]))
+        );
+
+        // String set
+        assert_eq!(
+            set(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(0),
+                    Value::Char('H'),
+                    Value::String("hello".into())
+                ]
+            )
+            .ok(),
+            Some(Value::String("Hello".into()))
+        );
+    }
+
+    #[test]
+    fn test_length() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        assert_eq!(
+            length(
+                &mut rng,
+                &data,
+                &[Value::List(vec![Value::Integer(1), Value::Integer(2)])]
+            )
+            .ok(),
+            Some(Value::Integer(2))
+        );
+
+        assert_eq!(
+            length(&mut rng, &data, &[Value::String("hello".into())]).ok(),
+            Some(Value::Integer(5))
+        );
+    }
+
+    #[test]
+    fn test_is_empty() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        assert_eq!(
+            is_empty(&mut rng, &data, &[Value::List(vec![])]).ok(),
+            Some(Value::Boolean(true))
+        );
+
+        assert_eq!(
+            is_empty(&mut rng, &data, &[Value::String("".into())]).ok(),
+            Some(Value::Boolean(true))
+        );
+
+        assert_eq!(
+            is_empty(&mut rng, &data, &[Value::List(vec![Value::Integer(1)])]).ok(),
+            Some(Value::Boolean(false))
+        );
+    }
+
+    #[test]
+    fn test_head_tail_init_last() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let list = Value::List(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]);
+        let s = Value::String("hello".into());
+
+        // Head tests
+        assert_eq!(
+            head(&mut rng, &data, &[list.clone()]).ok(),
+            Some(Value::Integer(1))
+        );
+        assert_eq!(
+            head(&mut rng, &data, &[s.clone()]).ok(),
+            Some(Value::Char('h'))
+        );
+
+        // Tail tests
+        assert_eq!(
+            tail(&mut rng, &data, &[list.clone()]).ok(),
+            Some(Value::List(vec![Value::Integer(2), Value::Integer(3)]))
+        );
+        assert_eq!(
+            tail(&mut rng, &data, &[s.clone()]).ok(),
+            Some(Value::String("ello".into()))
+        );
+
+        // Init tests
+        assert_eq!(
+            init(&mut rng, &data, &[list.clone()]).ok(),
+            Some(Value::List(vec![Value::Integer(1), Value::Integer(2)]))
+        );
+        assert_eq!(
+            init(&mut rng, &data, &[s.clone()]).ok(),
+            Some(Value::String("hell".into()))
+        );
+
+        // Last tests
+        assert_eq!(last(&mut rng, &data, &[list]).ok(), Some(Value::Integer(3)));
+        assert_eq!(last(&mut rng, &data, &[s]).ok(), Some(Value::Char('o')));
+
+        // Empty cases
+        assert_eq!(head(&mut rng, &data, &[Value::List(vec![])]).ok(), None);
+    }
+
+    #[test]
+    fn test_contains() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List contains
+        assert_eq!(
+            contains(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(2),
+                    Value::List(vec![
+                        Value::Integer(1),
+                        Value::Integer(2),
+                        Value::Integer(3)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::Boolean(true))
+        );
+
+        // String contains
+        assert_eq!(
+            contains(
+                &mut rng,
+                &data,
+                &[Value::Char('e'), Value::String("hello".into())]
+            )
+            .ok(),
+            Some(Value::Boolean(true))
+        );
+    }
+
+    #[test]
+    fn test_take_drop() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let list = Value::List(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+            Value::Integer(4),
+        ]);
+        let s = Value::String("hello".into());
+
+        // Take tests
+        assert_eq!(
+            take(&mut rng, &data, &[Value::Integer(2), list.clone()]).ok(),
+            Some(Value::List(vec![Value::Integer(1), Value::Integer(2)]))
+        );
+        assert_eq!(
+            take(&mut rng, &data, &[Value::Integer(-2), list.clone()]).ok(),
+            Some(Value::List(vec![Value::Integer(3), Value::Integer(4)]))
+        );
+        assert_eq!(
+            take(&mut rng, &data, &[Value::Integer(2), s.clone()]).ok(),
+            Some(Value::String("he".into()))
+        );
+
+        // Drop tests
+        assert_eq!(
+            drop(&mut rng, &data, &[Value::Integer(2), list.clone()]).ok(),
+            Some(Value::List(vec![Value::Integer(3), Value::Integer(4)]))
+        );
+        assert_eq!(
+            drop(&mut rng, &data, &[Value::Integer(-2), list]).ok(),
+            Some(Value::List(vec![Value::Integer(1), Value::Integer(2)]))
+        );
+        assert_eq!(
+            drop(&mut rng, &data, &[Value::Integer(2), s]).ok(),
+            Some(Value::String("llo".into()))
+        );
+    }
+
+    #[test]
+    fn test_index_of() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List index_of
+        assert_eq!(
+            index_of(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(2),
+                    Value::List(vec![
+                        Value::Integer(1),
+                        Value::Integer(2),
+                        Value::Integer(3)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::Integer(1))
+        );
+
+        // String index_of
+        assert_eq!(
+            index_of(
+                &mut rng,
+                &data,
+                &[Value::Char('l'), Value::String("hello".into())]
+            )
+            .ok(),
+            Some(Value::Integer(2))
+        );
+
+        // Not found case
+        assert_eq!(
+            index_of(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(4),
+                    Value::List(vec![Value::Integer(1), Value::Integer(2)])
+                ]
+            )
+            .ok(),
+            Some(Value::Integer(-1))
+        );
+    }
+
+    #[test]
+    fn test_reverse() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List reverse
+        assert_eq!(
+            reverse(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3)
+                ])]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(3),
+                Value::Integer(2),
+                Value::Integer(1)
+            ]))
+        );
+
+        // String reverse
+        assert_eq!(
+            reverse(&mut rng, &data, &[Value::String("hello".into())]).ok(),
+            Some(Value::String("olleh".into()))
+        );
+    }
+
+    #[test]
+    fn test_slice() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List slice
+        assert_eq!(
+            slice(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(1),
+                    Value::Integer(3),
+                    Value::List(vec![
+                        Value::Integer(1),
+                        Value::Integer(2),
+                        Value::Integer(3),
+                        Value::Integer(4)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![Value::Integer(2), Value::Integer(3)]))
+        );
+
+        // String slice
+        assert_eq!(
+            slice(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(1),
+                    Value::Integer(4),
+                    Value::String("hello".into())
+                ]
+            )
+            .ok(),
+            Some(Value::String("ell".into()))
+        );
+
+        // Negative indices
+        assert_eq!(
+            slice(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(-3),
+                    Value::Integer(-1),
+                    Value::List(vec![
+                        Value::Integer(1),
+                        Value::Integer(2),
+                        Value::Integer(3),
+                        Value::Integer(4)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![Value::Integer(2), Value::Integer(3)]))
+        );
+    }
+
+    #[test]
+    fn test_split() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List split
+        assert_eq!(
+            split(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(2),
+                    Value::List(vec![
+                        Value::Integer(1),
+                        Value::Integer(2),
+                        Value::Integer(3),
+                        Value::Integer(4)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::List(vec![Value::Integer(1), Value::Integer(2)]),
+                Value::List(vec![Value::Integer(3), Value::Integer(4)])
+            ]))
+        );
+
+        // String split
+        assert_eq!(
+            split(
+                &mut rng,
+                &data,
+                &[Value::Integer(2), Value::String("hello".into())]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::String("he".into()),
+                Value::String("llo".into())
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_unique() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // List unique
+        assert_eq!(
+            unique(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(1),
+                    Value::Integer(3)
+                ])]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(3)
+            ]))
+        );
+
+        // String unique
+        assert_eq!(
+            unique(&mut rng, &data, &[Value::String("hello".into())]).ok(),
+            Some(Value::String("helo".into()))
+        );
+    }
+
+    #[test]
+    fn test_min_max_of() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Min of list
+        assert_eq!(
+            min_of(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::Integer(3),
+                    Value::Integer(1),
+                    Value::Integer(2)
+                ])]
+            )
+            .ok(),
+            Some(Value::Integer(1))
+        );
+
+        // Max of list
+        assert_eq!(
+            max_of(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::Integer(3),
+                    Value::Integer(1),
+                    Value::Integer(2)
+                ])]
+            )
+            .ok(),
+            Some(Value::Integer(3))
+        );
+
+        // Min of string
+        assert_eq!(
+            min_of(&mut rng, &data, &[Value::String("hello".into())]).ok(),
+            Some(Value::Char('e'))
+        );
+
+        // Empty list case
+        assert_eq!(min_of(&mut rng, &data, &[Value::List(vec![])]).ok(), None);
+    }
+
+    #[test]
+    fn test_sum_product() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Sum of integers
+        assert_eq!(
+            sum(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3)
+                ])]
+            )
+            .ok(),
+            Some(Value::Integer(6))
+        );
+
+        // Product of integers
+        assert_eq!(
+            product(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                    Value::Integer(4)
+                ])]
+            )
+            .ok(),
+            Some(Value::Integer(24))
+        );
+
+        // Empty list sum
+        assert_eq!(
+            sum(&mut rng, &data, &[Value::List(vec![])]).ok(),
+            Some(Value::Integer(0))
+        );
+    }
+
+    #[test]
+    fn test_sort() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Sort integers
+        assert_eq!(
+            sort(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::Integer(3),
+                    Value::Integer(1),
+                    Value::Integer(2)
+                ])]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(3)
+            ]))
+        );
+
+        // Sort string
+        assert_eq!(
+            sort(&mut rng, &data, &[Value::String("hello".into())]).ok(),
+            Some(Value::String("ehllo".into()))
+        );
+    }
+
+    #[test]
+    fn test_flatten() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        assert_eq!(
+            flatten(
+                &mut rng,
+                &data,
+                &[Value::List(vec![
+                    Value::List(vec![Value::Integer(1), Value::Integer(2)]),
+                    Value::List(vec![Value::Integer(3), Value::Integer(4)])
+                ])]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(3),
+                Value::Integer(4)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_join() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Join lists
+        assert_eq!(
+            join(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(0),
+                    Value::List(vec![
+                        Value::List(vec![Value::Integer(1), Value::Integer(2)]),
+                        Value::List(vec![Value::Integer(3), Value::Integer(4)])
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(0),
+                Value::Integer(3),
+                Value::Integer(4)
+            ]))
+        );
+
+        // Join strings with char
+        assert_eq!(
+            join(
+                &mut rng,
+                &data,
+                &[
+                    Value::Char(','),
+                    Value::List(vec![
+                        Value::String("a".into()),
+                        Value::String("b".into()),
+                        Value::String("c".into())
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::String("a,b,c".into()))
+        );
+    }
+
+    #[test]
+    fn test_intercalate() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Intercalate strings
+        assert_eq!(
+            intercalate(
+                &mut rng,
+                &data,
+                &[
+                    Value::String(", ".into()),
+                    Value::List(vec![
+                        Value::String("a".into()),
+                        Value::String("b".into()),
+                        Value::String("c".into())
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::String("a, b, c".into()))
+        );
+
+        // Intercalate lists
+        assert_eq!(
+            intercalate(
+                &mut rng,
+                &data,
+                &[
+                    Value::List(vec![Value::Integer(0), Value::Integer(0)]),
+                    Value::List(vec![
+                        Value::List(vec![Value::Integer(1), Value::Integer(2)]),
+                        Value::List(vec![Value::Integer(3), Value::Integer(4)])
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(0),
+                Value::Integer(0),
+                Value::Integer(3),
+                Value::Integer(4)
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_intersperse() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Intersperse list
+        assert_eq!(
+            intersperse(
+                &mut rng,
+                &data,
+                &[
+                    Value::Integer(0),
+                    Value::List(vec![
+                        Value::Integer(1),
+                        Value::Integer(2),
+                        Value::Integer(3)
+                    ])
+                ]
+            )
+            .ok(),
+            Some(Value::List(vec![
+                Value::Integer(1),
+                Value::Integer(0),
+                Value::Integer(2),
+                Value::Integer(0),
+                Value::Integer(3)
+            ]))
+        );
+
+        // Intersperse string
+        assert_eq!(
+            intersperse(
+                &mut rng,
+                &data,
+                &[Value::Char(','), Value::String("abc".into())]
+            )
+            .ok(),
+            Some(Value::String("a,b,c".into()))
+        );
+    }
+}

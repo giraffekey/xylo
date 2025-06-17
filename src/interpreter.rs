@@ -139,6 +139,16 @@ pub struct Data {
     pub perlin: Perlin,
 }
 
+impl Default for Data {
+    fn default() -> Data {
+        Data {
+            dimensions: (400, 400),
+            max_depth: 1500,
+            perlin: Perlin::new(0),
+        }
+    }
+}
+
 type Frame = HashMap<String, Function>;
 
 #[derive(Debug)]

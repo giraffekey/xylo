@@ -388,3 +388,275 @@ builtin_function!(grad_spread_mode => {
         Value::Gradient(g)
     }
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "std")]
+    use std::rc::Rc;
+
+    #[cfg(feature = "no-std")]
+    use alloc::{rc::Rc, vec};
+
+    use crate::shape::Shape;
+    use core::cell::RefCell;
+    use rand::SeedableRng;
+    use tiny_skia::SpreadMode;
+
+    #[test]
+    fn test_hsl_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let shape = Rc::new(RefCell::new(Shape::path(vec![])));
+
+        // Test hsl with various input types
+        let hsl_tests = vec![
+            (Value::Integer(180), Value::Integer(50), Value::Integer(50)), // int, int, int
+            (Value::Float(180.0), Value::Float(0.5), Value::Float(0.5)),   // float, float, float
+            (Value::Integer(180), Value::Float(0.5), Value::Integer(50)),  // mixed types
+        ];
+
+        for (h, s, l) in hsl_tests {
+            let result = hsl(&mut rng, &data, &[h, s, l, Value::Shape(shape.clone())]).unwrap();
+
+            assert!(matches!(result, Value::Shape(_)));
+        }
+
+        // Test hsla
+        let hsla_result = hsla(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(180),
+                Value::Integer(50),
+                Value::Integer(50),
+                Value::Float(0.8),
+                Value::Shape(shape.clone()),
+            ],
+        )
+        .unwrap();
+        assert!(matches!(hsla_result, Value::Shape(_)));
+
+        // Test individual components
+        let hue_result = hue(
+            &mut rng,
+            &data,
+            &[Value::Integer(90), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(hue_result, Value::Shape(_)));
+
+        let sat_result = saturation(
+            &mut rng,
+            &data,
+            &[Value::Float(0.75), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(sat_result, Value::Shape(_)));
+
+        // Test shifts
+        let hshift_result = hshift(
+            &mut rng,
+            &data,
+            &[Value::Integer(30), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(hshift_result, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_solid_and_hex() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let shape = Rc::new(RefCell::new(Shape::path(vec![])));
+
+        // Test solid
+        let solid_result = solid(&mut rng, &data, &[Value::Shape(shape.clone())]).unwrap();
+        assert!(matches!(solid_result, Value::Shape(_)));
+
+        // Test hex
+        let hex_result = hex(
+            &mut rng,
+            &data,
+            &[Value::Hex([255, 0, 0]), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(hex_result, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_gradient_creation() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Test linear gradient
+        let linear_grad = linear_grad(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(0),
+                Value::Integer(0),
+                Value::Integer(100),
+                Value::Integer(100),
+            ],
+        )
+        .unwrap();
+        assert!(matches!(linear_grad, Value::Gradient(_)));
+
+        // Test radial gradient
+        let radial_grad = radial_grad(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(50),
+                Value::Integer(50),
+                Value::Integer(100),
+                Value::Integer(100),
+                Value::Integer(50),
+            ],
+        )
+        .unwrap();
+        assert!(matches!(radial_grad, Value::Gradient(_)));
+
+        // Test gradient application to shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![])));
+        let grad_result =
+            gradient(&mut rng, &data, &[linear_grad, Value::Shape(shape.clone())]).unwrap();
+        assert!(matches!(grad_result, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_gradient_manipulation() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create base gradient
+        let grad = linear_grad(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(0),
+                Value::Integer(0),
+                Value::Integer(100),
+                Value::Integer(100),
+            ],
+        )
+        .unwrap();
+
+        // Test gradient start/end modification
+        let new_start = grad_start(
+            &mut rng,
+            &data,
+            &[Value::Integer(10), Value::Integer(10), grad.clone()],
+        )
+        .unwrap();
+        assert!(matches!(new_start, Value::Gradient(_)));
+
+        let new_end = grad_end(
+            &mut rng,
+            &data,
+            &[Value::Integer(90), Value::Integer(90), new_start.clone()],
+        )
+        .unwrap();
+        assert!(matches!(new_end, Value::Gradient(_)));
+
+        // Test gradient stops
+        let with_stop = grad_stop_hsl(
+            &mut rng,
+            &data,
+            &[
+                Value::Float(0.5),
+                Value::Integer(180),
+                Value::Integer(50),
+                Value::Integer(50),
+                new_end.clone(),
+            ],
+        )
+        .unwrap();
+        assert!(matches!(with_stop, Value::Gradient(_)));
+
+        // Test spread mode
+        let with_spread = grad_spread_mode(
+            &mut rng,
+            &data,
+            &[Value::SpreadMode(SpreadMode::Repeat), with_stop.clone()],
+        )
+        .unwrap();
+        assert!(matches!(with_spread, Value::Gradient(_)));
+    }
+
+    #[test]
+    fn test_gradient_conversion() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create radial gradient
+        let radial = radial_grad(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(50),
+                Value::Integer(50),
+                Value::Integer(100),
+                Value::Integer(100),
+                Value::Integer(50),
+            ],
+        )
+        .unwrap();
+
+        // Convert to linear
+        let linear = to_linear_grad(&mut rng, &data, &[radial.clone()]).unwrap();
+        assert!(matches!(linear, Value::Gradient(_)));
+
+        // Convert back to radial
+        let radial_again =
+            grad_radius(&mut rng, &data, &[Value::Integer(75), linear.clone()]).unwrap();
+        assert!(matches!(radial_again, Value::Gradient(_)));
+    }
+
+    #[test]
+    fn test_invalid_inputs() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let shape = Rc::new(RefCell::new(Shape::path(vec![])));
+
+        // Test hsl with wrong number of arguments
+        assert!(hsl(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(180),
+                Value::Integer(50),
+                Value::Shape(shape.clone())
+            ]
+        )
+        .is_err());
+
+        // Test gradient with invalid position
+        let grad = linear_grad(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(0),
+                Value::Integer(0),
+                Value::Integer(100),
+                Value::Integer(100),
+            ],
+        )
+        .unwrap();
+
+        assert!(grad_stop_hsl(
+            &mut rng,
+            &data,
+            &[
+                Value::String("0.5".into()), // invalid position
+                Value::Integer(180),
+                Value::Integer(50),
+                Value::Integer(50),
+                grad.clone()
+            ]
+        )
+        .is_err());
+    }
+}

@@ -321,3 +321,602 @@ builtin_function!(max => {
     [Value::Integer(a), Value::Float(b)] => Value::Float((*a as f32).max(*b)),
     [Value::Float(a), Value::Integer(b)] => Value::Float((*b as f32).max(*a))
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+
+    #[test]
+    fn test_neg() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            neg(&mut rng, &data, &[Value::Integer(1)]).ok(),
+            Some(Value::Integer(-1))
+        );
+        assert_eq!(
+            neg(&mut rng, &data, &[Value::Integer(-1)]).ok(),
+            Some(Value::Integer(1))
+        );
+        assert_eq!(
+            neg(&mut rng, &data, &[Value::Float(2.5)]).ok(),
+            Some(Value::Float(-2.5))
+        );
+        assert_eq!(
+            neg(&mut rng, &data, &[Value::Float(-2.5)]).ok(),
+            Some(Value::Float(2.5))
+        );
+        assert_eq!(
+            neg(&mut rng, &data, &[Value::Complex(Complex::new(3.0, 1.0))]).ok(),
+            Some(Value::Complex(Complex::new(-3.0, -1.0)))
+        );
+        assert_eq!(
+            neg(&mut rng, &data, &[Value::Complex(Complex::new(-3.0, -1.0))]).ok(),
+            Some(Value::Complex(Complex::new(3.0, 1.0)))
+        );
+    }
+
+    #[test]
+    fn test_bitnot() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            bitnot(&mut rng, &data, &[Value::Integer(0b1010)]).ok(),
+            Some(Value::Integer(!0b1010))
+        );
+        assert_eq!(
+            bitnot(&mut rng, &data, &[Value::Float(5.0)]).ok(),
+            Some(Value::Float(!5i32 as f32))
+        );
+    }
+
+    #[test]
+    fn test_add() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            add(&mut rng, &data, &[Value::Integer(2), Value::Integer(3)]).ok(),
+            Some(Value::Integer(5))
+        );
+        assert_eq!(
+            add(&mut rng, &data, &[Value::Float(2.5), Value::Float(3.5)]).ok(),
+            Some(Value::Float(6.0))
+        );
+        assert_eq!(
+            add(
+                &mut rng,
+                &data,
+                &[
+                    Value::Complex(Complex::new(1.0, 2.0)),
+                    Value::Complex(Complex::new(3.0, 4.0))
+                ]
+            )
+            .ok(),
+            Some(Value::Complex(Complex::new(4.0, 6.0)))
+        );
+        assert_eq!(
+            add(&mut rng, &data, &[Value::Integer(2), Value::Float(3.5)]).ok(),
+            Some(Value::Float(5.5))
+        );
+        assert_eq!(
+            add(&mut rng, &data, &[Value::Float(2.5), Value::Integer(3)]).ok(),
+            Some(Value::Float(5.5))
+        );
+        assert_eq!(
+            add(
+                &mut rng,
+                &data,
+                &[Value::Complex(Complex::new(1.0, 2.0)), Value::Integer(3)]
+            )
+            .ok(),
+            Some(Value::Complex(Complex::new(4.0, 2.0)))
+        );
+    }
+
+    #[test]
+    fn test_sub() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            sub(&mut rng, &data, &[Value::Integer(5), Value::Integer(3)]).ok(),
+            Some(Value::Integer(2))
+        );
+        assert_eq!(
+            sub(&mut rng, &data, &[Value::Float(5.5), Value::Float(3.5)]).ok(),
+            Some(Value::Float(2.0))
+        );
+        assert_eq!(
+            sub(
+                &mut rng,
+                &data,
+                &[
+                    Value::Complex(Complex::new(4.0, 6.0)),
+                    Value::Complex(Complex::new(3.0, 4.0))
+                ]
+            )
+            .ok(),
+            Some(Value::Complex(Complex::new(1.0, 2.0)))
+        );
+        assert_eq!(
+            sub(&mut rng, &data, &[Value::Integer(5), Value::Float(3.5)]).ok(),
+            Some(Value::Float(1.5))
+        );
+        assert_eq!(
+            sub(&mut rng, &data, &[Value::Float(5.5), Value::Integer(3)]).ok(),
+            Some(Value::Float(2.5))
+        );
+    }
+
+    #[test]
+    fn test_mul() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            mul(&mut rng, &data, &[Value::Integer(2), Value::Integer(3)]).ok(),
+            Some(Value::Integer(6))
+        );
+        assert_eq!(
+            mul(&mut rng, &data, &[Value::Float(2.5), Value::Float(4.0)]).ok(),
+            Some(Value::Float(10.0))
+        );
+        assert_eq!(
+            mul(
+                &mut rng,
+                &data,
+                &[
+                    Value::Complex(Complex::new(1.0, 2.0)),
+                    Value::Complex(Complex::new(3.0, 4.0))
+                ]
+            )
+            .ok(),
+            Some(Value::Complex(Complex::new(-5.0, 10.0)))
+        );
+        assert_eq!(
+            mul(&mut rng, &data, &[Value::Integer(2), Value::Float(3.5)]).ok(),
+            Some(Value::Float(7.0))
+        );
+    }
+
+    #[test]
+    fn test_div() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            div(&mut rng, &data, &[Value::Integer(6), Value::Integer(3)]).ok(),
+            Some(Value::Integer(2))
+        );
+        assert_eq!(
+            div(&mut rng, &data, &[Value::Float(10.0), Value::Float(4.0)]).ok(),
+            Some(Value::Float(2.5))
+        );
+        assert_eq!(
+            div(
+                &mut rng,
+                &data,
+                &[
+                    Value::Complex(Complex::new(-5.0, 10.0)),
+                    Value::Complex(Complex::new(1.0, 2.0))
+                ]
+            )
+            .ok(),
+            Some(Value::Complex(Complex::new(3.0, 4.0)))
+        );
+        assert_eq!(
+            div(&mut rng, &data, &[Value::Integer(7), Value::Float(2.0)]).ok(),
+            Some(Value::Float(3.5))
+        );
+    }
+
+    #[test]
+    fn test_modulo() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            modulo(&mut rng, &data, &[Value::Integer(7), Value::Integer(3)]).ok(),
+            Some(Value::Integer(1))
+        );
+        assert_eq!(
+            modulo(&mut rng, &data, &[Value::Float(7.5), Value::Float(3.0)]).ok(),
+            Some(Value::Float(1.5))
+        );
+        assert_eq!(
+            modulo(&mut rng, &data, &[Value::Integer(7), Value::Float(3.0)]).ok(),
+            Some(Value::Float(1.0))
+        );
+    }
+
+    #[test]
+    fn test_pow() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            pow(&mut rng, &data, &[Value::Integer(2), Value::Integer(3)]).ok(),
+            Some(Value::Float(8.0))
+        );
+        assert_eq!(
+            pow(&mut rng, &data, &[Value::Float(2.5), Value::Float(2.0)]).ok(),
+            Some(Value::Float(6.25))
+        );
+        assert_eq!(
+            pow(&mut rng, &data, &[Value::Integer(2), Value::Float(3.0)]).ok(),
+            Some(Value::Float(8.0))
+        );
+    }
+
+    #[test]
+    fn test_bitand() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            bitand(
+                &mut rng,
+                &data,
+                &[Value::Integer(0b1010), Value::Integer(0b1100)]
+            )
+            .ok(),
+            Some(Value::Integer(0b1000))
+        );
+    }
+
+    #[test]
+    fn test_bitor() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            bitor(
+                &mut rng,
+                &data,
+                &[Value::Integer(0b1010), Value::Integer(0b1100)]
+            )
+            .ok(),
+            Some(Value::Integer(0b1110))
+        );
+    }
+
+    #[test]
+    fn test_bitxor() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            bitxor(
+                &mut rng,
+                &data,
+                &[Value::Integer(0b1010), Value::Integer(0b1100)]
+            )
+            .ok(),
+            Some(Value::Integer(0b0110))
+        );
+    }
+
+    #[test]
+    fn test_bitleft() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            bitleft(
+                &mut rng,
+                &data,
+                &[Value::Integer(0b1010), Value::Integer(2)]
+            )
+            .ok(),
+            Some(Value::Integer(0b101000))
+        );
+    }
+
+    #[test]
+    fn test_bitright() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            bitright(
+                &mut rng,
+                &data,
+                &[Value::Integer(0b101000), Value::Integer(2)]
+            )
+            .ok(),
+            Some(Value::Integer(0b1010))
+        );
+    }
+
+    #[test]
+    fn test_int() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            int(&mut rng, &data, &[Value::Float(3.7)]).ok(),
+            Some(Value::Integer(3))
+        );
+        assert_eq!(
+            int(&mut rng, &data, &[Value::String("42".into())]).ok(),
+            Some(Value::Integer(42))
+        );
+    }
+
+    #[test]
+    fn test_float() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            float(&mut rng, &data, &[Value::Integer(3)]).ok(),
+            Some(Value::Float(3.0))
+        );
+        assert_eq!(
+            float(&mut rng, &data, &[Value::String("3.14".into())]).ok(),
+            Some(Value::Float(3.14))
+        );
+    }
+
+    #[test]
+    fn test_complex() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            complex(&mut rng, &data, &[Value::Float(1.0), Value::Float(2.0)]).ok(),
+            Some(Value::Complex(Complex::new(1.0, 2.0)))
+        );
+        assert_eq!(
+            complex(&mut rng, &data, &[Value::String("1+2i".into())]).ok(),
+            Some(Value::Complex(Complex::new(1.0, 2.0)))
+        );
+    }
+
+    #[test]
+    fn test_real_imag() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let c = Value::Complex(Complex::new(1.0, 2.0));
+        assert_eq!(
+            real(&mut rng, &data, &[c.clone()]).ok(),
+            Some(Value::Float(1.0))
+        );
+        assert_eq!(imag(&mut rng, &data, &[c]).ok(), Some(Value::Float(2.0)));
+    }
+
+    #[test]
+    fn test_deg_rad_conversion() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            deg_to_rad(&mut rng, &data, &[Value::Integer(180)]).ok(),
+            Some(Value::Float(PI))
+        );
+        assert_eq!(
+            rad_to_deg(&mut rng, &data, &[Value::Float(PI)]).ok(),
+            Some(Value::Float(180.0))
+        );
+    }
+
+    #[test]
+    fn test_constants() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(pi(&mut rng, &data, &[]).ok(), Some(Value::Float(PI)));
+        assert_eq!(tau(&mut rng, &data, &[]).ok(), Some(Value::Float(TAU)));
+        assert_eq!(e(&mut rng, &data, &[]).ok(), Some(Value::Float(E)));
+        assert_eq!(phi(&mut rng, &data, &[]).ok(), Some(Value::Float(PHI)));
+    }
+
+    #[test]
+    fn test_trig_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let angle = Value::Float(PI / 4.0);
+
+        // sin(π/4) = √2/2 ≈ 0.7071067811865475
+        assert!(
+            if let Some(Value::Float(result)) = sin(&mut rng, &data, &[angle.clone()]).ok() {
+                (result - 0.7071067811865475).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+
+        // cos(π/4) = √2/2 ≈ 0.7071067811865475
+        assert!(
+            if let Some(Value::Float(result)) = cos(&mut rng, &data, &[angle.clone()]).ok() {
+                (result - 0.7071067811865475).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+
+        // tan(π/4) = 1
+        assert!(
+            if let Some(Value::Float(result)) = tan(&mut rng, &data, &[angle]).ok() {
+                (result - 1.0).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+    }
+
+    #[test]
+    fn test_inverse_trig_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let value = Value::Float(0.5);
+
+        // asin(0.5) = π/6 ≈ 0.5235987755982988
+        assert!(
+            if let Some(Value::Float(result)) = asin(&mut rng, &data, &[value.clone()]).ok() {
+                (result - 0.5235987755982988).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+
+        // acos(0.5) = π/3 ≈ 1.0471975511965976
+        assert!(
+            if let Some(Value::Float(result)) = acos(&mut rng, &data, &[value.clone()]).ok() {
+                (result - 1.0471975511965976).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+
+        // atan(0.5) ≈ 0.4636476090008061
+        assert!(
+            if let Some(Value::Float(result)) = atan(&mut rng, &data, &[value]).ok() {
+                (result - 0.4636476090008061).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+    }
+
+    #[test]
+    fn test_hyperbolic_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        let value = Value::Float(1.0);
+
+        // sinh(1) ≈ 1.1752011936438014
+        assert!(
+            if let Some(Value::Float(result)) = sinh(&mut rng, &data, &[value.clone()]).ok() {
+                (result - 1.1752011936438014).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+
+        // cosh(1) ≈ 1.543080634815244
+        assert!(
+            if let Some(Value::Float(result)) = cosh(&mut rng, &data, &[value.clone()]).ok() {
+                (result - 1.543080634815244).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+
+        // tanh(1) ≈ 0.7615941559557649
+        assert!(
+            if let Some(Value::Float(result)) = tanh(&mut rng, &data, &[value]).ok() {
+                (result - 0.7615941559557649).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+    }
+
+    #[test]
+    fn test_logarithmic_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // ln(e) = 1
+        assert!(
+            if let Some(Value::Float(result)) = ln(&mut rng, &data, &[Value::Float(E)]).ok() {
+                (result - 1.0).abs() < 1e-6
+            } else {
+                false
+            }
+        );
+
+        // log10(100) = 2
+        assert!(if let Some(Value::Float(result)) =
+            log10(&mut rng, &data, &[Value::Integer(100)]).ok()
+        {
+            (result - 2.0).abs() < 1e-6
+        } else {
+            false
+        });
+
+        // log2(8) = 3 (using log with base 2)
+        assert_eq!(
+            log(&mut rng, &data, &[Value::Integer(2), Value::Integer(8)]).ok(),
+            Some(Value::Integer(3))
+        );
+    }
+
+    #[test]
+    fn test_abs() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            abs(&mut rng, &data, &[Value::Integer(-5)]).ok(),
+            Some(Value::Integer(5))
+        );
+        assert_eq!(
+            abs(&mut rng, &data, &[Value::Float(-3.5)]).ok(),
+            Some(Value::Float(3.5))
+        );
+        assert!(if let Some(Value::Float(result)) =
+            abs(&mut rng, &data, &[Value::Complex(Complex::new(3.0, 4.0))]).ok()
+        {
+            (result - 5.0).abs() < 1e-6
+        } else {
+            false
+        });
+    }
+
+    #[test]
+    fn test_floor_ceil() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            floor(&mut rng, &data, &[Value::Float(3.7)]).ok(),
+            Some(Value::Integer(3))
+        );
+        assert_eq!(
+            ceil(&mut rng, &data, &[Value::Float(3.2)]).ok(),
+            Some(Value::Integer(4))
+        );
+    }
+
+    #[test]
+    fn test_sqrt_cbrt() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert!(if let Some(Value::Float(result)) =
+            sqrt(&mut rng, &data, &[Value::Integer(25)]).ok()
+        {
+            (result - 5.0).abs() < 1e-6
+        } else {
+            false
+        });
+        assert!(if let Some(Value::Float(result)) =
+            cbrt(&mut rng, &data, &[Value::Integer(27)]).ok()
+        {
+            (result - 3.0).abs() < 1e-6
+        } else {
+            false
+        });
+    }
+
+    #[test]
+    fn test_factorials() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            fact(&mut rng, &data, &[Value::Integer(5)]).ok(),
+            Some(Value::Integer(120))
+        );
+        assert_eq!(
+            fact2(&mut rng, &data, &[Value::Integer(6)]).ok(),
+            Some(Value::Integer(48)) // 6!! = 6*4*2 = 48
+        );
+
+        // Test negative numbers (should return error)
+        assert!(fact(&mut rng, &data, &[Value::Integer(-1)]).is_err());
+        assert!(fact2(&mut rng, &data, &[Value::Float(-1.0)]).is_err());
+    }
+
+    #[test]
+    fn test_min_max() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+        assert_eq!(
+            min(&mut rng, &data, &[Value::Integer(3), Value::Integer(5)]).ok(),
+            Some(Value::Integer(3))
+        );
+        assert_eq!(
+            max(&mut rng, &data, &[Value::Float(3.5), Value::Float(5.5)]).ok(),
+            Some(Value::Float(5.5))
+        );
+        assert_eq!(
+            min(&mut rng, &data, &[Value::Integer(3), Value::Float(5.5)]).ok(),
+            Some(Value::Float(3.0))
+        );
+    }
+}

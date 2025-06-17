@@ -324,3 +324,239 @@ builtin_function!(voronoi => {
         Value::List(shapes)
     }
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shape::{BasicShape, Pattern, Shape, CIRCLE, SQUARE};
+    use rand::SeedableRng;
+    use tiny_skia::{LineCap, SpreadMode, Stroke};
+
+    #[test]
+    fn test_compose() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create two simple shapes
+        let shape1 = Rc::new(RefCell::new(Shape::square()));
+        let shape2 = Rc::new(RefCell::new(Shape::circle()));
+
+        // Compose them
+        let result = compose(
+            &mut rng,
+            &data,
+            &[Value::Shape(shape1), Value::Shape(shape2)],
+        )
+        .unwrap();
+
+        // Verify the composed shape structure
+        assert_eq!(
+            result,
+            Value::Shape(Rc::new(RefCell::new(Shape::composite(
+                Rc::new(RefCell::new(Shape::Basic(SQUARE.clone(), None, None))),
+                Rc::new(RefCell::new(Shape::Basic(CIRCLE.clone(), None, None)))
+            ))))
+        );
+    }
+
+    #[test]
+    fn test_styling_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::square()));
+
+        // Test stroke width
+        let stroked = stroke(
+            &mut rng,
+            &data,
+            &[Value::Integer(2), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+
+        assert_eq!(
+            stroked,
+            Value::Shape(Rc::new(RefCell::new(Shape::Basic(
+                BasicShape::Square {
+                    x: -1.0,
+                    y: -1.0,
+                    width: 2.0,
+                    height: 2.0,
+                    transform: IDENTITY,
+                    zindex: None,
+                    color: Color::Solid(WHITE),
+                    blend_mode: BlendMode::SourceOver,
+                    anti_alias: true,
+                    style: Style::Stroke(Stroke {
+                        width: 2.0,
+                        ..Stroke::default()
+                    }),
+                },
+                None,
+                None,
+            ))))
+        );
+
+        // Test line cap
+        let round = line_cap(
+            &mut rng,
+            &data,
+            &[Value::LineCap(LineCap::Round), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+
+        assert_eq!(
+            round,
+            Value::Shape(Rc::new(RefCell::new(Shape::Basic(
+                BasicShape::Square {
+                    x: -1.0,
+                    y: -1.0,
+                    width: 2.0,
+                    height: 2.0,
+                    transform: IDENTITY,
+                    zindex: None,
+                    color: Color::Solid(WHITE),
+                    blend_mode: BlendMode::SourceOver,
+                    anti_alias: true,
+                    style: Style::Stroke(Stroke {
+                        width: 2.0,
+                        line_cap: LineCap::Round,
+                        ..Stroke::default()
+                    }),
+                },
+                None,
+                None,
+            ))))
+        );
+    }
+
+    #[test]
+    fn test_fill_rules() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test triangle shape
+        let shape = Rc::new(RefCell::new(Shape::triangle()));
+
+        // Test winding fill rule
+        let winding_result = winding(&mut rng, &data, &[Value::Shape(shape.clone())]).unwrap();
+
+        assert_eq!(
+            winding_result,
+            Value::Shape(Rc::new(RefCell::new(Shape::Basic(
+                BasicShape::Triangle {
+                    points: [-1.0, 0.577350269, 1.0, 0.577350269, 0.0, -1.154700538],
+                    transform: IDENTITY,
+                    zindex: None,
+                    color: Color::Solid(WHITE),
+                    blend_mode: BlendMode::SourceOver,
+                    anti_alias: true,
+                    style: Style::Fill(FillRule::Winding),
+                },
+                None,
+                None,
+            ))))
+        );
+
+        // Test even-odd fill rule
+        let even_odd_result = even_odd(&mut rng, &data, &[Value::Shape(shape.clone())]).unwrap();
+
+        assert_eq!(
+            even_odd_result,
+            Value::Shape(Rc::new(RefCell::new(Shape::Basic(
+                BasicShape::Triangle {
+                    points: [-1.0, 0.577350269, 1.0, 0.577350269, 0.0, -1.154700538],
+                    transform: IDENTITY,
+                    zindex: None,
+                    color: Color::Solid(WHITE),
+                    blend_mode: BlendMode::SourceOver,
+                    anti_alias: true,
+                    style: Style::Fill(FillRule::EvenOdd),
+                },
+                None,
+                None,
+            ))))
+        );
+    }
+
+    #[test]
+    fn test_mask_and_pattern() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create test shapes
+        let shape = Rc::new(RefCell::new(Shape::square()));
+        let mask_val = Rc::new(RefCell::new(Shape::circle()));
+        let pattern_val = Rc::new(RefCell::new(Shape::triangle()));
+
+        // Test mask application
+        let masked = mask(
+            &mut rng,
+            &data,
+            &[Value::Shape(mask_val.clone()), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+
+        assert_eq!(
+            masked,
+            Value::Shape(Rc::new(RefCell::new(Shape::Basic(
+                SQUARE.clone(),
+                Some(mask_val.clone()),
+                None
+            ))))
+        );
+
+        // Test pattern application
+        let patterned = pattern(
+            &mut rng,
+            &data,
+            &[
+                Value::Shape(pattern_val.clone()),
+                Value::SpreadMode(SpreadMode::Pad),
+                Value::Shape(shape.clone()),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(
+            patterned,
+            Value::Shape(Rc::new(RefCell::new(Shape::Basic(
+                SQUARE.clone(),
+                Some(mask_val),
+                Some(Pattern {
+                    pattern: pattern_val,
+                    spread_mode: SpreadMode::Pad,
+                })
+            ))))
+        );
+    }
+
+    #[test]
+    fn test_voronoi() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Test with simple sites
+        let sites = vec![
+            Value::List(vec![Value::Integer(0), Value::Integer(0)]),
+            Value::List(vec![Value::Integer(10), Value::Integer(10)]),
+        ];
+
+        let result = voronoi(&mut rng, &data, &[Value::List(sites), Value::Integer(20)]).unwrap();
+
+        // Should return a list of polygon shapes
+        if let Value::List(shapes) = result {
+            assert_eq!(shapes.len(), 2);
+            for shape in shapes {
+                if let Value::Shape(rc_shape) = shape {
+                    assert!(matches!(*rc_shape.borrow(), Shape::Composite { .. }));
+                } else {
+                    panic!("Expected Shape value");
+                }
+            }
+        } else {
+            panic!("Expected List value");
+        }
+    }
+}

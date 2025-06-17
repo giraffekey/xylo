@@ -290,3 +290,307 @@ builtin_function!(zshift => {
         Value::Shape(shape.clone())
     },
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "std")]
+    use std::rc::Rc;
+
+    #[cfg(feature = "no-std")]
+    use alloc::{rc::Rc, vec};
+
+    use crate::shape::{PathSegment, Shape};
+    use core::cell::RefCell;
+    use rand::SeedableRng;
+
+    #[test]
+    fn test_translation_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 10.0),
+        ])));
+
+        // Test translate with various input types
+        let translate_tests = vec![
+            (Value::Integer(5), Value::Integer(10)), // int, int
+            (Value::Float(5.0), Value::Float(10.0)), // float, float
+            (Value::Integer(5), Value::Float(10.0)), // int, float
+            (Value::Float(5.0), Value::Integer(10)), // float, int
+        ];
+
+        for (tx, ty) in translate_tests {
+            let result =
+                translate(&mut rng, &data, &[tx, ty, Value::Shape(shape.clone())]).unwrap();
+
+            assert!(matches!(result, Value::Shape(_)));
+        }
+
+        // Test translatex
+        let translated_x = translatex(
+            &mut rng,
+            &data,
+            &[Value::Integer(5), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(translated_x, Value::Shape(_)));
+
+        // Test translatey
+        let translated_y = translatey(
+            &mut rng,
+            &data,
+            &[Value::Integer(5), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(translated_y, Value::Shape(_)));
+
+        // Test translateb
+        let translated_both = translateb(
+            &mut rng,
+            &data,
+            &[Value::Integer(5), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(translated_both, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_rotation_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 10.0),
+        ])));
+
+        // Test basic rotation
+        let rotated = rotate(
+            &mut rng,
+            &data,
+            &[Value::Integer(45), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(rotated, Value::Shape(_)));
+
+        // Test rotation at point
+        let rotated_at = rotate_at(
+            &mut rng,
+            &data,
+            &[
+                Value::Integer(45),
+                Value::Integer(5),
+                Value::Integer(5),
+                Value::Shape(shape.clone()),
+            ],
+        )
+        .unwrap();
+        assert!(matches!(rotated_at, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_scale_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 10.0),
+        ])));
+
+        // Test scale with various input types
+        let scale_tests = vec![
+            (Value::Integer(2), Value::Integer(3)), // int, int
+            (Value::Float(2.0), Value::Float(3.0)), // float, float
+            (Value::Integer(2), Value::Float(3.0)), // int, float
+            (Value::Float(2.0), Value::Integer(3)), // float, int
+        ];
+
+        for (sx, sy) in scale_tests {
+            let result = scale(&mut rng, &data, &[sx, sy, Value::Shape(shape.clone())]).unwrap();
+
+            assert!(matches!(result, Value::Shape(_)));
+        }
+
+        // Test scalex
+        let scaled_x = scalex(
+            &mut rng,
+            &data,
+            &[Value::Integer(2), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(scaled_x, Value::Shape(_)));
+
+        // Test scaley
+        let scaled_y = scaley(
+            &mut rng,
+            &data,
+            &[Value::Integer(2), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(scaled_y, Value::Shape(_)));
+
+        // Test scaleb
+        let scaled_both = scaleb(
+            &mut rng,
+            &data,
+            &[Value::Integer(2), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(scaled_both, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_skew_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 10.0),
+        ])));
+
+        // Test skew with various input types
+        let skew_tests = vec![
+            (Value::Integer(10), Value::Integer(20)), // int, int
+            (Value::Float(10.0), Value::Float(20.0)), // float, float
+            (Value::Integer(10), Value::Float(20.0)), // int, float
+            (Value::Float(10.0), Value::Integer(20)), // float, int
+        ];
+
+        for (kx, ky) in skew_tests {
+            let result = skew(&mut rng, &data, &[kx, ky, Value::Shape(shape.clone())]).unwrap();
+
+            assert!(matches!(result, Value::Shape(_)));
+        }
+
+        // Test skewx
+        let skewed_x = skewx(
+            &mut rng,
+            &data,
+            &[Value::Integer(10), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(skewed_x, Value::Shape(_)));
+
+        // Test skewy
+        let skewed_y = skewy(
+            &mut rng,
+            &data,
+            &[Value::Integer(10), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(skewed_y, Value::Shape(_)));
+
+        // Test skewb
+        let skewed_both = skewb(
+            &mut rng,
+            &data,
+            &[Value::Integer(10), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(skewed_both, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_flip_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 10.0),
+        ])));
+
+        // Test basic flip
+        let flipped = flip(
+            &mut rng,
+            &data,
+            &[Value::Integer(45), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(flipped, Value::Shape(_)));
+
+        // Test fliph
+        let flipped_h = fliph(&mut rng, &data, &[Value::Shape(shape.clone())]).unwrap();
+        assert!(matches!(flipped_h, Value::Shape(_)));
+
+        // Test flipv
+        let flipped_v = flipv(&mut rng, &data, &[Value::Shape(shape.clone())]).unwrap();
+        assert!(matches!(flipped_v, Value::Shape(_)));
+
+        // Test flipd
+        let flipped_d = flipd(&mut rng, &data, &[Value::Shape(shape.clone())]).unwrap();
+        assert!(matches!(flipped_d, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_zindex_functions() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 10.0),
+        ])));
+
+        // Test zindex
+        let zindexed = zindex(
+            &mut rng,
+            &data,
+            &[Value::Integer(5), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(zindexed, Value::Shape(_)));
+
+        // Test zshift
+        let zshifted = zshift(
+            &mut rng,
+            &data,
+            &[Value::Integer(5), Value::Shape(shape.clone())],
+        )
+        .unwrap();
+        assert!(matches!(zshifted, Value::Shape(_)));
+    }
+
+    #[test]
+    fn test_invalid_inputs() {
+        let mut rng = ChaCha8Rng::from_seed([0; 32]);
+        let data = Data::default();
+
+        // Create a test shape
+        let shape = Rc::new(RefCell::new(Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 10.0),
+        ])));
+
+        // Test with invalid shape argument
+        assert!(translate(
+            &mut rng,
+            &data,
+            &[Value::Integer(5), Value::Integer(10), Value::Integer(0)]
+        )
+        .is_err());
+
+        // Test with wrong number of arguments
+        assert!(translate(&mut rng, &data, &[Value::Integer(5)]).is_err());
+
+        // Test with invalid rotation angle type
+        assert!(rotate(
+            &mut rng,
+            &data,
+            &[Value::String("45".into()), Value::Shape(shape.clone())]
+        )
+        .is_err());
+    }
+}
