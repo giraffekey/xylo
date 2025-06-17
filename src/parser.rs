@@ -1029,498 +1029,446 @@ fn definition(input: &str) -> IResult<&str, Definition> {
 }
 
 pub fn parse(input: &str) -> crate::Result<Tree> {
-    let (_input, tree) = terminated(
+    let (input, tree) = terminated(
         many0(preceded(many0((space0, line_ending)), definition)),
         (multispace0, eof),
     )
     .parse(input)
     .map_err(|_| crate::Error::ParseError)?;
+    assert!(input.is_empty());
     Ok(tree)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tiny_skia::{BlendMode, LineCap, LineJoin, SpreadMode};
 
-    #[test]
-    fn test_literal() {
-        assert_eq!(literal("3"), Ok(("", Literal::Integer(3))));
-        assert_eq!(literal("5.0"), Ok(("", Literal::Float(5.0))));
-        assert_eq!(literal("0.5"), Ok(("", Literal::Float(0.5))));
-        assert_eq!(literal(".5"), Ok(("", Literal::Float(0.5))));
-        assert_eq!(
-            literal("5+3i"),
-            Ok(("", Literal::Complex(Complex::new(5.0, 3.0))))
-        );
-        assert_eq!(
-            literal("5-3i"),
-            Ok(("", Literal::Complex(Complex::new(5.0, -3.0))))
-        );
-        assert_eq!(
-            literal("3i"),
-            Ok(("", Literal::Complex(Complex::new(0.0, 3.0))))
-        );
-        assert_eq!(
-            literal("-3i"),
-            Ok(("", Literal::Complex(Complex::new(0.0, -3.0))))
-        );
-        assert_eq!(literal("true"), Ok(("", Literal::Boolean(true))));
-        assert_eq!(literal("false"), Ok(("", Literal::Boolean(false))));
-        assert_eq!(literal("0xf0ae13"), Ok(("", Literal::Hex([240, 174, 19]))));
-        assert_eq!(
-            literal("SQUARE"),
-            Ok(("", Literal::Shape(ShapeKind::Square)))
-        );
-        assert_eq!(
-            literal("CIRCLE"),
-            Ok(("", Literal::Shape(ShapeKind::Circle)))
-        );
-        assert_eq!(
-            literal("TRIANGLE"),
-            Ok(("", Literal::Shape(ShapeKind::Triangle)))
-        );
-        assert_eq!(literal("FILL"), Ok(("", Literal::Shape(ShapeKind::Fill))));
-        assert_eq!(literal("EMPTY"), Ok(("", Literal::Shape(ShapeKind::Empty))));
-        assert_eq!(
-            literal("BLEND_CLEAR"),
-            Ok(("", Literal::BlendMode(BlendMode::Clear)))
-        );
-        assert_eq!(
-            literal("BLEND_SOURCE_OVER"),
-            Ok(("", Literal::BlendMode(BlendMode::SourceOver)))
-        );
-        assert_eq!(
-            literal("BLEND_DESTINATION_OVER"),
-            Ok(("", Literal::BlendMode(BlendMode::DestinationOver)))
-        );
+    // Helper function to simplify test assertions
+    fn assert_parses<'a, P, O>(mut parser: P, input: &'a str, expected: O)
+    where
+        P: FnMut(&'a str) -> IResult<&'a str, O>,
+        O: PartialEq + core::fmt::Debug,
+    {
+        assert_eq!(parser(input), Ok(("", expected)));
     }
 
     #[test]
-    fn test_identifer() {
-        assert_eq!(identifier("snake_case"), Ok(("", "snake_case")));
-        assert_eq!(identifier("camelCase3"), Ok(("", "camelCase3")));
-        assert_eq!(identifier("π"), Ok(("", "π")));
-        assert_eq!(identifier("τ"), Ok(("", "τ")));
-        assert_eq!(identifier("ℯ"), Ok(("", "ℯ")));
-        assert_eq!(identifier("φ"), Ok(("", "φ")));
-        assert_eq!(identifier("(!)"), Ok(("", "!")));
-        assert_eq!(identifier("(+)"), Ok(("", "+")));
-        assert_eq!(identifier("(*)"), Ok(("", "*")));
+    fn test_literals() {
+        // Numeric literals
+        assert_parses(literal, "42", Literal::Integer(42));
+        assert_parses(literal, "3.14", Literal::Float(3.14));
+        assert_parses(literal, "50%", Literal::Float(0.5));
+        assert_parses(literal, "3+4i", Literal::Complex(Complex::new(3.0, 4.0)));
+        assert_parses(literal, "-2.5i", Literal::Complex(Complex::new(0.0, -2.5)));
+
+        // Boolean literals
+        assert_parses(literal, "true", Literal::Boolean(true));
+        assert_parses(literal, "false", Literal::Boolean(false));
+
+        // Color literals
+        assert_parses(literal, "0xff00cc", Literal::Hex([255, 0, 204]));
+        assert_parses(literal, "0xf0c", Literal::Hex([255, 0, 204])); // shorthand
+
+        // Shape literals
+        assert_parses(literal, "TRIANGLE", Literal::Shape(ShapeKind::Triangle));
+        assert_parses(literal, "▲", Literal::Shape(ShapeKind::Triangle));
+        assert_parses(literal, "SQUARE", Literal::Shape(ShapeKind::Square));
+        assert_parses(literal, "■", Literal::Shape(ShapeKind::Square));
+        assert_parses(literal, "CIRCLE", Literal::Shape(ShapeKind::Circle));
+        assert_parses(literal, "●", Literal::Shape(ShapeKind::Circle));
     }
 
     #[test]
-    fn test_call() {
-        assert_eq!(
-            call(0, 0)("func arg1 (arg2 x) arg3"),
-            Ok((
-                "",
-                vec![
-                    Token::Call("arg1", 0),
-                    Token::Call("x", 0),
-                    Token::Call("arg2", 1),
-                    Token::Call("arg3", 0),
-                    Token::Call("func", 3)
-                ]
-            ))
-        );
-        assert_eq!(call(0, 0)("π"), Ok(("", vec![Token::Call("π", 0)])));
-        assert_eq!(
-            call(0, 0)("(+) 2 3"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Integer(2)),
-                    Token::Literal(Literal::Integer(3)),
-                    Token::Call("+", 2)
-                ]
-            ))
-        );
+    fn test_enum_literals() {
+        // Blend modes
+        let blend_modes = vec![
+            ("BLEND_CLEAR", BlendMode::Clear),
+            ("BLEND_SOURCE_OVER", BlendMode::SourceOver),
+            ("BLEND_DESTINATION_OVER", BlendMode::DestinationOver),
+            ("BLEND_SOURCE_IN", BlendMode::SourceIn),
+            ("BLEND_DESTINATION_IN", BlendMode::DestinationIn),
+            ("BLEND_SOURCE_OUT", BlendMode::SourceOut),
+            ("BLEND_DESTINATION_OUT", BlendMode::DestinationOut),
+            ("BLEND_SOURCE_ATOP", BlendMode::SourceAtop),
+            ("BLEND_DESTINATION_ATOP", BlendMode::DestinationAtop),
+            ("BLEND_SOURCE", BlendMode::Source),
+            ("BLEND_DESTINATION", BlendMode::Destination),
+            ("BLEND_XOR", BlendMode::Xor),
+            ("BLEND_PLUS", BlendMode::Plus),
+            ("BLEND_MODULATE", BlendMode::Modulate),
+            ("BLEND_SCREEN", BlendMode::Screen),
+            ("BLEND_OVERLAY", BlendMode::Overlay),
+            ("BLEND_DARKEN", BlendMode::Darken),
+            ("BLEND_LIGHTEN", BlendMode::Lighten),
+            ("BLEND_COLOR_DODGE", BlendMode::ColorDodge),
+            ("BLEND_COLOR_BURN", BlendMode::ColorBurn),
+            ("BLEND_HARD_LIGHT", BlendMode::HardLight),
+            ("BLEND_SOFT_LIGHT", BlendMode::SoftLight),
+            ("BLEND_DIFFERENCE", BlendMode::Difference),
+            ("BLEND_EXCLUSION", BlendMode::Exclusion),
+            ("BLEND_MULTIPLY", BlendMode::Multiply),
+            ("BLEND_HUE", BlendMode::Hue),
+            ("BLEND_SATURATION", BlendMode::Saturation),
+            ("BLEND_COLOR", BlendMode::Color),
+            ("BLEND_LUMINOSITY", BlendMode::Luminosity),
+        ];
+
+        for (input, expected) in blend_modes {
+            assert_parses(blend_mode, input, Literal::BlendMode(expected));
+            assert_parses(literal, input, Literal::BlendMode(expected));
+        }
+
+        // Line caps
+        let line_caps = vec![
+            ("LINE_CAP_BUTT", LineCap::Butt),
+            ("LINE_CAP_ROUND", LineCap::Round),
+            ("LINE_CAP_SQUARE", LineCap::Square),
+        ];
+
+        for (input, expected) in line_caps {
+            assert_parses(line_cap, input, Literal::LineCap(expected));
+            assert_parses(literal, input, Literal::LineCap(expected));
+        }
+
+        // Line joins
+        let line_joins = vec![
+            ("LINE_JOIN_MITER_CLIP", LineJoin::MiterClip),
+            ("LINE_JOIN_MITER", LineJoin::Miter),
+            ("LINE_JOIN_ROUND", LineJoin::Round),
+            ("LINE_JOIN_BEVEL", LineJoin::Bevel),
+        ];
+
+        for (input, expected) in line_joins {
+            assert_parses(line_join, input, Literal::LineJoin(expected));
+            assert_parses(literal, input, Literal::LineJoin(expected));
+        }
+
+        // Spread modes
+        let spread_modes = vec![
+            ("SPREAD_MODE_PAD", SpreadMode::Pad),
+            ("SPREAD_MODE_REFLECT", SpreadMode::Reflect),
+            ("SPREAD_MODE_REPEAT", SpreadMode::Repeat),
+        ];
+
+        for (input, expected) in spread_modes {
+            assert_parses(spread_mode, input, Literal::SpreadMode(expected));
+            assert_parses(literal, input, Literal::SpreadMode(expected));
+        }
+
+        // Filter qualities
+        let filter_qualities = vec![
+            ("QUALITY_NEAREST", FilterQuality::Nearest),
+            ("QUALITY_BILINEAR", FilterQuality::Bilinear),
+            ("QUALITY_BICUBIC", FilterQuality::Bicubic),
+        ];
+
+        for (input, expected) in filter_qualities {
+            assert_parses(filter_quality, input, Literal::FilterQuality(expected));
+            assert_parses(literal, input, Literal::FilterQuality(expected));
+        }
+
+        // Filter types
+        let filter_types = vec![
+            ("FILTER_NEAREST", FilterType::Nearest),
+            ("FILTER_TRIANGLE", FilterType::Triangle),
+            ("FILTER_CATMULL_ROM", FilterType::CatmullRom),
+            ("FILTER_GAUSSIAN", FilterType::Gaussian),
+            ("FILTER_LANCZOS3", FilterType::Lanczos3),
+        ];
+
+        for (input, expected) in filter_types {
+            assert_parses(filter_type, input, Literal::FilterType(expected));
+            assert_parses(literal, input, Literal::FilterType(expected));
+        }
+
+        // Sort modes
+        let sort_modes = vec![
+            ("SORT_BLACK", SortMode::Black(DEFAULT_BLACK.clone())),
+            ("SORT_BRIGHTNESS", SortMode::Brightness(DEFAULT_BRIGHTNESS)),
+            ("SORT_WHITE", SortMode::White(DEFAULT_WHITE.clone())),
+        ];
+
+        for (input, expected) in sort_modes {
+            assert_parses(sort_mode, input, Literal::SortMode(expected.clone()));
+            assert_parses(literal, input, Literal::SortMode(expected));
+        }
+
+        // Sort directions
+        let sort_directions = vec![
+            ("DIRECTION_BOTH", SortDirection::Both),
+            ("DIRECTION_COLUMN", SortDirection::Column),
+            ("DIRECTION_ROW", SortDirection::Row),
+        ];
+
+        for (input, expected) in sort_directions {
+            assert_parses(
+                sort_direction,
+                input,
+                Literal::SortDirection(expected.clone()),
+            );
+            assert_parses(literal, input, Literal::SortDirection(expected));
+        }
+
+        // Test that invalid enum values fail
+        assert!(blend_mode("BLEND_INVALID").is_err());
+        assert!(line_cap("LINE_CAP_INVALID").is_err());
+        assert!(line_join("LINE_JOIN_INVALID").is_err());
+        assert!(spread_mode("SPREAD_MODE_INVALID").is_err());
+        assert!(filter_quality("QUALITY_INVALID").is_err());
+        assert!(filter_type("FILTER_INVALID").is_err());
+        assert!(sort_mode("SORT_INVALID").is_err());
+        assert!(sort_direction("DIRECTION_INVALID").is_err());
     }
 
     #[test]
-    fn test_let_statement() {
-        assert_eq!(
-            let_statement(0)("let x = 3 -> x",),
-            Ok((
-                "",
-                vec![
-                    Token::Let("x", vec![], 2),
-                    Token::Literal(Literal::Integer(3)),
-                    Token::Return(None),
-                    Token::Call("x", 0),
-                    Token::Pop
-                ]
-            ))
-        );
-        assert_eq!(
-            let_statement(0)(
-                "\
-let x = 3
-    y = 5
-    x + y\
-                ",
-            ),
-            Ok((
-                "",
-                vec![
-                    Token::Let("x", vec![], 2),
-                    Token::Literal(Literal::Integer(3)),
-                    Token::Return(None),
-                    Token::Let("y", vec![], 2),
-                    Token::Literal(Literal::Integer(5)),
-                    Token::Return(None),
-                    Token::Call("x", 0),
-                    Token::Call("y", 0),
-                    Token::BinaryOperator(BinaryOperator::Addition),
-                    Token::Pop,
-                ]
-            ))
-        );
+    fn test_operators() {
+        // Unary operators
+        assert_parses(unary_operator, "-", UnaryOperator::Negation);
+        assert_parses(unary_operator, "!", UnaryOperator::Not);
+        assert_parses(unary_operator, "~", UnaryOperator::BitNot);
+
+        // Binary operators
+        assert_parses(binary_operator, "+", BinaryOperator::Addition);
+        assert_parses(binary_operator, "**", BinaryOperator::Exponentiation);
+        assert_parses(binary_operator, "==", BinaryOperator::EqualTo);
+        assert_parses(binary_operator, "..", BinaryOperator::RangeExclusive);
+        assert_parses(binary_operator, "|>", BinaryOperator::Pipe);
     }
 
     #[test]
-    fn test_if_statement() {
-        assert_eq!(
-            if_statement(0)("if x == 0 -> 2; else -> 3"),
-            Ok((
-                "",
-                vec![
-                    Token::Call("x", 0),
-                    Token::Literal(Literal::Integer(0)),
-                    Token::BinaryOperator(BinaryOperator::EqualTo),
-                    Token::If(2),
-                    Token::Literal(Literal::Integer(2)),
-                    Token::Jump(1),
-                    Token::Literal(Literal::Integer(3)),
-                ]
-            ))
-        );
-        assert_eq!(
-            if_statement(0)(
-                "\
-if x > 0
-    1
-else if x < 0
-    (-1)
-else
-    0\
-                "
-            ),
-            Ok((
-                "",
-                vec![
-                    Token::Call("x", 0),
-                    Token::Literal(Literal::Integer(0)),
-                    Token::BinaryOperator(BinaryOperator::GreaterThan),
-                    Token::If(2),
-                    Token::Literal(Literal::Integer(1)),
-                    Token::Jump(7),
-                    Token::Call("x", 0),
-                    Token::Literal(Literal::Integer(0)),
-                    Token::BinaryOperator(BinaryOperator::LessThan),
-                    Token::If(2),
-                    Token::Literal(Literal::Integer(-1)),
-                    Token::Jump(1),
-                    Token::Literal(Literal::Integer(0))
-                ]
-            ))
-        );
-    }
-
-    #[test]
-    fn test_match_statement() {
-        assert_eq!(
-            match_statement(0)("match n -> 3 -> 1; 2 -> 2; 1 -> 3"),
-            Ok((
-                "",
-                vec![
-                    Token::Call("n", 0),
-                    Token::Match(vec![
-                        (Pattern::Matches(vec![Literal::Integer(3)]), 2),
-                        (Pattern::Matches(vec![Literal::Integer(2)]), 2),
-                        (Pattern::Matches(vec![Literal::Integer(1)]), 2),
-                    ]),
-                    Token::Literal(Literal::Integer(1)),
-                    Token::Jump(4),
-                    Token::Literal(Literal::Integer(2)),
-                    Token::Jump(2),
-                    Token::Literal(Literal::Integer(3)),
-                    Token::Jump(0)
-                ]
-            ))
-        );
-        assert_eq!(
-            match_statement(0)(
-                "\
-match n
-    3.0 -> 3
-    2.0 -> 2
-    1.0 -> 1\
-                "
-            ),
-            Ok((
-                "",
-                vec![
-                    Token::Call("n", 0),
-                    Token::Match(vec![
-                        (Pattern::Matches(vec![Literal::Float(3.0)]), 2),
-                        (Pattern::Matches(vec![Literal::Float(2.0)]), 2),
-                        (Pattern::Matches(vec![Literal::Float(1.0)]), 2),
-                    ]),
-                    Token::Literal(Literal::Integer(3)),
-                    Token::Jump(4),
-                    Token::Literal(Literal::Integer(2)),
-                    Token::Jump(2),
-                    Token::Literal(Literal::Integer(1)),
-                    Token::Jump(0)
-                ]
-            ))
-        );
-    }
-
-    #[test]
-    fn test_for_statement() {
-        assert_eq!(
-            for_statement(0)("for i in 0..3 -> i"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Integer(0)),
-                    Token::Literal(Literal::Integer(3)),
-                    Token::BinaryOperator(BinaryOperator::RangeExclusive),
-                    Token::ForStart("i"),
-                    Token::Call("i", 0),
-                    Token::Pop,
-                    Token::ForEnd
-                ]
-            ))
-        );
-        assert_eq!(
-            for_statement(0)(
-                "\
-for i in 0..5
-    i + 1\
-                "
-            ),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Integer(0)),
-                    Token::Literal(Literal::Integer(5)),
-                    Token::BinaryOperator(BinaryOperator::RangeExclusive),
-                    Token::ForStart("i"),
-                    Token::Call("i", 0),
-                    Token::Literal(Literal::Integer(1)),
-                    Token::BinaryOperator(BinaryOperator::Addition),
-                    Token::Pop,
-                    Token::ForEnd
-                ]
-            ))
-        );
-    }
-
-    #[test]
-    fn test_loop_statement() {
-        assert_eq!(
-            loop_statement(0)("loop 3 -> 0"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Integer(3)),
-                    Token::LoopStart,
-                    Token::Literal(Literal::Integer(0)),
-                    Token::LoopEnd
-                ]
-            ))
-        );
-        assert_eq!(
-            loop_statement(0)(
-                "\
-loop 5
-    rand * 10\
-                "
-            ),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Integer(5)),
-                    Token::LoopStart,
-                    Token::Call("rand", 0),
-                    Token::Literal(Literal::Integer(10)),
-                    Token::BinaryOperator(BinaryOperator::Multiplication),
-                    Token::LoopEnd
-                ]
-            ))
-        );
-    }
-
-    #[test]
-    fn test_unary_operation() {
-        assert_eq!(
-            expr(0, true)("-3.0"),
-            Ok(("", vec![Token::Literal(Literal::Float(-3.0)),]))
-        );
-        assert_eq!(
-            expr(0, true)("-(3.0)"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Float(3.0)),
-                    Token::UnaryOperator(UnaryOperator::Negation),
-                ]
-            ))
-        );
-        assert_eq!(
-            expr(0, true)("!true"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Boolean(true)),
-                    Token::UnaryOperator(UnaryOperator::Not),
-                ]
-            ))
-        );
-        assert_eq!(
-            expr(0, true)("~5"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Integer(5)),
-                    Token::UnaryOperator(UnaryOperator::BitNot),
-                ]
-            ))
-        );
-    }
-
-    #[test]
-    fn test_binary_operation() {
-        assert_eq!(
-            expr(0, true)("5 - 3.0"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Integer(5)),
-                    Token::Literal(Literal::Float(3.0)),
-                    Token::BinaryOperator(BinaryOperator::Subtraction),
-                ]
-            ))
-        );
-        assert_eq!(
-            expr(0, true)("SQUARE : CIRCLE"),
-            Ok((
-                "",
-                vec![
-                    Token::Literal(Literal::Shape(ShapeKind::Square)),
-                    Token::Literal(Literal::Shape(ShapeKind::Circle)),
-                    Token::BinaryOperator(BinaryOperator::Composition),
-                ]
-            ))
-        );
-    }
-
-    #[test]
-    fn test_definition() {
-        assert_eq!(
-            definition("addition x y = x + y"),
-            Ok((
-                "",
-                Definition {
-                    name: "addition",
-                    params: vec!["x", "y"],
-                    block: vec![
-                        Token::Call("x", 0),
-                        Token::Call("y", 0),
-                        Token::BinaryOperator(BinaryOperator::Addition)
-                    ],
-                    weight: 1.0,
-                }
-            ))
-        );
-        assert_eq!(
-            definition(
-                "\
-draw@5 =
-    SQUARE\
-                "
-            ),
-            Ok((
-                "",
-                Definition {
-                    name: "draw",
-                    params: vec![],
-                    block: vec![Token::Literal(Literal::Shape(ShapeKind::Square))],
-                    weight: 5.0,
-                }
-            ))
-        );
-    }
-
-    #[test]
-    fn test_parse() {
-        let tree = parse(
-            "\
-root = collect (shapes 5)
-
-shapes@3 x =
-    loop x
-        SQUARE
-
-shapes@2 x =
-    for i in 0..x
-        if i % 2 == 0
-            CIRCLE
-        else
-            TRIANGLE
-            ",
-        );
-        assert!(tree.is_ok());
-        assert_eq!(
-            tree.unwrap(),
+    fn test_expressions() {
+        // Simple expressions
+        assert_parses(
+            expr(0, true),
+            "3 + 4 * 2",
             vec![
-                Definition {
-                    name: "root",
-                    params: vec![],
-                    block: vec![
-                        Token::Literal(Literal::Integer(5)),
-                        Token::Call("shapes", 1),
-                        Token::Call("collect", 1)
-                    ],
-                    weight: 1.0,
-                },
-                Definition {
-                    name: "shapes",
-                    params: vec!["x"],
-                    block: vec![
-                        Token::Call("x", 0),
-                        Token::LoopStart,
-                        Token::Literal(Literal::Shape(ShapeKind::Square)),
-                        Token::LoopEnd
-                    ],
-                    weight: 3.0,
-                },
-                Definition {
-                    name: "shapes",
-                    params: vec!["x"],
-                    block: vec![
-                        Token::Literal(Literal::Integer(0)),
-                        Token::Call("x", 0),
-                        Token::BinaryOperator(BinaryOperator::RangeExclusive),
-                        Token::ForStart("i"),
-                        Token::Call("i", 0),
-                        Token::Literal(Literal::Integer(2)),
-                        Token::BinaryOperator(BinaryOperator::Modulo),
-                        Token::Literal(Literal::Integer(0)),
-                        Token::BinaryOperator(BinaryOperator::EqualTo),
-                        Token::If(2),
-                        Token::Literal(Literal::Shape(ShapeKind::Circle)),
-                        Token::Jump(1),
-                        Token::Literal(Literal::Shape(ShapeKind::Triangle)),
-                        Token::Pop,
-                        Token::ForEnd
-                    ],
-                    weight: 2.0,
-                },
-            ]
+                Token::Literal(Literal::Integer(3)),
+                Token::Literal(Literal::Integer(4)),
+                Token::Literal(Literal::Integer(2)),
+                Token::BinaryOperator(BinaryOperator::Multiplication),
+                Token::BinaryOperator(BinaryOperator::Addition),
+            ],
+        );
+
+        // Parentheses
+        assert_parses(
+            expr(0, true),
+            "(3 + 4) * 2",
+            vec![
+                Token::Literal(Literal::Integer(3)),
+                Token::Literal(Literal::Integer(4)),
+                Token::BinaryOperator(BinaryOperator::Addition),
+                Token::Literal(Literal::Integer(2)),
+                Token::BinaryOperator(BinaryOperator::Multiplication),
+            ],
+        );
+
+        // Function calls
+        assert_parses(
+            expr(0, true),
+            "f x y",
+            vec![
+                Token::Call("x", 0),
+                Token::Call("y", 0),
+                Token::Call("f", 2),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_control_structures() {
+        // If-else
+        assert_parses(
+            if_statement(0),
+            "if x > 0 -> 1 else -> -1",
+            vec![
+                Token::Call("x", 0),
+                Token::Literal(Literal::Integer(0)),
+                Token::BinaryOperator(BinaryOperator::GreaterThan),
+                Token::If(2),
+                Token::Literal(Literal::Integer(1)),
+                Token::Jump(1),
+                Token::Literal(Literal::Integer(-1)),
+            ],
+        );
+
+        // Match
+        assert_parses(
+            match_statement(0),
+            "match x -> 1 -> 10; 2 -> 20",
+            vec![
+                Token::Call("x", 0),
+                Token::Match(vec![
+                    (Pattern::Matches(vec![Literal::Integer(1)]), 2),
+                    (Pattern::Matches(vec![Literal::Integer(2)]), 2),
+                ]),
+                Token::Literal(Literal::Integer(10)),
+                Token::Jump(2),
+                Token::Literal(Literal::Integer(20)),
+                Token::Jump(0),
+            ],
+        );
+
+        // For loop
+        assert_parses(
+            for_statement(0),
+            "for i in 0..5 -> i * 2",
+            vec![
+                Token::Literal(Literal::Integer(0)),
+                Token::Literal(Literal::Integer(5)),
+                Token::BinaryOperator(BinaryOperator::RangeExclusive),
+                Token::ForStart("i"),
+                Token::Call("i", 0),
+                Token::Literal(Literal::Integer(2)),
+                Token::BinaryOperator(BinaryOperator::Multiplication),
+                Token::Pop,
+                Token::ForEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_definitions() {
+        // Simple definition
+        assert_parses(
+            definition,
+            "square = SQUARE",
+            Definition {
+                name: "square",
+                params: vec![],
+                block: vec![Token::Literal(Literal::Shape(ShapeKind::Square))],
+                weight: 1.0,
+            },
+        );
+
+        // Parameterized definition
+        assert_parses(
+            definition,
+            "repeat@2.5 n shape = loop n -> shape",
+            Definition {
+                name: "repeat",
+                params: vec!["n", "shape"],
+                block: vec![
+                    Token::Call("n", 0),
+                    Token::LoopStart,
+                    Token::Call("shape", 0),
+                    Token::LoopEnd,
+                ],
+                weight: 2.5,
+            },
+        );
+    }
+
+    #[test]
+    fn test_full_parser() {
+        let program = r#"
+root =
+    let shapes = [CIRCLE, SQUARE, TRIANGLE]
+        for shape in shapes -> shape
+
+double x = x * 2
+        "#;
+
+        let result = parse(program);
+        assert!(result.is_ok());
+        let tree = result.unwrap();
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].name, "root");
+        assert_eq!(tree[1].name, "double");
+    }
+
+    #[test]
+    fn test_error_cases() {
+        // Invalid numeric literals
+        assert!(float("abc").is_err());
+        assert!(complex("3+").is_err());
+
+        // Invalid identifiers
+        assert!(identifier("123").is_err());
+        assert!(identifier("let").is_err()); // keyword
+
+        // Malformed expressions
+        assert!(expr(0, true)("3 +").is_err());
+        assert!(if_statement(0)("if x ->").is_err());
+
+        // Incomplete definitions
+        assert!(definition("foo =").is_err());
+        assert!(definition("bar x").is_err());
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        // Empty input
+        assert_eq!(parse("").ok(), Some(vec![]));
+
+        // Whitespace only
+        assert_eq!(parse("  \n  \t  ").ok(), Some(vec![]));
+
+        // Unicode identifiers
+        assert_parses(identifier, "π", "π");
+        assert_parses(identifier, "ℯ", "ℯ");
+    }
+
+    #[test]
+    fn test_operator_precedence() {
+        assert_parses(
+            expr(0, true),
+            "1 + 2 * 3",
+            vec![
+                Token::Literal(Literal::Integer(1)),
+                Token::Literal(Literal::Integer(2)),
+                Token::Literal(Literal::Integer(3)),
+                Token::BinaryOperator(BinaryOperator::Multiplication),
+                Token::BinaryOperator(BinaryOperator::Addition),
+            ],
+        );
+
+        assert_parses(
+            expr(0, true),
+            "1 * 2 + 3",
+            vec![
+                Token::Literal(Literal::Integer(1)),
+                Token::Literal(Literal::Integer(2)),
+                Token::BinaryOperator(BinaryOperator::Multiplication),
+                Token::Literal(Literal::Integer(3)),
+                Token::BinaryOperator(BinaryOperator::Addition),
+            ],
+        );
+
+        assert_parses(
+            expr(0, true),
+            "1 + 2 + 3",
+            vec![
+                Token::Literal(Literal::Integer(1)),
+                Token::Literal(Literal::Integer(2)),
+                Token::BinaryOperator(BinaryOperator::Addition),
+                Token::Literal(Literal::Integer(3)),
+                Token::BinaryOperator(BinaryOperator::Addition),
+            ],
+        );
+    }
+
+    #[test]
+    fn test_list_expressions() {
+        assert_parses(
+            list,
+            "[1, 2, 3]",
+            vec![Token::List(vec![
+                vec![Token::Literal(Literal::Integer(1))],
+                vec![Token::Literal(Literal::Integer(2))],
+                vec![Token::Literal(Literal::Integer(3))],
+            ])],
+        );
+
+        assert_parses(
+            list,
+            "[SQUARE, CIRCLE, 0xff0000]",
+            vec![Token::List(vec![
+                vec![Token::Literal(Literal::Shape(ShapeKind::Square))],
+                vec![Token::Literal(Literal::Shape(ShapeKind::Circle))],
+                vec![Token::Literal(Literal::Hex([255, 0, 0]))],
+            ])],
         );
     }
 }

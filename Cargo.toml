@@ -30,7 +30,6 @@ strip = true
 
 [dependencies]
 ahash = { version = "0.8", default-features = false }
-argon2 = { version = "0.5.3", features = ["std"] }
 asdf-pixel-sort = { version = "0.2.1", git = "https://github.com/giraffekey/asdf-pixel-sort" }
 base64 = { version = "0.22", default-features = false }
 clap = { version = "4.5", features = ["derive"] }

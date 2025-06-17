@@ -886,272 +886,329 @@ fn gen_seed() -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shape::{BasicShape, Color, Style, WHITE};
-    use tiny_skia::Transform;
+    use crate::shape::{BasicShape, Color, PathSegment, Style, IDENTITY, WHITE};
+    use palette::{rgb::Rgba, FromColor, Hsla};
+    use tiny_skia::{BlendMode, FillRule, SpreadMode, Stroke, Transform};
 
-    #[test]
-    fn test_binary_operation() {
-        let config = Config {
+    // Helper function to create a test config with a fixed seed
+    fn test_config() -> Config {
+        Config {
             seed: Some([0; 32]),
             ..Config::default()
-        };
-        let res = execute(
-            parse(
-                "
-root = square
+        }
+    }
 
-square = ss (3 + 5) SQUARE
-                ",
-            )
-            .unwrap(),
-            config,
-        );
-        assert!(res.is_ok());
+    #[test]
+    fn test_value_kind() {
+        assert_eq!(Value::Integer(42).kind().ok(), Some(ValueKind::Integer));
+        assert_eq!(Value::Float(3.14).kind().ok(), Some(ValueKind::Float));
         assert_eq!(
-            res.unwrap(),
-            Rc::new(RefCell::new(Shape::Basic(
-                BasicShape::Square {
-                    x: -1.0,
-                    y: -1.0,
-                    width: 2.0,
-                    height: 2.0,
-                    transform: Transform::from_scale(8.0, 8.0),
-                    zindex: None,
-                    color: Color::Solid(WHITE),
-                    blend_mode: BlendMode::SourceOver,
-                    anti_alias: true,
-                    style: Style::default(),
-                },
-                None,
-                None,
-            )))
+            Value::Complex(Complex::new(1.0, 2.0)).kind().ok(),
+            Some(ValueKind::Complex)
+        );
+        assert_eq!(Value::Boolean(true).kind().ok(), Some(ValueKind::Boolean));
+        assert_eq!(Value::Hex([255, 0, 0]).kind().ok(), Some(ValueKind::Hex));
+        assert_eq!(Value::Char('a').kind().ok(), Some(ValueKind::Char));
+        assert_eq!(
+            Value::String("test".into()).kind().ok(),
+            Some(ValueKind::String)
+        );
+        assert_eq!(
+            Value::Shape(Rc::new(RefCell::new(Shape::empty())))
+                .kind()
+                .ok(),
+            Some(ValueKind::Shape)
+        );
+        assert_eq!(
+            Value::BlendMode(BlendMode::Multiply).kind().ok(),
+            Some(ValueKind::Enum)
+        );
+        assert_eq!(
+            Value::Function("test".into(), 1, vec![]).kind().ok(),
+            Some(ValueKind::Function(1))
+        );
+        assert_eq!(
+            Value::List(vec![Value::Integer(1), Value::Integer(2)])
+                .kind()
+                .ok(),
+            Some(ValueKind::List(Box::new(ValueKind::Integer)))
         );
     }
 
     #[test]
-    fn test_let_statement() {
-        let config = Config {
-            seed: Some([0; 32]),
-            ..Config::default()
-        };
-        let res = execute(
-            parse(
-                "
-root = square
-
-square =
-    let n1 = 3
-        n2 = 5
-        n3 = 2
-        ss (n1 * n2 * n3) SQUARE
-                ",
-            )
-            .unwrap(),
-            config,
-        );
-        assert!(res.is_ok());
+    fn test_reduce_literal() {
         assert_eq!(
-            res.unwrap(),
-            Rc::new(RefCell::new(Shape::Basic(
-                BasicShape::Square {
-                    x: -1.0,
-                    y: -1.0,
-                    width: 2.0,
-                    height: 2.0,
-                    transform: Transform::from_scale(30.0, 30.0),
-                    zindex: None,
-                    color: Color::Solid(WHITE),
-                    blend_mode: BlendMode::SourceOver,
-                    anti_alias: true,
-                    style: Style::default(),
-                },
-                None,
-                None,
-            ))),
+            reduce_literal(&Literal::Integer(42)).ok(),
+            Some(Value::Integer(42))
+        );
+        assert_eq!(
+            reduce_literal(&Literal::Float(3.14)).ok(),
+            Some(Value::Float(3.14))
+        );
+        assert_eq!(
+            reduce_literal(&Literal::Complex(Complex::new(1.0, 2.0))).ok(),
+            Some(Value::Complex(Complex::new(1.0, 2.0)))
+        );
+        assert_eq!(
+            reduce_literal(&Literal::Shape(ShapeKind::Square)).ok(),
+            Some(Value::Shape(Rc::new(RefCell::new(Shape::square()))))
+        );
+        assert_eq!(
+            reduce_literal(&Literal::BlendMode(BlendMode::Multiply)).ok(),
+            Some(Value::BlendMode(BlendMode::Multiply))
         );
     }
 
     #[test]
-    fn test_if_statement() {
-        let config = Config {
-            seed: Some([0; 32]),
-            ..Config::default()
-        };
+    fn test_shape_operations() {
+        // Basic shape creation
+        let res = execute(parse("root = SQUARE").unwrap(), test_config());
+        assert_eq!(res.unwrap(), Rc::new(RefCell::new(Shape::square())));
+
+        // Composition
         let res = execute(
             parse(
                 "
-root = shape true : shape false
-
-shape is_square =
-    if is_square
-        SQUARE
-    else
-        EMPTY
+root = compose SQUARE CIRCLE
                 ",
             )
             .unwrap(),
-            config,
+            test_config(),
         );
-        assert!(res.is_ok());
         assert_eq!(
             res.unwrap(),
             Rc::new(RefCell::new(Shape::composite(
                 Rc::new(RefCell::new(Shape::square())),
-                Rc::new(RefCell::new(Shape::empty())),
+                Rc::new(RefCell::new(Shape::circle())),
             )))
         );
-    }
 
-    #[test]
-    fn test_match_statement() {
-        let config = Config {
-            seed: Some([0; 32]),
-            ..Config::default()
-        };
+        // Styling
         let res = execute(
             parse(
                 "
-root = shape 1 : shape 2 : shape 3 : shape 4
+root = stroke 2 (hex 0xff0000 SQUARE)
+                ",
+            )
+            .unwrap(),
+            test_config(),
+        );
+        let expected = Shape::Basic(
+            BasicShape::Square {
+                x: -1.0,
+                y: -1.0,
+                width: 2.0,
+                height: 2.0,
+                transform: Transform::default(),
+                zindex: None,
+                color: Color::Solid(Hsla::from_color(Rgba::new(1.0, 0.0, 0.0, 1.0))),
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+                style: Style::Stroke(Stroke {
+                    width: 2.0,
+                    ..Stroke::default()
+                }),
+            },
+            None,
+            None,
+        );
+        assert_eq!(res.unwrap(), Rc::new(RefCell::new(expected)));
+    }
 
-shape n =
-    match n
+    #[test]
+    fn test_control_flow() {
+        // If expression
+        let res = execute(
+            parse(
+                "
+root =
+    if true -> SQUARE
+    else -> CIRCLE
+                ",
+            )
+            .unwrap(),
+            test_config(),
+        );
+        assert_eq!(res.unwrap(), Rc::new(RefCell::new(Shape::square())));
+
+        // Match expression
+        let res = execute(
+            parse(
+                "
+root =
+    match 2
         1 -> SQUARE
         2 -> CIRCLE
         3 -> TRIANGLE
-        _ -> EMPTY
                 ",
             )
             .unwrap(),
-            config,
+            test_config(),
         );
-        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Rc::new(RefCell::new(Shape::circle())));
+
+        // For loop
+        let res = execute(
+            parse(
+                "
+root = collect (for i in 1..3 -> SQUARE)
+                ",
+            )
+            .unwrap(),
+            test_config(),
+        );
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::composite(
-                Rc::new(RefCell::new(Shape::composite(
-                    Rc::new(RefCell::new(Shape::composite(
-                        Rc::new(RefCell::new(Shape::square())),
-                        Rc::new(RefCell::new(Shape::circle())),
-                    ))),
-                    Rc::new(RefCell::new(Shape::triangle())),
-                ))),
-                Rc::new(RefCell::new(Shape::empty())),
+            Rc::new(RefCell::new(Shape::collection(vec![
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::square())),
+            ])))
+        );
+
+        // Loop
+        let res = execute(
+            parse(
+                "
+root = collect (loop 3 -> SQUARE)
+                ",
+            )
+            .unwrap(),
+            test_config(),
+        );
+        assert_eq!(
+            res.unwrap(),
+            Rc::new(RefCell::new(Shape::collection(vec![
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::square())),
+                Rc::new(RefCell::new(Shape::square())),
+            ])))
+        );
+    }
+
+    #[test]
+    fn test_functions() {
+        // Simple function
+        let res = execute(
+            parse(
+                "
+root = double_scale SQUARE
+double_scale shape = ss 2 shape
+                ",
+            )
+            .unwrap(),
+            test_config(),
+        );
+        assert_eq!(
+            res.unwrap(),
+            Rc::new(RefCell::new(Shape::Basic(
+                BasicShape::Square {
+                    x: -1.0,
+                    y: -1.0,
+                    width: 2.0,
+                    height: 2.0,
+                    transform: IDENTITY.post_scale(2.0, 2.0),
+                    zindex: None,
+                    color: Color::Solid(WHITE),
+                    blend_mode: BlendMode::SourceOver,
+                    anti_alias: true,
+                    style: Style::Fill(FillRule::Winding),
+                },
+                None,
+                None
             )))
         );
     }
 
     #[test]
-    fn test_for_statement() {
-        let config = Config {
-            seed: Some([0; 32]),
-            ..Config::default()
-        };
+    fn test_complex_shapes() {
+        // Path creation
         let res = execute(
             parse(
-                "
-root = collect shapes
-
-shapes =
-    for i in 0..10
-        if i % 2 == 0
-            SQUARE
-        else
-            CIRCLE
-                ",
+                r#"
+root =
+    move_to 0 0
+    : line_to 10 0
+    : line_to 5 10
+    : close
+                "#,
             )
             .unwrap(),
-            config,
+            test_config(),
         );
-        assert!(res.is_ok());
-        assert_eq!(
-            res.unwrap(),
-            Rc::new(RefCell::new(Shape::collection(vec![
-                Rc::new(RefCell::new(Shape::square())),
-                Rc::new(RefCell::new(Shape::circle())),
-                Rc::new(RefCell::new(Shape::square())),
-                Rc::new(RefCell::new(Shape::circle())),
-                Rc::new(RefCell::new(Shape::square())),
-                Rc::new(RefCell::new(Shape::circle())),
-                Rc::new(RefCell::new(Shape::square())),
-                Rc::new(RefCell::new(Shape::circle())),
-                Rc::new(RefCell::new(Shape::square())),
-                Rc::new(RefCell::new(Shape::circle())),
-            ],)))
+        let expected = Shape::path(vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 0.0),
+            PathSegment::LineTo(5.0, 10.0),
+            PathSegment::Close,
+        ]);
+        assert_eq!(*res.unwrap().borrow(), expected);
+
+        // Gradient
+        let res = execute(
+            parse(
+                r#"
+root = g grad SQUARE
+
+grad =
+    grad_stop_hex 0 RED (
+    grad_stop_hex 1 BLUE (
+    linear_grad 0 0 1 1))
+                "#,
+            )
+            .unwrap(),
+            test_config(),
         );
+        let expected = Shape::Basic(
+            BasicShape::Square {
+                x: -1.0,
+                y: -1.0,
+                width: 2.0,
+                height: 2.0,
+                transform: IDENTITY,
+                zindex: None,
+                color: Color::Gradient(Gradient {
+                    start: (0.0, 0.0),
+                    end: (1.0, 1.0),
+                    stops: vec![
+                        (0.0, Hsla::from_color(Rgba::new(1.0, 0.0, 0.0, 1.0))),
+                        (1.0, Hsla::from_color(Rgba::new(0.0, 0.0, 1.0, 1.0))),
+                    ],
+                    spread_mode: SpreadMode::Pad,
+                    transform: Transform::default(),
+                    radius: None,
+                }),
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+                style: Style::Fill(FillRule::Winding),
+            },
+            None,
+            None,
+        );
+        assert_eq!(*res.unwrap().borrow(), expected);
     }
 
     #[test]
-    fn test_loop_statement() {
-        let config = Config {
-            seed: Some([0; 32]),
-            ..Config::default()
-        };
-        let res = execute(
-            parse(
-                "
-root = collect shapes
+    fn test_randomness() {
+        // Verify random produces consistent results with same seed
+        let res1 = execute(parse("root = ss rand SQUARE").unwrap(), test_config());
+        let res2 = execute(parse("root = ss rand SQUARE").unwrap(), test_config());
+        assert_eq!(res1.unwrap(), res2.unwrap());
 
-shapes =
-    loop 3
-        ss (rand * 100) SQUARE
-                ",
-            )
-            .unwrap(),
-            config,
+        // Verify different seeds produce different results
+        let res1 = execute(
+            parse("root = ss rand SQUARE").unwrap(),
+            Config {
+                seed: Some([1; 32]),
+                ..test_config()
+            },
         );
-        assert!(res.is_ok());
-        assert_eq!(
-            res.unwrap(),
-            Rc::new(RefCell::new(Shape::collection(vec![
-                Rc::new(RefCell::new(Shape::Basic(
-                    BasicShape::Square {
-                        x: -1.0,
-                        y: -1.0,
-                        width: 2.0,
-                        height: 2.0,
-                        transform: Transform::from_scale(83.69197, 83.69197),
-                        zindex: None,
-                        color: Color::Solid(WHITE),
-                        blend_mode: BlendMode::SourceOver,
-                        anti_alias: true,
-                        style: Style::default(),
-                    },
-                    None,
-                    None,
-                ))),
-                Rc::new(RefCell::new(Shape::Basic(
-                    BasicShape::Square {
-                        x: -1.0,
-                        y: -1.0,
-                        width: 2.0,
-                        height: 2.0,
-                        transform: Transform::from_scale(90.9063, 90.9063),
-                        zindex: None,
-                        color: Color::Solid(WHITE),
-                        blend_mode: BlendMode::SourceOver,
-                        anti_alias: true,
-                        style: Style::default(),
-                    },
-                    None,
-                    None,
-                ))),
-                Rc::new(RefCell::new(Shape::Basic(
-                    BasicShape::Square {
-                        x: -1.0,
-                        y: -1.0,
-                        width: 2.0,
-                        height: 2.0,
-                        transform: Transform::from_scale(63.14245, 63.14245),
-                        zindex: None,
-                        color: Color::Solid(WHITE),
-                        blend_mode: BlendMode::SourceOver,
-                        anti_alias: true,
-                        style: Style::default(),
-                    },
-                    None,
-                    None,
-                ))),
-            ],)))
+        let res2 = execute(
+            parse("root = ss rand SQUARE").unwrap(),
+            Config {
+                seed: Some([2; 32]),
+                ..test_config()
+            },
         );
+        assert_ne!(res1.unwrap(), res2.unwrap());
     }
 }

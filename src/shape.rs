@@ -1466,3 +1466,386 @@ impl Shape {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tiny_skia::{BlendMode, FillRule, LineCap, SpreadMode, StrokeDash};
+
+    #[test]
+    fn test_basic_shapes() {
+        // Test square creation
+        let square = Shape::square();
+        assert_eq!(square, Shape::Basic(SQUARE.clone(), None, None));
+
+        // Test circle creation
+        let circle = Shape::circle();
+        assert_eq!(circle, Shape::Basic(CIRCLE.clone(), None, None));
+
+        // Test triangle creation
+        let triangle = Shape::triangle();
+        assert_eq!(triangle, Shape::Basic(TRIANGLE.clone(), None, None));
+
+        // Test fill creation
+        let fill = Shape::fill();
+        assert_eq!(fill, Shape::Basic(FILL.clone(), None, None));
+
+        // Test empty creation
+        let empty = Shape::empty();
+        assert_eq!(empty, Shape::Basic(EMPTY.clone(), None, None));
+    }
+
+    #[test]
+    fn test_path_creation() {
+        let segments = vec![
+            PathSegment::MoveTo(0.0, 0.0),
+            PathSegment::LineTo(10.0, 0.0),
+            PathSegment::Close,
+        ];
+        let path = Shape::path(segments.clone());
+        assert_eq!(
+            path,
+            Shape::Path {
+                segments,
+                transform: IDENTITY,
+                zindex: None,
+                color: Color::Solid(WHITE),
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+                style: Style::default(),
+                mask: None,
+                pattern: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_composite_shapes() {
+        let square = Rc::new(RefCell::new(Shape::square()));
+        let circle = Rc::new(RefCell::new(Shape::circle()));
+
+        let composite = Shape::composite(square.clone(), circle.clone());
+        assert_eq!(
+            composite,
+            Shape::Composite {
+                a: square,
+                b: circle,
+                transform: IDENTITY,
+                zindex_overwrite: None,
+                zindex_shift: None,
+                color_overwrite: ColorChange::default(),
+                color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
+                style_overwrite: None,
+                mask_overwrite: None,
+                pattern_overwrite: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_collection_shapes() {
+        let shapes = vec![
+            Rc::new(RefCell::new(Shape::square())),
+            Rc::new(RefCell::new(Shape::circle())),
+        ];
+
+        let collection = Shape::collection(shapes.clone());
+        assert_eq!(
+            collection,
+            Shape::Collection {
+                shapes,
+                transform: IDENTITY,
+                zindex_overwrite: None,
+                zindex_shift: None,
+                color_overwrite: ColorChange::default(),
+                color_shift: HslaChange::default(),
+                blend_mode_overwrite: None,
+                anti_alias_overwrite: None,
+                style_overwrite: None,
+                mask_overwrite: None,
+                pattern_overwrite: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_transform_operations() {
+        let mut shape = Shape::square();
+
+        // Test translate
+        shape.translate(10.0, 20.0);
+        match shape {
+            Shape::Basic(BasicShape::Square { transform, .. }, _, _) => {
+                assert_eq!(transform.tx, 10.0);
+                assert_eq!(transform.ty, 20.0);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test rotate
+        shape.rotate(45.0);
+        match shape {
+            Shape::Basic(BasicShape::Square { transform, .. }, _, _) => {
+                assert_eq!(transform.sx, 0.70710677);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test scale
+        shape.scale(2.0, 3.0);
+        match shape {
+            Shape::Basic(BasicShape::Square { transform, .. }, _, _) => {
+                assert_eq!(transform.sx, 2.0 * 0.70710677);
+                assert_eq!(transform.sy, 3.0 * 0.70710677);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+    }
+
+    #[test]
+    fn test_color_operations() {
+        let mut shape = Shape::square();
+
+        // Test HSL color
+        shape.set_hsl(120.0, 0.5, 0.5);
+        match shape {
+            Shape::Basic(
+                BasicShape::Square {
+                    color: Color::Solid(color),
+                    ..
+                },
+                _,
+                _,
+            ) => {
+                assert_eq!(color.hue, 120.0);
+                assert_eq!(color.saturation, 0.5);
+                assert_eq!(color.lightness, 0.5);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test HSLA color
+        shape.set_hsla(180.0, 0.7, 0.3, 0.8);
+        match shape {
+            Shape::Basic(
+                BasicShape::Square {
+                    color: Color::Solid(color),
+                    ..
+                },
+                _,
+                _,
+            ) => {
+                assert_eq!(color.hue, 180.0);
+                assert_eq!(color.saturation, 0.7);
+                assert_eq!(color.lightness, 0.3);
+                assert_eq!(color.alpha, 0.8);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test hex color
+        shape.set_hex([0xFF, 0x00, 0x00]);
+        match shape {
+            Shape::Basic(
+                BasicShape::Square {
+                    color: Color::Solid(color),
+                    ..
+                },
+                _,
+                _,
+            ) => {
+                assert_eq!(color.hue, 0.0);
+                assert_eq!(color.saturation, 1.0);
+                assert_eq!(color.lightness, 0.5);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+    }
+
+    #[test]
+    fn test_style_operations() {
+        let mut shape = Shape::square();
+
+        // Test fill rule
+        shape.set_fill_rule(FillRule::EvenOdd);
+        match shape {
+            Shape::Basic(
+                BasicShape::Square {
+                    style: Style::Fill(fill_rule),
+                    ..
+                },
+                _,
+                _,
+            ) => {
+                assert_eq!(fill_rule, FillRule::EvenOdd);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test stroke
+        shape.set_stroke_width(2.0);
+        match shape {
+            Shape::Basic(
+                BasicShape::Square {
+                    style: Style::Stroke(ref stroke),
+                    ..
+                },
+                _,
+                _,
+            ) => {
+                assert_eq!(stroke.width, 2.0);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test line cap
+        shape.set_line_cap(LineCap::Round);
+        match shape {
+            Shape::Basic(
+                BasicShape::Square {
+                    style: Style::Stroke(ref stroke),
+                    ..
+                },
+                _,
+                _,
+            ) => {
+                assert_eq!(stroke.line_cap, LineCap::Round);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test dash pattern
+        let dash = StrokeDash::new(vec![5.0, 3.0], 1.0);
+        shape.set_dash(dash.clone());
+        match shape {
+            Shape::Basic(
+                BasicShape::Square {
+                    style: Style::Stroke(stroke),
+                    ..
+                },
+                _,
+                _,
+            ) => {
+                assert_eq!(stroke.dash, dash);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+    }
+
+    #[test]
+    fn test_blend_mode() {
+        let mut shape = Shape::square();
+        shape.set_blend_mode(BlendMode::Multiply);
+        match shape {
+            Shape::Basic(BasicShape::Square { blend_mode, .. }, _, _) => {
+                assert_eq!(blend_mode, BlendMode::Multiply);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+    }
+
+    #[test]
+    fn test_mask_and_pattern() {
+        let mut shape = Shape::square();
+        let mask = Rc::new(RefCell::new(Shape::circle()));
+        let pattern = Rc::new(RefCell::new(Shape::triangle()));
+
+        // Test mask
+        shape.set_mask(mask.clone());
+        match shape {
+            Shape::Basic(_, Some(ref m), _) => {
+                assert_eq!(*m.borrow(), *mask.borrow());
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test pattern
+        shape.set_pattern(pattern.clone(), SpreadMode::Repeat);
+        match shape {
+            Shape::Basic(_, _, Some(p)) => {
+                assert_eq!(*p.pattern.borrow(), *pattern.borrow());
+                assert_eq!(p.spread_mode, SpreadMode::Repeat);
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+    }
+
+    #[test]
+    fn test_gradient() {
+        let mut gradient = Gradient::linear(0.0, 0.0, 100.0, 100.0);
+
+        // Test gradient stops
+        gradient.set_stop_hsl(0.0, 0.0, 1.0, 0.5);
+        gradient.set_stop_hsl(1.0, 120.0, 1.0, 0.5);
+        assert_eq!(gradient.stops.len(), 2);
+        assert_eq!(gradient.stops[0].0, 0.0);
+        assert_eq!(gradient.stops[0].1.hue, 0.0);
+        assert_eq!(gradient.stops[1].0, 1.0);
+        assert_eq!(gradient.stops[1].1.hue, 120.0);
+
+        // Test spread mode
+        gradient.set_spread_mode(SpreadMode::Reflect);
+        assert_eq!(gradient.spread_mode, SpreadMode::Reflect);
+    }
+
+    #[test]
+    fn test_zindex_operations() {
+        let mut shape = Shape::square();
+
+        // Test set zindex
+        shape.set_zindex(5.0);
+        match shape {
+            Shape::Basic(BasicShape::Square { zindex, .. }, _, _) => {
+                assert_eq!(zindex, Some(5.0));
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test shift zindex
+        shape.shift_zindex(2.0);
+        match shape {
+            Shape::Basic(BasicShape::Square { zindex, .. }, _, _) => {
+                assert_eq!(zindex, Some(7.0));
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+    }
+
+    #[test]
+    fn test_composite_operations() {
+        let square = Rc::new(RefCell::new(Shape::square()));
+        let circle = Rc::new(RefCell::new(Shape::circle()));
+        let mut composite = Shape::composite(square, circle);
+
+        // Test color overwrite
+        composite.set_color(Color::Solid(Hsla::new::<f32>(180.0.into(), 1.0, 0.5, 1.0)));
+        match composite {
+            Shape::Composite {
+                ref color_overwrite,
+                ..
+            } => match color_overwrite {
+                ColorChange::Hsla(overwrite) => {
+                    assert_eq!(overwrite.hue.unwrap(), 180.0);
+                    assert_eq!(overwrite.saturation.unwrap(), 1.0);
+                    assert_eq!(overwrite.lightness.unwrap(), 0.5);
+                }
+                _ => panic!("Unexpected color change type"),
+            },
+            _ => panic!("Unexpected shape type"),
+        }
+
+        // Test blend mode overwrite
+        composite.set_blend_mode(BlendMode::Multiply);
+        match composite {
+            Shape::Composite {
+                blend_mode_overwrite,
+                ..
+            } => {
+                assert_eq!(blend_mode_overwrite, Some(BlendMode::Multiply));
+            }
+            _ => panic!("Unexpected shape type"),
+        }
+    }
+}

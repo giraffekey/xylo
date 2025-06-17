@@ -1129,3 +1129,240 @@ pub fn render(shape: Rc<RefCell<Shape>>, width: u32, height: u32) -> Result<Pixm
 
     Ok(pixmap)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "no-std")]
+    use alloc::vec;
+
+    use palette::Hsla;
+
+    // Helper function to create a simple shape for testing
+    fn create_test_shape() -> Rc<RefCell<Shape>> {
+        Rc::new(RefCell::new(Shape::Basic(
+            BasicShape::Square {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+                transform: Transform::identity(),
+                zindex: Some(0.0),
+                color: Color::Solid(Hsla::new(0.0, 1.0, 0.5, 1.0)),
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+                style: Style::Fill(FillRule::Winding),
+            },
+            None,
+            None,
+        )))
+    }
+
+    #[test]
+    fn test_convert_color() {
+        let palette_color = Rgba::new(1.0, 0.5, 0.25, 0.75);
+        let skia_color = convert_color(palette_color);
+
+        assert_eq!(skia_color.red(), 1.0);
+        assert_eq!(skia_color.green(), 0.5);
+        assert_eq!(skia_color.blue(), 0.25);
+        assert_eq!(skia_color.alpha(), 0.75);
+    }
+
+    #[test]
+    fn test_solid_paint() {
+        let color = Rgba::new(0.1, 0.2, 0.3, 0.4);
+        let paint = solid_paint(color, BlendMode::Multiply, false);
+
+        assert_eq!(paint.blend_mode, BlendMode::Multiply);
+        assert!(!paint.anti_alias);
+        if let Shader::SolidColor(c) = paint.shader {
+            assert_eq!(c.red(), 0.1);
+            assert_eq!(c.green(), 0.2);
+            assert_eq!(c.blue(), 0.3);
+            assert_eq!(c.alpha(), 0.4);
+        } else {
+            panic!("Expected solid color shader");
+        }
+    }
+
+    #[test]
+    fn test_gradient_paint() {
+        let gradient = Gradient {
+            start: (0.0, 0.0),
+            end: (100.0, 100.0),
+            radius: None,
+            stops: vec![
+                (0.0, Hsla::new(0.0, 1.0, 0.5, 1.0)),
+                (1.0, Hsla::new(120.0, 0.8, 0.6, 0.8)),
+            ],
+            spread_mode: SpreadMode::Pad,
+            transform: Transform::identity(),
+        };
+
+        let paint = gradient_paint(gradient, BlendMode::Screen, true);
+
+        assert_eq!(paint.blend_mode, BlendMode::Screen);
+        assert!(paint.anti_alias);
+        assert!(matches!(paint.shader, Shader::LinearGradient(_)));
+    }
+
+    #[test]
+    fn test_convert_shape_basic() {
+        let shape = create_test_shape();
+        let mut data = Vec::new();
+        convert_shape(&mut data, shape, Transform::identity()).unwrap();
+
+        assert_eq!(data.len(), 1);
+        if let ShapeData::FillPath { path, paint, .. } = &data[0] {
+            assert!(path.bounds().width() > 0.0);
+            assert!(path.bounds().height() > 0.0);
+            if let Shader::SolidColor(c) = paint.shader {
+                assert_eq!(c.red(), 1.0); // Red for HSL(0, 1.0, 0.5)
+            } else {
+                panic!("Expected solid color shader");
+            }
+        } else {
+            panic!("Expected FillPath variant");
+        }
+    }
+
+    #[test]
+    fn test_render_basic_shape() {
+        let shape = create_test_shape();
+        let pixmap = render(shape, 200, 200).unwrap();
+
+        // Basic checks that rendering produced something
+        assert_eq!(pixmap.width(), 200);
+        assert_eq!(pixmap.height(), 200);
+        assert!(pixmap.data().iter().any(|&b| b != 0)); // Not all pixels are transparent
+    }
+
+    #[test]
+    fn test_zindex_ordering() {
+        let mut data = vec![
+            ShapeData::Fill {
+                color: tiny_skia::Color::from_rgba(1.0, 0.0, 0.0, 1.0).unwrap(),
+                zindex: 1.0,
+            },
+            ShapeData::Fill {
+                color: tiny_skia::Color::from_rgba(0.0, 1.0, 0.0, 1.0).unwrap(),
+                zindex: 0.0,
+            },
+        ];
+
+        // Sort by zindex
+        data.sort_by(|a, b| a.zindex().partial_cmp(&b.zindex()).unwrap());
+
+        assert_eq!(data[0].zindex(), 0.0);
+        assert_eq!(data[1].zindex(), 1.0);
+    }
+
+    #[test]
+    fn test_color_overwrites() {
+        let original = Color::Solid(Hsla::new(0.0, 1.0, 0.5, 1.0));
+        let overwrite = ColorChange::Hsla(HslaChange {
+            hue: Some(120.0.into()),
+            ..Default::default()
+        });
+        let shift = HslaChange {
+            lightness: Some(0.1.into()),
+            ..Default::default()
+        };
+
+        let result = overwrite_color(original, overwrite, shift);
+
+        if let Color::Solid(hsla) = result {
+            assert_eq!(hsla.hue, 120.0);
+            assert_eq!(hsla.lightness, 0.6); // 0.5 + 0.1
+        } else {
+            panic!("Expected solid color");
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_image_rendering() {
+        let shape = Rc::new(RefCell::new(Shape::Image {
+            path: ImagePath::File("test.png".into()),
+            ops: vec![],
+            transform: Transform::identity(),
+            zindex: Some(0.0),
+            opacity: 1.0,
+            blend_mode: BlendMode::SourceOver,
+            quality: FilterQuality::Nearest,
+            mask: None,
+        }));
+
+        // This test just verifies the image path is handled without panic
+        let result = render(shape, 100, 100);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_composite_shape_rendering() {
+        let shape_a = create_test_shape();
+        let shape_b = Rc::new(RefCell::new(Shape::Basic(
+            BasicShape::Circle {
+                x: 50.0,
+                y: 50.0,
+                radius: 25.0,
+                transform: Transform::identity(),
+                zindex: Some(1.0),
+                color: Color::Solid(Hsla::new(120.0, 1.0, 0.5, 0.5)),
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+                style: Style::Fill(FillRule::Winding),
+            },
+            None,
+            None,
+        )));
+
+        let composite = Rc::new(RefCell::new(Shape::Composite {
+            a: shape_a,
+            b: shape_b,
+            transform: Transform::identity(),
+            zindex_overwrite: None,
+            zindex_shift: None,
+            color_overwrite: ColorChange::default(),
+            color_shift: HslaChange::default(),
+            blend_mode_overwrite: None,
+            anti_alias_overwrite: None,
+            style_overwrite: None,
+            mask_overwrite: None,
+            pattern_overwrite: None,
+        }));
+
+        let pixmap = render(composite, 200, 200).unwrap();
+        assert_eq!(pixmap.width(), 200);
+        assert_eq!(pixmap.height(), 200);
+    }
+
+    #[test]
+    fn test_path_shape_rendering() {
+        let path_shape = Rc::new(RefCell::new(Shape::Path {
+            segments: vec![
+                PathSegment::MoveTo(0.0, 0.0),
+                PathSegment::LineTo(100.0, 0.0),
+                PathSegment::LineTo(50.0, 100.0),
+                PathSegment::Close,
+            ],
+            transform: Transform::identity(),
+            zindex: Some(0.0),
+            color: Color::Solid(Hsla::new(240.0, 1.0, 0.5, 1.0)),
+            blend_mode: BlendMode::SourceOver,
+            anti_alias: true,
+            style: Style::Stroke(Stroke {
+                width: 2.0,
+                ..Default::default()
+            }),
+            mask: None,
+            pattern: None,
+        }));
+
+        let pixmap = render(path_shape, 200, 200).unwrap();
+        assert_eq!(pixmap.width(), 200);
+        assert_eq!(pixmap.height(), 200);
+    }
+}
