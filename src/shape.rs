@@ -151,6 +151,46 @@ impl Gradient {
     pub fn set_spread_mode(&mut self, spread_mode: SpreadMode) {
         self.spread_mode = spread_mode;
     }
+
+    pub fn translate(&mut self, tx: f32, ty: f32) {
+        self.transform = self.transform.post_translate(tx, ty);
+    }
+
+    pub fn rotate(&mut self, r: f32) {
+        self.transform = self.transform.post_rotate(r);
+    }
+
+    pub fn rotate_at(&mut self, r: f32, tx: f32, ty: f32) {
+        self.transform = self.transform.post_rotate_at(r, tx, ty);
+    }
+
+    pub fn scale(&mut self, sx: f32, sy: f32) {
+        self.transform = self.transform.post_scale(sx, sy);
+    }
+
+    pub fn skew(&mut self, kx: f32, ky: f32) {
+        self.transform = self.transform.post_concat(Transform::from_skew(kx, ky));
+    }
+
+    pub fn flip(&mut self, f: f32) {
+        self.transform = self
+            .transform
+            .post_rotate(f)
+            .post_scale(-1.0, 1.0)
+            .post_rotate(-f);
+    }
+
+    pub fn fliph(&mut self) {
+        self.transform = self.transform.post_scale(-1.0, 1.0);
+    }
+
+    pub fn flipv(&mut self) {
+        self.transform = self.transform.post_scale(1.0, -1.0);
+    }
+
+    pub fn flipd(&mut self) {
+        self.transform = self.transform.post_scale(-1.0, -1.0);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

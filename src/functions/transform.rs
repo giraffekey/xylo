@@ -26,6 +26,26 @@ builtin_function!(translate => {
         shape.borrow_mut().translate(*tx, *ty as f32);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(tx), Value::Integer(ty), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*tx as f32, *ty as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(tx), Value::Float(ty), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*tx, *ty);
+        Value::Gradient(grad)
+    },
+    [Value::Integer(tx), Value::Float(ty), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*tx as f32, *ty);
+        Value::Gradient(grad)
+    },
+    [Value::Float(tx), Value::Integer(ty), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*tx, *ty as f32);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(translatex => {
@@ -38,6 +58,16 @@ builtin_function!(translatex => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().translate(*tx, 0.0);
         Value::Shape(shape.clone())
+    },
+    [Value::Integer(tx), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*tx as f32, 0.0);
+        Value::Gradient(grad)
+    },
+    [Value::Float(tx), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*tx, 0.0);
+        Value::Gradient(grad)
     },
 });
 
@@ -52,6 +82,16 @@ builtin_function!(translatey => {
         shape.borrow_mut().translate(0.0, *ty);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(ty), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(0.0, *ty as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(ty), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(0.0, *ty);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(translateb => {
@@ -65,6 +105,16 @@ builtin_function!(translateb => {
         shape.borrow_mut().translate(*t, *t);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(t), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*t as f32, *t as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(t), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.translate(*t, *t);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(rotate => {
@@ -77,6 +127,16 @@ builtin_function!(rotate => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().rotate(*r);
         Value::Shape(shape.clone())
+    },
+    [Value::Integer(r), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.rotate(*r as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(r), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.rotate(*r);
+        Value::Gradient(grad)
     },
 });
 
@@ -100,7 +160,27 @@ builtin_function!(rotate_at => {
         };
         shape.borrow_mut().rotate_at(r, tx, ty);
         Value::Shape(shape.clone())
-    }
+    },
+    [r, tx, ty, Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        let r = match r {
+            Value::Integer(n) => *n as f32,
+            Value::Float(n)   => *n,
+           _ => return Err(Error::InvalidArgument("rotate_at".into())),
+        };
+        let tx = match tx {
+            Value::Integer(n) => *n as f32,
+            Value::Float(n)   => *n,
+           _ => return Err(Error::InvalidArgument("rotate_at".into())),
+        };
+        let ty = match ty {
+            Value::Integer(n) => *n as f32,
+            Value::Float(n)   => *n,
+           _ => return Err(Error::InvalidArgument("rotate_at".into())),
+        };
+        grad.rotate_at(r, tx, ty);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(scale => {
@@ -124,6 +204,26 @@ builtin_function!(scale => {
         shape.borrow_mut().scale(*sx, *sy as f32);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(sx), Value::Integer(sy), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*sx as f32, *sy as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(sx), Value::Float(sy), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*sx, *sy);
+        Value::Gradient(grad)
+    },
+    [Value::Integer(sx), Value::Float(sy), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*sx as f32, *sy);
+        Value::Gradient(grad)
+    },
+    [Value::Float(sx), Value::Integer(sy), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*sx, *sy as f32);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(scalex => {
@@ -136,6 +236,16 @@ builtin_function!(scalex => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().scale(*sx, 0.0);
         Value::Shape(shape.clone())
+    },
+    [Value::Integer(sx), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*sx as f32, 0.0);
+        Value::Gradient(grad)
+    },
+    [Value::Float(sx), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*sx, 0.0);
+        Value::Gradient(grad)
     },
 });
 
@@ -150,6 +260,16 @@ builtin_function!(scaley => {
         shape.borrow_mut().scale(0.0, *sy);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(sy), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(0.0, *sy as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(sy), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(0.0, *sy);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(scaleb => {
@@ -163,6 +283,16 @@ builtin_function!(scaleb => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().scale(*s, *s);
         Value::Shape(shape.clone())
+    },
+    [Value::Integer(s), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*s as f32, *s as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(s), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.scale(*s, *s);
+        Value::Gradient(grad)
     },
 });
 
@@ -187,6 +317,26 @@ builtin_function!(skew => {
         shape.borrow_mut().skew(*kx, *ky as f32);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(kx), Value::Integer(ky), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*kx as f32, *ky as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(kx), Value::Float(ky), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*kx, *ky);
+        Value::Gradient(grad)
+    },
+    [Value::Integer(kx), Value::Float(ky), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*kx as f32, *ky);
+        Value::Gradient(grad)
+    },
+    [Value::Float(kx), Value::Integer(ky), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*kx, *ky as f32);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(skewx => {
@@ -199,6 +349,16 @@ builtin_function!(skewx => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().skew(*kx, 0.0);
         Value::Shape(shape.clone())
+    },
+    [Value::Integer(kx), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*kx as f32, 0.0);
+        Value::Gradient(grad)
+    },
+    [Value::Float(kx), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*kx, 0.0);
+        Value::Gradient(grad)
     },
 });
 
@@ -213,6 +373,16 @@ builtin_function!(skewy => {
         shape.borrow_mut().skew(0.0, *ky);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(ky), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(0.0, *ky as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(ky), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(0.0, *ky);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(skewb => {
@@ -225,6 +395,16 @@ builtin_function!(skewb => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().skew(*k, *k);
         Value::Shape(shape.clone())
+    },
+    [Value::Integer(k), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*k as f32, *k as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(k), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.skew(*k, *k);
+        Value::Gradient(grad)
     },
 });
 
@@ -239,6 +419,16 @@ builtin_function!(flip => {
         shape.borrow_mut().flip(*f);
         Value::Shape(shape.clone())
     },
+    [Value::Integer(f), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.flip(*f as f32);
+        Value::Gradient(grad)
+    },
+    [Value::Float(f), Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.flip(*f);
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(fliph => {
@@ -246,6 +436,11 @@ builtin_function!(fliph => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().fliph();
         Value::Shape(shape.clone())
+    },
+    [Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.fliph();
+        Value::Gradient(grad)
     },
 });
 
@@ -255,6 +450,11 @@ builtin_function!(flipv => {
         shape.borrow_mut().flipv();
         Value::Shape(shape.clone())
     },
+    [Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.flipv();
+        Value::Gradient(grad)
+    },
 });
 
 builtin_function!(flipd => {
@@ -262,6 +462,11 @@ builtin_function!(flipd => {
         let shape = dedup_shape(shape);
         shape.borrow_mut().flipd();
         Value::Shape(shape.clone())
+    },
+    [Value::Gradient(grad)] => {
+        let mut grad = grad.clone();
+        grad.flipd();
+        Value::Gradient(grad)
     },
 });
 
