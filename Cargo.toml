@@ -37,6 +37,7 @@ factorial = "0.4"
 fontdue = "0.9"
 hashbrown = "0.15"
 image = "0.25"
+imageproc = "0.25"
 itertools = { version = "0.14", default-features = false }
 noise = "0.9"
 nom = { version = "8.0", default-features = false }

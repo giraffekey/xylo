@@ -11,6 +11,7 @@ use crate::colors::color;
 use asdf_pixel_sort::{DEFAULT_BLACK, DEFAULT_BRIGHTNESS, DEFAULT_WHITE};
 use core::str::FromStr;
 use image::imageops::FilterType;
+use imageproc::distance_transform::Norm;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::{
@@ -52,6 +53,29 @@ impl ToString for ShapeKind {
     }
 }
 
+type ImageThresholdType = imageproc::contrast::ThresholdType;
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ThresholdType {
+    Binary,
+    BinaryInverted,
+    Truncate,
+    ToZero,
+    ToZeroInverted,
+}
+
+impl Into<ImageThresholdType> for ThresholdType {
+    fn into(self) -> ImageThresholdType {
+        match self {
+            ThresholdType::Binary => ImageThresholdType::Binary,
+            ThresholdType::BinaryInverted => ImageThresholdType::BinaryInverted,
+            ThresholdType::Truncate => ImageThresholdType::Truncate,
+            ThresholdType::ToZero => ImageThresholdType::ToZero,
+            ThresholdType::ToZeroInverted => ImageThresholdType::ToZeroInverted,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Integer(i32),
@@ -68,6 +92,8 @@ pub enum Literal {
     SpreadMode(SpreadMode),
     FilterQuality(FilterQuality),
     FilterType(FilterType),
+    ThresholdType(ThresholdType),
+    Norm(Norm),
     SortMode(SortMode),
     SortDirection(SortDirection),
 }
@@ -141,6 +167,18 @@ impl ToString for Literal {
                 FilterType::CatmullRom => "FILTER_CATMULL_ROM".into(),
                 FilterType::Gaussian => "FILTER_GAUSSIAN".into(),
                 FilterType::Lanczos3 => "FILTER_LANCZOS3".into(),
+            },
+            Literal::ThresholdType(tt) => match tt {
+                ThresholdType::Binary => "THRESHOLD_BINARY".into(),
+                ThresholdType::BinaryInverted => "THRESHOLD_BINARY_INVERTED".into(),
+                ThresholdType::Truncate => "THRESHOLD_TRUNCATE".into(),
+                ThresholdType::ToZero => "THRESHOLD_TO_ZERO".into(),
+                ThresholdType::ToZeroInverted => "THRESHOLD_TO_ZERO_INVERTED".into(),
+            },
+            Literal::Norm(norm) => match norm {
+                Norm::L1 => "NORM_L1".into(),
+                Norm::L2 => "NORM_L2".into(),
+                Norm::LInf => "NORM_LINF".into(),
             },
             Literal::SortMode(sm) => match sm {
                 SortMode::Black(_) => "SORT_BLACK".into(),
@@ -563,6 +601,38 @@ fn filter_type(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
+fn threshold_type(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(
+                ThresholdType::BinaryInverted,
+                tag("THRESHOLD_BINARY_INVERTED"),
+            ),
+            value(ThresholdType::Binary, tag("THRESHOLD_BINARY")),
+            value(ThresholdType::Truncate, tag("THRESHOLD_TRUNCATE")),
+            value(
+                ThresholdType::ToZeroInverted,
+                tag("THRESHOLD_TO_ZERO_INVERTED"),
+            ),
+            value(ThresholdType::ToZero, tag("THRESHOLD_TO_ZERO")),
+        )),
+        Literal::ThresholdType,
+    )
+    .parse(input)
+}
+
+fn norm(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(Norm::L1, tag("NORM_L1")),
+            value(Norm::L2, tag("NORM_L2")),
+            value(Norm::LInf, tag("NORM_LINF")),
+        )),
+        Literal::Norm,
+    )
+    .parse(input)
+}
+
 fn sort_mode(input: &str) -> IResult<&str, Literal> {
     map(
         alt((
@@ -607,6 +677,8 @@ fn literal(input: &str) -> IResult<&str, Literal> {
         spread_mode,
         filter_quality,
         filter_type,
+        threshold_type,
+        norm,
         sort_mode,
         sort_direction,
     ))

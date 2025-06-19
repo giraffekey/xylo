@@ -4,8 +4,12 @@ use std::rc::Rc;
 #[cfg(feature = "no-std")]
 use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
+use crate::parser::ThresholdType;
+
 use core::cell::RefCell;
 use image::imageops::FilterType;
+use imageproc::distance_transform::Norm;
+use imageproc::geometric_transformations::Interpolation;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
 use tiny_skia::{
     BlendMode, FillRule, FilterQuality, LineCap, LineJoin, SpreadMode, Stroke, StrokeDash,
@@ -274,7 +278,7 @@ pub enum ImageOp {
     Blur(f32),
     FastBlur(f32),
     Crop(u32, u32, u32, u32),
-    Filter3x3(Vec<f32>),
+    Filter3x3([f32; 9]),
     FlipHorizontal,
     FlipVertical,
     HorizontalGradient([u8; 4], [u8; 4]),
@@ -288,6 +292,49 @@ pub enum ImageOp {
     Thumbnail(u32, u32),
     Tile(Rc<RefCell<Shape>>),
     Unsharpen(f32, i32),
+    AdaptiveThreshold(u32),
+    EqualizeHistogram,
+    MatchHistogram(Rc<RefCell<Shape>>),
+    StretchContrast(u8, u8, u8, u8),
+    Threshold(u8, ThresholdType),
+    DistanceTransform(Norm),
+    EuclideanSquaredDistanceTransform,
+    Canny(f32, f32),
+    BilateralFilter(u32, f32, f32),
+    BoxFilter(u32, u32),
+    GaussianBlur(f32),
+    SharpenGaussian(f32, f32),
+    HorizontalFilter(Vec<f32>),
+    VerticalFilter(Vec<f32>),
+    LaplacianFilter,
+    MedianFilter(u32, u32),
+    SeparableFilter(Vec<f32>, Vec<f32>),
+    SeparableFilterEqual(Vec<f32>),
+    Sharpen3x3,
+    Rotate(f32, f32, f32, Interpolation),
+    RotateAboutCenter(f32, Interpolation),
+    Translate(i32, i32),
+    Warp([f32; 9], Interpolation),
+    HorizontalPrewitt,
+    HorizontalScharr,
+    HorizontalSobel,
+    VerticalPrewitt,
+    VerticalScharr,
+    VerticalSobel,
+    PrewittGradients,
+    SobelGradients,
+    IntegralImage,
+    IntegralSquaredImage,
+    RedChannel,
+    GreenChannel,
+    BlueChannel,
+    Close(Norm, u8),
+    Dilate(Norm, u8),
+    Erode(Norm, u8),
+    Open(Norm, u8),
+    GaussianNoise(f64, f64, u64),
+    SaltAndPepperNoise(f64, u64),
+    SuppressNonMaximum(u32),
     PixelSort(asdf_pixel_sort::Mode, asdf_pixel_sort::Direction),
 }
 

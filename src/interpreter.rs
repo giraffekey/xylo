@@ -13,6 +13,7 @@ use crate::shape::{Gradient, Shape};
 use core::cell::RefCell;
 use hashbrown::HashMap;
 use image::imageops::FilterType;
+use imageproc::distance_transform::Norm;
 use noise::Perlin;
 use num::Complex;
 use rand::distr::{weighted::WeightedIndex, Distribution};
@@ -54,6 +55,8 @@ pub enum Value {
     SpreadMode(SpreadMode),
     FilterQuality(FilterQuality),
     FilterType(FilterType),
+    ThresholdType(ThresholdType),
+    Norm(Norm),
     SortMode(asdf_pixel_sort::Mode),
     SortDirection(asdf_pixel_sort::Direction),
     Function(String, usize, Vec<Value>),
@@ -78,6 +81,8 @@ impl Value {
             | Self::SpreadMode(_)
             | Self::FilterQuality(_)
             | Self::FilterType(_)
+            | Self::ThresholdType(_)
+            | Self::Norm(_)
             | Self::SortMode(_)
             | Self::SortDirection(_) => Ok(ValueKind::Enum),
             Self::Function(_, argc, _) => Ok(ValueKind::Function(*argc)),
@@ -121,6 +126,8 @@ impl PartialEq for Value {
             (Value::SpreadMode(a), Value::SpreadMode(b)) => a == b,
             (Value::FilterQuality(a), Value::FilterQuality(b)) => a == b,
             (Value::FilterType(a), Value::FilterType(b)) => a == b,
+            (Value::ThresholdType(a), Value::ThresholdType(b)) => a == b,
+            (Value::Norm(a), Value::Norm(b)) => a == b,
             (Value::SortMode(a), Value::SortMode(b)) => a == b,
             (Value::SortDirection(a), Value::SortDirection(b)) => a == b,
             (Value::Function(a_name, a_argc, a_args), Value::Function(b_name, b_argc, b_args)) => {
@@ -251,6 +258,8 @@ fn reduce_literal(literal: &Literal) -> Result<Value> {
         Literal::SpreadMode(sm) => Ok(Value::SpreadMode(*sm)),
         Literal::FilterQuality(fq) => Ok(Value::FilterQuality(*fq)),
         Literal::FilterType(ft) => Ok(Value::FilterType(*ft)),
+        Literal::ThresholdType(tt) => Ok(Value::ThresholdType(*tt)),
+        Literal::Norm(norm) => Ok(Value::Norm(*norm)),
         Literal::SortMode(sm) => Ok(Value::SortMode(sm.clone())),
         Literal::SortDirection(sd) => Ok(Value::SortDirection(sd.clone())),
     }

@@ -11,7 +11,9 @@ use crate::interpreter::{Data, Value};
 use crate::shape::{ImageOp, ImagePath, Shape};
 
 use core::cell::RefCell;
+use imageproc::geometric_transformations::Interpolation;
 use rand_chacha::ChaCha8Rng;
+use tiny_skia::FilterQuality;
 
 builtin_function!(import_image => {
     [Value::String(path)] => {
@@ -48,17 +50,16 @@ builtin_function!(brighten => {
 });
 
 builtin_function!(contrast => {
-    [contrast, Value::Shape(image)] => {
-        let contrast = match contrast {
-            Value::Integer(contrast) => *contrast as f32,
-            Value::Float(contrast)   => *contrast,
-            _ => return Err(Error::InvalidArgument("contrast".into())),
-        };
-
+    [Value::Integer(contrast), Value::Shape(image)] => {
         let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::Contrast(contrast));
+        image.borrow_mut().add_image_op(ImageOp::Contrast(*contrast as f32));
         Value::Shape(image)
-    }
+    },
+    [Value::Float(contrast), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Contrast(*contrast));
+        Value::Shape(image)
+    },
 });
 
 builtin_function!(grayscale => {
@@ -94,31 +95,29 @@ builtin_function!(invert => {
 });
 
 builtin_function!(blur => {
-    [sigma, Value::Shape(image)] => {
-        let sigma = match sigma {
-            Value::Integer(sigma) => *sigma as f32,
-            Value::Float(sigma)   => *sigma,
-            _ => return Err(Error::InvalidArgument("blur".into())),
-        };
-
+    [Value::Integer(sigma), Value::Shape(image)] => {
         let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::Blur(sigma));
+        image.borrow_mut().add_image_op(ImageOp::Blur(*sigma as f32));
         Value::Shape(image)
-    }
+    },
+    [Value::Float(sigma), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Blur(*sigma));
+        Value::Shape(image)
+    },
 });
 
 builtin_function!(fast_blur => {
-    [sigma, Value::Shape(image)] => {
-        let sigma = match sigma {
-            Value::Integer(sigma) => *sigma as f32,
-            Value::Float(sigma)   => *sigma,
-            _ => return Err(Error::InvalidArgument("fast_blur".into())),
-        };
-
+    [Value::Integer(sigma), Value::Shape(image)] => {
         let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::FastBlur(sigma));
+        image.borrow_mut().add_image_op(ImageOp::FastBlur(*sigma as f32));
         Value::Shape(image)
-    }
+    },
+    [Value::Float(sigma), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::FastBlur(*sigma));
+        Value::Shape(image)
+    },
 });
 
 builtin_function!(crop => {
@@ -140,12 +139,13 @@ builtin_function!(filter3x3 => {
         }
 
         let kernel = kernel.iter().map(|value| match value {
+            Value::Integer(n) => Ok(*n as f32),
             Value::Float(n) => Ok(*n),
             _ => Err(Error::InvalidArgument("filter3x3".into())),
         }).collect::<Result<Vec<_>>>()?;
 
         let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::Filter3x3(kernel));
+        image.borrow_mut().add_image_op(ImageOp::Filter3x3(kernel.try_into().unwrap()));
         Value::Shape(image)
     }
 });
@@ -289,17 +289,502 @@ builtin_function!(tile => {
 });
 
 builtin_function!(unsharpen => {
-    [sigma, Value::Integer(threshold), Value::Shape(image)] => {
-        let sigma = match sigma {
-            Value::Integer(sigma) => *sigma as f32,
-            Value::Float(sigma)   => *sigma,
-            _ => return Err(Error::InvalidArgument("unsharpen".into())),
+    [Value::Integer(sigma), Value::Integer(threshold), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Unsharpen(*sigma as f32, *threshold));
+        Value::Shape(image)
+    },
+    [Value::Float(sigma), Value::Integer(threshold), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Unsharpen(*sigma, *threshold));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(adaptive_threshold => {
+    [Value::Integer(block_radius), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::AdaptiveThreshold(*block_radius as u32));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(equalize_histogram => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::EqualizeHistogram);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(match_histogram => {
+    [Value::Shape(target), Value::Shape(image)] => {
+        let target = dedup_shape(target);
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::MatchHistogram(target));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(stretch_contrast => {
+    [Value::Integer(input_lower), Value::Integer(input_upper), Value::Integer(output_lower), Value::Integer(output_upper), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::StretchContrast(*input_lower as u8, *input_upper as u8, *output_lower as u8, *output_upper as u8));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(threshold => {
+    [Value::Integer(t), Value::ThresholdType(t_type), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Threshold(*t as u8, *t_type));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(distance_transform => {
+    [Value::Norm(norm), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::DistanceTransform(*norm));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(euclidean_squared_distance_transform => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::EuclideanSquaredDistanceTransform);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(canny => {
+    [Value::Integer(low_threshold), Value::Integer(high_threshold), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Canny(*low_threshold as f32, *high_threshold as f32));
+        Value::Shape(image)
+    },
+    [Value::Float(low_threshold), Value::Float(high_threshold), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Canny(*low_threshold, *high_threshold));
+        Value::Shape(image)
+    },
+    [Value::Integer(low_threshold), Value::Float(high_threshold), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Canny(*low_threshold as f32, *high_threshold));
+        Value::Shape(image)
+    },
+    [Value::Float(low_threshold), Value::Integer(high_threshold), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Canny(*low_threshold, *high_threshold as f32));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(bilateral_filter => {
+    [Value::Integer(window_size), Value::Integer(sigma_color), Value::Integer(sigma_spatial), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::BilateralFilter(*window_size as u32, *sigma_color as f32, *sigma_spatial as f32));
+        Value::Shape(image)
+    },
+    [Value::Integer(window_size), Value::Float(sigma_color), Value::Float(sigma_spatial), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::BilateralFilter(*window_size as u32, *sigma_color, *sigma_spatial));
+        Value::Shape(image)
+    },
+    [Value::Integer(window_size), Value::Integer(sigma_color), Value::Float(sigma_spatial), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::BilateralFilter(*window_size as u32, *sigma_color as f32, *sigma_spatial));
+        Value::Shape(image)
+    },
+    [Value::Integer(window_size), Value::Float(sigma_color), Value::Integer(sigma_spatial), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::BilateralFilter(*window_size as u32, *sigma_color, *sigma_spatial as f32));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(box_filter => {
+    [Value::Integer(x_radius), Value::Integer(y_radius), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::BoxFilter(*x_radius as u32, *y_radius as u32));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(gaussian_blur => {
+    [Value::Integer(sigma), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::GaussianBlur(*sigma as f32));
+        Value::Shape(image)
+    },
+    [Value::Float(sigma), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::GaussianBlur(*sigma));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(sharpen_gaussian => {
+    [Value::Integer(sigma), Value::Integer(amount), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SharpenGaussian(*sigma as f32, *amount as f32));
+        Value::Shape(image)
+    },
+    [Value::Float(sigma), Value::Float(amount), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SharpenGaussian(*sigma, *amount));
+        Value::Shape(image)
+    },
+    [Value::Integer(sigma), Value::Float(amount), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SharpenGaussian(*sigma as f32, *amount));
+        Value::Shape(image)
+    },
+    [Value::Float(sigma), Value::Integer(amount), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SharpenGaussian(*sigma, *amount as f32));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(horizontal_filter => {
+    [Value::List(kernel), Value::Shape(image)] => {
+        let kernel = kernel.iter().map(|value| match value {
+            Value::Integer(n) => Ok(*n as f32),
+            Value::Float(n) => Ok(*n),
+            _ => Err(Error::InvalidArgument("horizontal_filter".into())),
+        }).collect::<Result<Vec<_>>>()?;
+
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::HorizontalFilter(kernel));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(vertical_filter => {
+    [Value::List(kernel), Value::Shape(image)] => {
+        let kernel = kernel.iter().map(|value| match value {
+            Value::Integer(n) => Ok(*n as f32),
+            Value::Float(n) => Ok(*n),
+            _ => Err(Error::InvalidArgument("vertical_filter".into())),
+        }).collect::<Result<Vec<_>>>()?;
+
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::VerticalFilter(kernel));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(laplacian_filter => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::LaplacianFilter);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(median_filter => {
+    [Value::Integer(x_radius), Value::Integer(y_radius), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::MedianFilter(*x_radius as u32, *y_radius as u32));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(separable_filter => {
+    [Value::List(h_kernel), Value::List(v_kernel), Value::Shape(image)] => {
+        let h_kernel = h_kernel.iter().map(|value| match value {
+            Value::Integer(n) => Ok(*n as f32),
+            Value::Float(n) => Ok(*n),
+            _ => Err(Error::InvalidArgument("separable_filter".into())),
+        }).collect::<Result<Vec<_>>>()?;
+
+        let v_kernel = v_kernel.iter().map(|value| match value {
+            Value::Integer(n) => Ok(*n as f32),
+            Value::Float(n) => Ok(*n),
+            _ => Err(Error::InvalidArgument("separable_filter".into())),
+        }).collect::<Result<Vec<_>>>()?;
+
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SeparableFilter(h_kernel, v_kernel));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(separable_filter_equal => {
+    [Value::List(kernel), Value::Shape(image)] => {
+        let kernel = kernel.iter().map(|value| match value {
+            Value::Integer(n) => Ok(*n as f32),
+            Value::Float(n) => Ok(*n),
+            _ => Err(Error::InvalidArgument("separable_filter_equal".into())),
+        }).collect::<Result<Vec<_>>>()?;
+
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SeparableFilterEqual(kernel));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(sharpen3x3 => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Sharpen3x3);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(translate_image => {
+    [Value::Integer(tx), Value::Integer(ty), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Translate(*tx, *ty));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(rotate_image => {
+    [cx, cy, angle, Value::FilterQuality(quality), Value::Shape(image)] => {
+        let cx = match cx {
+            Value::Integer(cx) => *cx as f32,
+            Value::Float(cx)   => *cx,
+            _ => return Err(Error::InvalidArgument("rotate_image".into())),
+        };
+
+        let cy = match cy {
+            Value::Integer(cy) => *cy as f32,
+            Value::Float(cy)   => *cy,
+            _ => return Err(Error::InvalidArgument("rotate_image".into())),
+        };
+
+        let angle = match angle {
+            Value::Integer(angle) => *angle as f32,
+            Value::Float(angle)   => *angle,
+            _ => return Err(Error::InvalidArgument("rotate_image".into())),
         };
 
         let image = dedup_shape(image);
-        image.borrow_mut().add_image_op(ImageOp::Unsharpen(sigma, *threshold));
+        image.borrow_mut().add_image_op(ImageOp::Rotate(cx, cy, angle, quality_to_interpolation(quality)));
         Value::Shape(image)
     }
+});
+
+builtin_function!(rotate_image_about_center => {
+    [Value::Integer(angle), Value::FilterQuality(quality), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::RotateAboutCenter(*angle as f32, quality_to_interpolation(quality)));
+        Value::Shape(image)
+    },
+    [Value::Float(angle), Value::FilterQuality(quality), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::RotateAboutCenter(*angle, quality_to_interpolation(quality)));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(warp_image => {
+    [Value::List(transform), Value::FilterQuality(quality), Value::Shape(image)] => {
+        if transform.len() != 9 {
+            return Err(Error::InvalidList);
+        }
+
+        let transform = transform.iter().map(|value| match value {
+            Value::Integer(n) => Ok(*n as f32),
+            Value::Float(n) => Ok(*n),
+            _ => Err(Error::InvalidArgument("warp".into())),
+        }).collect::<Result<Vec<_>>>()?;
+
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Warp(transform.try_into().unwrap(), quality_to_interpolation(quality)));
+        Value::Shape(image)
+    },
+});
+
+fn quality_to_interpolation(quality: &FilterQuality) -> Interpolation {
+    match quality {
+        FilterQuality::Nearest => Interpolation::Nearest,
+        FilterQuality::Bilinear => Interpolation::Bilinear,
+        FilterQuality::Bicubic => Interpolation::Bicubic,
+    }
+}
+
+builtin_function!(horizontal_prewitt => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::HorizontalPrewitt);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(horizontal_scharr => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::HorizontalScharr);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(horizontal_sobel => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::HorizontalSobel);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(vertical_prewitt => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::VerticalPrewitt);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(vertical_scharr => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::VerticalScharr);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(vertical_sobel => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::VerticalSobel);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(prewitt_gradients => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::PrewittGradients);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(sobel_gradients => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SobelGradients);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(integral_image => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::IntegralImage);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(integral_squared_image => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::IntegralSquaredImage);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(red_channel => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::RedChannel);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(green_channel => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::GreenChannel);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(blue_channel => {
+    [Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::BlueChannel);
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(image_close => {
+    [Value::Norm(norm), Value::Integer(k), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Close(*norm, *k as u8));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(image_dilate => {
+    [Value::Norm(norm), Value::Integer(k), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Dilate(*norm, *k as u8));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(image_erode => {
+    [Value::Norm(norm), Value::Integer(k), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Erode(*norm, *k as u8));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(image_open => {
+    [Value::Norm(norm), Value::Integer(k), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::Open(*norm, *k as u8));
+        Value::Shape(image)
+    }
+});
+
+builtin_function!(gaussian_noise => {
+    [Value::Integer(mean), Value::Integer(stddev), Value::Integer(seed), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::GaussianNoise(*mean as f64, *stddev as f64, *seed as u64));
+        Value::Shape(image)
+    },
+    [Value::Float(mean), Value::Float(stddev), Value::Integer(seed), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::GaussianNoise(*mean as f64, *stddev as f64, *seed as u64));
+        Value::Shape(image)
+    },
+    [Value::Integer(mean), Value::Float(stddev), Value::Integer(seed), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::GaussianNoise(*mean as f64, *stddev as f64, *seed as u64));
+        Value::Shape(image)
+    },
+    [Value::Float(mean), Value::Integer(stddev), Value::Integer(seed), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::GaussianNoise(*mean as f64, *stddev as f64, *seed as u64));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(salt_and_pepper_noise => {
+    [Value::Integer(rate), Value::Integer(seed), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SaltAndPepperNoise(*rate as f64, *seed as u64));
+        Value::Shape(image)
+    },
+    [Value::Float(rate), Value::Integer(seed), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SaltAndPepperNoise(*rate as f64, *seed as u64));
+        Value::Shape(image)
+    },
+});
+
+builtin_function!(suppress_non_maximum => {
+    [Value::Integer(radius), Value::Shape(image)] => {
+        let image = dedup_shape(image);
+        image.borrow_mut().add_image_op(ImageOp::SuppressNonMaximum(*radius as u32));
+        Value::Shape(image)
+    },
 });
 
 builtin_function!(pixel_sort => {
