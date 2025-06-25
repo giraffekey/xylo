@@ -113,7 +113,7 @@ If your code is valid, you should see an image output to `art.png`.
 
 Join our community and stay connected! You can reach out to us through the following platforms:
 
-- **Discord**: [Join our Discord server](https://discord.gg/EZKEWxuk) to share your art, discuss ideas, and collaborate on the the project.
+- **Discord**: [Join our Discord server](https://discord.gg/xUQXFQ5DyZ) to share your art, discuss ideas, and collaborate on the the project.
 - **Telegram**: [Join our Telegram group](https://t.me/xylolang) for real-time updates and discussions.
 - **Reddit**: [Visit our subreddit](https://www.reddit.com/r/xylolang) to participate in discussions, share your artwork, and connect with other community members.
 - **Donations**: If you appreciate our work and would like to support us, consider donating through [Liberapay](https://liberapay.com/xylo) or [Giveth](https://giveth.io/project/xylo-programming-language). Your contributions help us continue improving the project!
