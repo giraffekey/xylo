@@ -1,6 +1,6 @@
 # Contributing to Xylo
 
-Thank you for your interest in contributing to Xylo, a functional programming language for procedural art! Whether you're improving the core language, adding examples, or fixing bugs, your work helps grow a creative coding tool for artists and programmers.
+Thank you for your interest in contributing to Xylo! Whether you're improving the core language, adding examples, or fixing bugs, your work helps grow a creative coding tool for artists and programmers.
 
 ## Ways to Contribute
 
