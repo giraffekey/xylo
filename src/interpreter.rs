@@ -654,7 +654,6 @@ fn execute_block<'a>(
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => continue 'a,
                 };
-                println!("{:?}", a);
 
                 let mut found = false;
                 'b: for (pattern, has_guard, skip) in patterns {
@@ -663,7 +662,6 @@ fn execute_block<'a>(
                             Operand::Value(value) => value.unwrap(),
                             Operand::Function => continue 'a,
                         };
-                        println!("{:?}", condition);
                         match condition {
                             Value::Boolean(b) => b,
                             _ => return Err(Error::InvalidCondition),
