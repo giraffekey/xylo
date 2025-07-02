@@ -654,23 +654,42 @@ fn execute_block<'a>(
                     Operand::Value(value) => value.unwrap(),
                     Operand::Function => continue 'a,
                 };
+                println!("{:?}", a);
 
                 let mut found = false;
-                'b: for (pattern, skip) in patterns {
-                    match pattern {
-                        Pattern::Matches(matches) => {
-                            for b in matches {
-                                if pattern_match(&a, b)? {
-                                    found = true;
-                                    break 'b;
+                'b: for (pattern, has_guard, skip) in patterns {
+                    let is_guard = if *has_guard {
+                        let condition = match next_operand(stack, rng, data, &mut index)? {
+                            Operand::Value(value) => value.unwrap(),
+                            Operand::Function => continue 'a,
+                        };
+                        println!("{:?}", condition);
+                        match condition {
+                            Value::Boolean(b) => b,
+                            _ => return Err(Error::InvalidCondition),
+                        }
+                    } else {
+                        true
+                    };
+
+                    if is_guard {
+                        match pattern {
+                            Pattern::Matches(matches) => {
+                                for b in matches {
+                                    if pattern_match(&a, b)? {
+                                        found = true;
+                                        break 'b;
+                                    }
                                 }
+                                index += skip;
                             }
-                            index += skip;
+                            Pattern::Wildcard => {
+                                found = true;
+                                break 'b;
+                            }
                         }
-                        Pattern::Wildcard => {
-                            found = true;
-                            break 'b;
-                        }
+                    } else {
+                        index += skip;
                     }
                 }
 
@@ -1046,8 +1065,8 @@ root =
                 "
 root =
     match 2
-        1 -> SQUARE
-        2 -> CIRCLE
+        _ if false -> SQUARE
+        2 if true -> CIRCLE
         3 -> TRIANGLE
                 ",
             )

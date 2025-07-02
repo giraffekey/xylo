@@ -115,7 +115,13 @@ fn block_to_string(block: &[Token]) -> String {
                 index += 1;
 
                 let mut pats = Vec::new();
-                for (pattern, skip) in patterns {
+                for (pattern, has_guard, skip) in patterns {
+                    let guard = if *has_guard {
+                        format!(" if {}", stack[depth].pop().unwrap())
+                    } else {
+                        String::new()
+                    };
+
                     match pattern {
                         Pattern::Matches(matches) => {
                             let matches = matches
@@ -124,14 +130,16 @@ fn block_to_string(block: &[Token]) -> String {
                                 .collect::<Vec<String>>()
                                 .join(",");
                             pats.push(format!(
-                                "{}->{}",
+                                "{}{}->{}",
                                 matches,
+                                guard,
                                 block_to_string(&block[index..index + skip])
                             ));
                         }
                         Pattern::Wildcard => {
                             pats.push(format!(
-                                "_->{}",
+                                "_{}->{}",
+                                guard,
                                 block_to_string(&block[index..index + skip])
                             ));
                         }
@@ -312,7 +320,7 @@ root = shape 1
 shape n =
     match n
         1 -> SQUARE
-        2 -> CIRCLE
+        2 if true -> CIRCLE
         3 -> TRIANGLE
         _ -> EMPTY
             ",
@@ -322,7 +330,7 @@ shape n =
             output.as_ref().unwrap(),
             "\
 root=(shape 1)
-shape n=match n->1->SQUARE;2->CIRCLE;3->TRIANGLE;_->EMPTY\
+shape n=match n->1->SQUARE;2 if true->CIRCLE;3->TRIANGLE;_->EMPTY\
             "
         );
         assert!(can_execute(output.as_ref().unwrap()));

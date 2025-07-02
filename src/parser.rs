@@ -312,7 +312,7 @@ pub enum Token<'a> {
     Return(Option<usize>),
     Let(&'a str, Vec<&'a str>, usize),
     If(usize),
-    Match(Vec<(Pattern, usize)>),
+    Match(Vec<(Pattern, bool, usize)>),
     ForStart(&'a str),
     ForEnd,
     LoopStart,
@@ -925,16 +925,30 @@ fn pattern(indent: usize) -> impl FnMut(&str) -> IResult<&str, Pattern> {
 struct PatternBlock<'a> {
     pattern: Pattern,
     expr: Block<'a>,
+    guard: Option<Block<'a>>,
 }
 
 fn pattern_block(indent: usize) -> impl FnMut(&str) -> IResult<&str, PatternBlock> {
     move |input| {
         let (input, pattern) = pattern(indent)(input)?;
+
+        let (input, has_guard) = opt((space1, tag("if"))).parse(input)?;
+        let (input, guard) = if has_guard.is_some() {
+            let (input, guard) = preceded(space1, expr(indent + 1, true)).parse(input)?;
+            (input, Some(guard))
+        } else {
+            (input, None)
+        };
+
         let (input, _) =
             alt(((multispace0, tag("->")), (space0, peek(line_ending)))).parse(input)?;
         let (input, expr) = expr(indent + 1, true)(input)?;
 
-        let pattern_block = PatternBlock { pattern, expr };
+        let pattern_block = PatternBlock {
+            pattern,
+            expr,
+            guard,
+        };
         Ok((input, pattern_block))
     }
 }
@@ -954,16 +968,30 @@ fn match_statement(indent: usize) -> impl FnMut(&str) -> IResult<&str, Block> {
         let mut skip = 0;
 
         let mut patterns = Vec::with_capacity(pattern_blocks.len());
+        let mut guard_blocks = Vec::new();
         let mut flattened_blocks = Vec::new();
 
         for pattern_block in pattern_blocks {
             skip += pattern_block.expr.len() + 1;
-            patterns.push((pattern_block.pattern, pattern_block.expr.len() + 1));
+            patterns.push((
+                pattern_block.pattern,
+                pattern_block.guard.is_some(),
+                pattern_block.expr.len() + 1,
+            ));
             flattened_blocks.extend(pattern_block.expr);
             flattened_blocks.push(Token::Jump(total - skip));
+
+            if let Some(mut guard) = pattern_block.guard {
+                guard.reverse();
+                guard_blocks.extend(guard);
+            }
         }
 
-        let mut block = Vec::with_capacity(condition.len() + flattened_blocks.len() + 1);
+        guard_blocks.reverse();
+
+        let mut block =
+            Vec::with_capacity(condition.len() + guard_blocks.len() + flattened_blocks.len() + 1);
+        block.extend(guard_blocks);
         block.extend(condition);
         block.push(Token::Match(patterns));
         block.extend(flattened_blocks);
@@ -1372,8 +1400,28 @@ mod tests {
             vec![
                 Token::Call("x", 0),
                 Token::Match(vec![
-                    (Pattern::Matches(vec![Literal::Integer(1)]), 2),
-                    (Pattern::Matches(vec![Literal::Integer(2)]), 2),
+                    (Pattern::Matches(vec![(Literal::Integer(1))]), false, 2),
+                    (Pattern::Matches(vec![Literal::Integer(2)]), false, 2),
+                ]),
+                Token::Literal(Literal::Integer(10)),
+                Token::Jump(2),
+                Token::Literal(Literal::Integer(20)),
+                Token::Jump(0),
+            ],
+        );
+
+        // Match
+        assert_parses(
+            match_statement(0),
+            "match x -> 1 -> 10; 2 if x == 2 -> 20",
+            vec![
+                Token::Call("x", 0),
+                Token::Literal(Literal::Integer(2)),
+                Token::BinaryOperator(BinaryOperator::EqualTo),
+                Token::Call("x", 0),
+                Token::Match(vec![
+                    (Pattern::Matches(vec![(Literal::Integer(1))]), false, 2),
+                    (Pattern::Matches(vec![Literal::Integer(2)]), true, 2),
                 ]),
                 Token::Literal(Literal::Integer(10)),
                 Token::Jump(2),
