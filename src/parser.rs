@@ -303,7 +303,7 @@ pub enum Pattern {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'a> {
     Literal(Literal),
-    List(Vec<Block<'a>>),
+    List(usize),
     UnaryOperator(UnaryOperator),
     BinaryOperator(BinaryOperator),
     Call(&'a str, usize),
@@ -806,13 +806,21 @@ fn indentation(input: &str, indent: usize) -> IResult<&str, usize> {
 }
 
 fn list(input: &str) -> IResult<&str, Block> {
-    let (input, list) = delimited(
+    let (input, elems) = delimited(
         (char('['), multispace0),
         separated_list0((multispace0, char(','), multispace0), expr(0, false)),
         (multispace0, char(']')),
     )
     .parse(input)?;
-    Ok((input, vec![Token::List(list)]))
+
+    let argc = elems.len();
+    let mut block = Vec::new();
+    for elem in elems {
+        block.extend(elem);
+    }
+    block.push(Token::List(argc));
+
+    Ok((input, block))
 }
 
 fn call(indent: usize, precedence: u8) -> impl FnMut(&str) -> IResult<&str, Block> {
@@ -1574,21 +1582,26 @@ double x = x * 2
         assert_parses(
             list,
             "[1, 2, 3]",
-            vec![Token::List(vec![
-                vec![Token::Literal(Literal::Integer(1))],
-                vec![Token::Literal(Literal::Integer(2))],
-                vec![Token::Literal(Literal::Integer(3))],
-            ])],
+            vec![
+                Token::Literal(Literal::Integer(1)),
+                Token::Literal(Literal::Integer(2)),
+                Token::Literal(Literal::Integer(3)),
+                Token::List(3),
+            ],
         );
 
         assert_parses(
             list,
-            "[SQUARE, CIRCLE, 0xff0000]",
-            vec![Token::List(vec![
-                vec![Token::Literal(Literal::Shape(ShapeKind::Square))],
-                vec![Token::Literal(Literal::Shape(ShapeKind::Circle))],
-                vec![Token::Literal(Literal::Hex([255, 0, 0]))],
-            ])],
+            "[SQUARE, CIRCLE, TRIANGLE, SQUARE : CIRCLE]",
+            vec![
+                Token::Literal(Literal::Shape(ShapeKind::Square)),
+                Token::Literal(Literal::Shape(ShapeKind::Circle)),
+                Token::Literal(Literal::Shape(ShapeKind::Triangle)),
+                Token::Literal(Literal::Shape(ShapeKind::Square)),
+                Token::Literal(Literal::Shape(ShapeKind::Circle)),
+                Token::BinaryOperator(BinaryOperator::Composition),
+                Token::List(4),
+            ],
         );
     }
 }

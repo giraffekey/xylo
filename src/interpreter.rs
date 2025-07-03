@@ -434,16 +434,20 @@ fn execute_block<'a>(
                 stack.operands.push(reduce_literal(literal)?);
                 index += 1;
             }
-            Token::List(blocks) => {
-                let values: Result<Vec<_>> = blocks
-                    .iter()
-                    .map(|block| execute_block(stack, rng, data, block, 0))
-                    .collect();
-                let values = values?;
+            Token::List(size) => {
+                let mut elems = Vec::with_capacity(*size);
+                for _ in 0..*size {
+                    let elem = match next_operand(stack, rng, data, &mut index)? {
+                        Operand::Value(value) => value.unwrap(),
+                        Operand::Function => continue 'a,
+                    };
+                    elems.push(elem);
+                }
+                elems.reverse();
 
-                let list = match values.get(0).map(Value::kind) {
+                let list = match elems.get(0).map(Value::kind) {
                     Some(Ok(ValueKind::Char)) => {
-                        let s: Result<String> = values
+                        let s: Result<String> = elems
                             .iter()
                             .map(|value| match value {
                                 Value::Char(c) => Ok(*c),
@@ -454,7 +458,7 @@ fn execute_block<'a>(
                         Value::String(s?)
                     }
                     _ => {
-                        let list = Value::List(values);
+                        let list = Value::List(elems);
                         list.kind()?;
                         list
                     }
@@ -983,6 +987,31 @@ mod tests {
             reduce_literal(&Literal::BlendMode(BlendMode::Multiply)).ok(),
             Some(Value::BlendMode(BlendMode::Multiply))
         );
+    }
+
+    #[test]
+    fn test_list_expressions() {
+        let res = execute(
+            parse("root = sx (last [1, 2, 3]) SQUARE").unwrap(),
+            test_config(),
+        );
+        let expected = Shape::Basic(
+            BasicShape::Square {
+                x: -1.0,
+                y: -1.0,
+                width: 2.0,
+                height: 2.0,
+                transform: Transform::from_scale(3.0, 1.0),
+                zindex: None,
+                color: Color::Solid(WHITE),
+                blend_mode: BlendMode::SourceOver,
+                anti_alias: true,
+                style: Style::Fill(FillRule::Winding),
+            },
+            None,
+            None,
+        );
+        assert_eq!(res.unwrap(), Rc::new(RefCell::new(expected)));
     }
 
     #[test]

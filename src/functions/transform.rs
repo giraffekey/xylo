@@ -229,22 +229,22 @@ builtin_function!(scale => {
 builtin_function!(scalex => {
     [Value::Integer(sx), Value::Shape(shape)] => {
         let shape = dedup_shape(shape);
-        shape.borrow_mut().scale(*sx as f32, 0.0);
+        shape.borrow_mut().scale(*sx as f32, 1.0);
         Value::Shape(shape.clone())
     },
     [Value::Float(sx), Value::Shape(shape)] => {
         let shape = dedup_shape(shape);
-        shape.borrow_mut().scale(*sx, 0.0);
+        shape.borrow_mut().scale(*sx, 1.0);
         Value::Shape(shape.clone())
     },
     [Value::Integer(sx), Value::Gradient(grad)] => {
         let mut grad = grad.clone();
-        grad.scale(*sx as f32, 0.0);
+        grad.scale(*sx as f32, 1.0);
         Value::Gradient(grad)
     },
     [Value::Float(sx), Value::Gradient(grad)] => {
         let mut grad = grad.clone();
-        grad.scale(*sx, 0.0);
+        grad.scale(*sx, 1.0);
         Value::Gradient(grad)
     },
 });
@@ -252,22 +252,22 @@ builtin_function!(scalex => {
 builtin_function!(scaley => {
     [Value::Integer(sy), Value::Shape(shape)] => {
         let shape = dedup_shape(shape);
-        shape.borrow_mut().scale(0.0, *sy as f32);
+        shape.borrow_mut().scale(1.0, *sy as f32);
         Value::Shape(shape.clone())
     },
     [Value::Float(sy), Value::Shape(shape)] => {
         let shape = dedup_shape(shape);
-        shape.borrow_mut().scale(0.0, *sy);
+        shape.borrow_mut().scale(1.0, *sy);
         Value::Shape(shape.clone())
     },
     [Value::Integer(sy), Value::Gradient(grad)] => {
         let mut grad = grad.clone();
-        grad.scale(0.0, *sy as f32);
+        grad.scale(1.0, *sy as f32);
         Value::Gradient(grad)
     },
     [Value::Float(sy), Value::Gradient(grad)] => {
         let mut grad = grad.clone();
-        grad.scale(0.0, *sy);
+        grad.scale(1.0, *sy);
         Value::Gradient(grad)
     },
 });
