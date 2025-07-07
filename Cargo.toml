@@ -30,14 +30,14 @@ strip = true
 
 [dependencies]
 ahash = { version = "0.8", default-features = false }
-asdf-pixel-sort = { version = "0.2.1", git = "https://github.com/giraffekey/asdf-pixel-sort" }
+asdf-pixel-sort = { version = "0.2.1", git = "https://github.com/giraffekey/asdf-pixel-sort", optional = true }
 base64 = { version = "0.22", default-features = false }
 clap = { version = "4.5", features = ["derive"] }
 factorial = "0.4"
-fontdue = "0.9"
+fontdue = { version = "0.9", optional = true }
 hashbrown = "0.15"
-image = "0.25"
-imageproc = "0.25"
+image = { version = "0.25", optional = true }
+imageproc = { version = "0.25", optional = true }
 itertools = { version = "0.14", default-features = false }
 noise = "0.9"
 nom = { version = "8.0", default-features = false }
@@ -52,11 +52,10 @@ tiny-skia = { version = "0.11", default-features = false, optional = true }
 voronoi = "0.1"
 
 [features]
-default = ["std", "simd"]
+default = ["std", "io", "simd"]
 std = [
 	"ahash/std",
 	"base64/std",
-	"fontdue/std",
 	"itertools/use_std",
 	"nom/std",
 	"palette/std",
@@ -65,6 +64,12 @@ std = [
 	"rand_chacha/std",
 	"tiny-skia/std",
 	"tiny-skia/png-format",
+]
+io = [
+	"asdf-pixel-sort",
+	"fontdue",
+	"image",
+	"imageproc",
 ]
 no-std = [
 	"base64/alloc",

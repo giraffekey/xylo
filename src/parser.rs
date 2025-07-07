@@ -6,12 +6,16 @@ use alloc::{
     vec::Vec,
 };
 
+#[cfg(feature = "io")]
+use {
+    asdf_pixel_sort::{DEFAULT_BLACK, DEFAULT_BRIGHTNESS, DEFAULT_WHITE},
+    image::imageops::FilterType,
+    imageproc::distance_transform::Norm,
+};
+
 use crate::colors::color;
 
-use asdf_pixel_sort::{DEFAULT_BLACK, DEFAULT_BRIGHTNESS, DEFAULT_WHITE};
 use core::str::FromStr;
-use image::imageops::FilterType;
-use imageproc::distance_transform::Norm;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while_m_n};
 use nom::character::complete::{
@@ -28,9 +32,45 @@ use tiny_skia::{BlendMode, FilterQuality, LineCap, LineJoin, SpreadMode};
 
 const KEYWORDS: &[&str] = &["let", "if", "else", "match", "for", "loop"];
 
+#[cfg(feature = "io")]
 pub type SortMode = asdf_pixel_sort::Mode;
 
+#[cfg(feature = "io")]
 pub type SortDirection = asdf_pixel_sort::Direction;
+
+#[cfg(not(feature = "io"))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FilterType {
+    Nearest,
+    Triangle,
+    CatmullRom,
+    Gaussian,
+    Lanczos3,
+}
+
+#[cfg(not(feature = "io"))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Norm {
+    L1,
+    L2,
+    LInf,
+}
+
+#[cfg(not(feature = "io"))]
+#[derive(Debug, Clone, PartialEq)]
+pub enum SortMode {
+    Black(()),
+    Brightness(u8),
+    White(()),
+}
+
+#[cfg(not(feature = "io"))]
+#[derive(Debug, Clone, PartialEq)]
+pub enum SortDirection {
+    Both,
+    Column,
+    Row,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShapeKind {
@@ -53,8 +93,6 @@ impl ToString for ShapeKind {
     }
 }
 
-type ImageThresholdType = imageproc::contrast::ThresholdType;
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ThresholdType {
     Binary,
@@ -64,14 +102,18 @@ pub enum ThresholdType {
     ToZeroInverted,
 }
 
-impl Into<ImageThresholdType> for ThresholdType {
-    fn into(self) -> ImageThresholdType {
+#[cfg(feature = "io")]
+type ImageprocThresholdType = imageproc::contrast::ThresholdType;
+
+#[cfg(feature = "io")]
+impl Into<ImageprocThresholdType> for ThresholdType {
+    fn into(self) -> ImageprocThresholdType {
         match self {
-            ThresholdType::Binary => ImageThresholdType::Binary,
-            ThresholdType::BinaryInverted => ImageThresholdType::BinaryInverted,
-            ThresholdType::Truncate => ImageThresholdType::Truncate,
-            ThresholdType::ToZero => ImageThresholdType::ToZero,
-            ThresholdType::ToZeroInverted => ImageThresholdType::ToZeroInverted,
+            ThresholdType::Binary => ImageprocThresholdType::Binary,
+            ThresholdType::BinaryInverted => ImageprocThresholdType::BinaryInverted,
+            ThresholdType::Truncate => ImageprocThresholdType::Truncate,
+            ThresholdType::ToZero => ImageprocThresholdType::ToZero,
+            ThresholdType::ToZeroInverted => ImageprocThresholdType::ToZeroInverted,
         }
     }
 }
@@ -633,6 +675,7 @@ fn norm(input: &str) -> IResult<&str, Literal> {
     .parse(input)
 }
 
+#[cfg(feature = "io")]
 fn sort_mode(input: &str) -> IResult<&str, Literal> {
     map(
         alt((
@@ -642,6 +685,19 @@ fn sort_mode(input: &str) -> IResult<&str, Literal> {
                 tag("SORT_BRIGHTNESS"),
             ),
             value(SortMode::White(DEFAULT_WHITE.clone()), tag("SORT_WHITE")),
+        )),
+        Literal::SortMode,
+    )
+    .parse(input)
+}
+
+#[cfg(not(feature = "io"))]
+fn sort_mode(input: &str) -> IResult<&str, Literal> {
+    map(
+        alt((
+            value(SortMode::Black(()), tag("SORT_BLACK")),
+            value(SortMode::Brightness(0), tag("SORT_BRIGHTNESS")),
+            value(SortMode::White(()), tag("SORT_WHITE")),
         )),
         Literal::SortMode,
     )
@@ -1291,10 +1347,18 @@ mod tests {
         }
 
         // Sort modes
+        #[cfg(feature = "io")]
         let sort_modes = vec![
             ("SORT_BLACK", SortMode::Black(DEFAULT_BLACK.clone())),
             ("SORT_BRIGHTNESS", SortMode::Brightness(DEFAULT_BRIGHTNESS)),
             ("SORT_WHITE", SortMode::White(DEFAULT_WHITE.clone())),
+        ];
+
+        #[cfg(not(feature = "io"))]
+        let sort_modes = vec![
+            ("SORT_BLACK", SortMode::Black(())),
+            ("SORT_BRIGHTNESS", SortMode::Brightness(0)),
+            ("SORT_WHITE", SortMode::White(())),
         ];
 
         for (input, expected) in sort_modes {

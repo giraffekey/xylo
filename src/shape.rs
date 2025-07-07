@@ -4,17 +4,26 @@ use std::rc::Rc;
 #[cfg(feature = "no-std")]
 use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
-use crate::parser::ThresholdType;
+#[cfg(feature = "io")]
+use {
+    image::imageops::FilterType, imageproc::distance_transform::Norm,
+    imageproc::geometric_transformations::Interpolation,
+};
+
+#[cfg(not(feature = "io"))]
+use crate::parser::{FilterType, Norm};
+
+use crate::parser::{SortDirection, SortMode, ThresholdType};
 
 use core::cell::RefCell;
-use image::imageops::FilterType;
-use imageproc::distance_transform::Norm;
-use imageproc::geometric_transformations::Interpolation;
 use palette::{rgb::Rgb, FromColor, Hsl, Hsla, RgbHue};
 use tiny_skia::{
     BlendMode, FillRule, FilterQuality, LineCap, LineJoin, SpreadMode, Stroke, StrokeDash,
     Transform,
 };
+
+#[cfg(not(feature = "io"))]
+type Interpolation = ();
 
 pub static IDENTITY: Transform = Transform {
     sx: 1.0,
@@ -335,7 +344,7 @@ pub enum ImageOp {
     GaussianNoise(f64, f64, u64),
     SaltAndPepperNoise(f64, u64),
     SuppressNonMaximum(u32),
-    PixelSort(asdf_pixel_sort::Mode, asdf_pixel_sort::Direction),
+    PixelSort(SortMode, SortDirection),
 }
 
 #[derive(Debug, Clone, PartialEq)]

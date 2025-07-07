@@ -1,8 +1,40 @@
 #[cfg(feature = "std")]
-use std::{io::Cursor, rc::Rc};
+use std::rc::Rc;
 
 #[cfg(feature = "no-std")]
 use alloc::{rc::Rc, string::String, vec::Vec};
+
+#[cfg(all(feature = "std", feature = "io"))]
+use std::{fs, io::Cursor};
+
+#[cfg(feature = "io")]
+use {
+    asdf_pixel_sort::{sort_with_options, Options},
+    fontdue::{Font, FontSettings},
+    image::{imageops, DynamicImage, ImageBuffer, ImageFormat, ImageReader, Pixel},
+    imageproc::contrast::{
+        adaptive_threshold, equalize_histogram, match_histogram, stretch_contrast, threshold,
+    },
+    imageproc::distance_transform::{distance_transform, euclidean_squared_distance_transform},
+    imageproc::edges::canny,
+    imageproc::filter::{
+        bilateral_filter, box_filter, gaussian_blur_f32, horizontal_filter, laplacian_filter,
+        median_filter, separable_filter, separable_filter_equal, sharpen3x3, sharpen_gaussian,
+        vertical_filter,
+    },
+    imageproc::geometric_transformations::{
+        rotate, rotate_about_center, translate, warp, Projection,
+    },
+    imageproc::gradients::{
+        horizontal_prewitt, horizontal_scharr, horizontal_sobel, prewitt_gradients,
+        sobel_gradients, vertical_prewitt, vertical_scharr, vertical_sobel,
+    },
+    imageproc::integral_image::{integral_image, integral_squared_image},
+    imageproc::morphology::{close, dilate, erode, open},
+    imageproc::noise::{gaussian_noise, salt_and_pepper_noise},
+    imageproc::suppress::suppress_non_maximum,
+    tiny_skia::IntSize,
+};
 
 use crate::error::Result;
 use crate::shape::{
@@ -10,36 +42,11 @@ use crate::shape::{
     Shape, Style, IDENTITY, WHITE,
 };
 
-use asdf_pixel_sort::{sort_with_options, Options};
 use core::{cell::RefCell, ops::Add};
-use fontdue::{Font, FontSettings};
-use image::{imageops, DynamicImage, ImageBuffer, ImageFormat, ImageReader, Pixel};
-use imageproc::contrast::{
-    adaptive_threshold, equalize_histogram, match_histogram, stretch_contrast, threshold,
-};
-use imageproc::distance_transform::{distance_transform, euclidean_squared_distance_transform};
-use imageproc::edges::canny;
-use imageproc::filter::{
-    bilateral_filter, box_filter, gaussian_blur_f32, horizontal_filter, laplacian_filter,
-    median_filter, separable_filter, separable_filter_equal, sharpen3x3, sharpen_gaussian,
-    vertical_filter,
-};
-use imageproc::geometric_transformations::{
-    rotate, rotate_about_center, translate, warp, Projection,
-};
-use imageproc::gradients::{
-    horizontal_prewitt, horizontal_scharr, horizontal_sobel, prewitt_gradients, sobel_gradients,
-    vertical_prewitt, vertical_scharr, vertical_sobel,
-};
-use imageproc::integral_image::{integral_image, integral_squared_image};
-use imageproc::morphology::{close, dilate, erode, open};
-use imageproc::noise::{gaussian_noise, salt_and_pepper_noise};
-use imageproc::suppress::suppress_non_maximum;
 use palette::{rgb::Rgba, FromColor};
 use tiny_skia::{
-    BlendMode, FillRule, FilterQuality, GradientStop, IntSize, LinearGradient, Mask, MaskType,
-    Paint, Path, PathBuilder, Pixmap, PixmapPaint, RadialGradient, Rect, Shader, SpreadMode,
-    Stroke, Transform,
+    BlendMode, FillRule, FilterQuality, GradientStop, LinearGradient, Mask, MaskType, Paint, Path,
+    PathBuilder, Pixmap, PixmapPaint, RadialGradient, Rect, Shader, SpreadMode, Stroke, Transform,
 };
 
 #[derive(Debug, Clone)]
@@ -842,7 +849,12 @@ fn convert_shape(
     )
 }
 
-fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, height: u32) {
+fn render_to_pixmap(
+    shape_data: ShapeData,
+    pixmap: &mut Pixmap,
+    width: u32,
+    height: u32,
+) -> Result<()> {
     match shape_data.clone() {
         ShapeData::FillPath {
             path,
@@ -856,7 +868,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
             let mask = mask.map(|data| {
                 let mut pixmap = Pixmap::new(width, height).unwrap();
                 for shape_data in data {
-                    render_to_pixmap(shape_data, &mut pixmap, width, height);
+                    render_to_pixmap(shape_data, &mut pixmap, width, height).unwrap();
                 }
                 Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
             });
@@ -865,7 +877,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                 Some((data, spread_mode)) => {
                     let mut pattern_pixmap = Pixmap::new(width, height).unwrap();
                     for shape_data in data {
-                        render_to_pixmap(shape_data, &mut pattern_pixmap, width, height);
+                        render_to_pixmap(shape_data, &mut pattern_pixmap, width, height)?;
                     }
                     let shader = tiny_skia::Pattern::new(
                         pattern_pixmap.as_ref(),
@@ -901,7 +913,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
             let mask = mask.map(|data| {
                 let mut pixmap = Pixmap::new(width, height).unwrap();
                 for shape_data in data {
-                    render_to_pixmap(shape_data, &mut pixmap, width, height);
+                    render_to_pixmap(shape_data, &mut pixmap, width, height).unwrap();
                 }
                 Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
             });
@@ -910,7 +922,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                 Some((data, spread_mode)) => {
                     let mut pattern_pixmap = Pixmap::new(width, height).unwrap();
                     for shape_data in data {
-                        render_to_pixmap(shape_data, &mut pattern_pixmap, width, height);
+                        render_to_pixmap(shape_data, &mut pattern_pixmap, width, height).unwrap();
                     }
                     let shader = tiny_skia::Pattern::new(
                         pattern_pixmap.as_ref(),
@@ -934,6 +946,7 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
                 }
             }
         }
+        #[cfg(all(feature = "std", feature = "io"))]
         ShapeData::Image {
             ops,
             transform,
@@ -948,673 +961,61 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
             mask,
             ..
         } => {
-            #[cfg(feature = "std")]
-            {
-                let mut image = match shape_data {
-                    ShapeData::Image { path, .. } => match path {
-                        ImagePath::File(path) =>
-                        {
-                            #[cfg(feature = "std")]
-                            ImageReader::open(path).unwrap().decode().unwrap().flipv()
-                        }
-                        ImagePath::Shape(shape) => {
-                            let pixmap = render(shape.clone(), width, height).unwrap();
-                            ImageReader::with_format(
-                                Cursor::new(pixmap.encode_png().unwrap()),
-                                ImageFormat::Png,
-                            )
-                            .decode()
-                            .unwrap()
-                        }
-                    },
-                    ShapeData::Text {
-                        font, text, size, ..
-                    } => {
-                        use std::fs;
-
-                        let font = fs::read(font).unwrap();
-                        let font = Font::from_bytes(font, FontSettings::default()).unwrap();
-
-                        let mut bitmaps = Vec::new();
-                        let mut width = 0;
-                        let mut height = 0;
-
-                        for c in text.chars() {
-                            let (metrics, bitmap) = font.rasterize(c, size);
-                            width += (metrics.width as u32).max(metrics.advance_width as u32);
-                            height = height.max(metrics.height as u32);
-                            bitmaps.push((metrics, bitmap));
-                        }
-
-                        let mut image = ImageBuffer::new(width, height);
-
-                        let mut x_offset = 0;
-                        for (metrics, bitmap) in bitmaps {
-                            for (i, &value) in bitmap.iter().enumerate() {
-                                let x = (x_offset as i32
-                                    + metrics.xmin
-                                    + i as i32 % metrics.width as i32)
-                                    .max(0) as u32;
-                                let y = height
-                                    - (metrics.ymin + i as i32 / metrics.width as i32).max(0)
-                                        as u32
-                                    - 1;
-                                image.put_pixel(x, y, image::Rgba([value as u8; 4]));
-                            }
-
-                            x_offset += metrics.advance_width as u32;
-                        }
-
-                        image.into()
+            let mut image = match shape_data {
+                ShapeData::Image { path, .. } => match path {
+                    ImagePath::File(path) => {
+                        ImageReader::open(path).unwrap().decode().unwrap().flipv()
                     }
-                    _ => unreachable!(),
-                };
-
-                for op in ops {
-                    match op {
-                        ImageOp::Brighten(value) => image = image.brighten(value),
-                        ImageOp::Contrast(c) => image = image.adjust_contrast(c),
-                        ImageOp::Grayscale => image = image.grayscale().into_rgba8().into(),
-                        ImageOp::GrayscaleAlpha => {
-                            image = imageops::colorops::grayscale_alpha(&image).into();
-                            image = image.into_rgba8().into();
-                        }
-                        ImageOp::Huerotate(value) => image = image.huerotate(value),
-                        ImageOp::Invert => image.invert(),
-                        ImageOp::Blur(sigma) => image = image.blur(sigma),
-                        ImageOp::FastBlur(sigma) => image = image.fast_blur(sigma),
-                        ImageOp::Crop(x, y, width, height) => {
-                            image = image.crop_imm(x, y, width, height);
-                        }
-                        ImageOp::Filter3x3(kernel) => image = image.filter3x3(&kernel),
-                        ImageOp::FlipHorizontal => image = image.fliph(),
-                        ImageOp::FlipVertical => image = image.flipv(),
-                        ImageOp::HorizontalGradient(start, end) => imageops::horizontal_gradient(
-                            &mut image,
-                            image::Rgba::from_slice(&start),
-                            image::Rgba::from_slice(&end),
-                        ),
-                        ImageOp::VerticalGradient(start, end) => imageops::vertical_gradient(
-                            &mut image,
-                            image::Rgba::from_slice(&start),
-                            image::Rgba::from_slice(&end),
-                        ),
-                        ImageOp::Overlay(top, x, y) => {
-                            let top = render(top, width, height).unwrap();
-                            let top = ImageReader::with_format(
-                                Cursor::new(top.encode_png().unwrap()),
-                                ImageFormat::Png,
-                            )
-                            .decode()
-                            .unwrap();
-                            imageops::overlay(&mut image, &top, x, y);
-                        }
-                        ImageOp::Replace(top, x, y) => {
-                            let top = render(top, width, height).unwrap();
-                            let top = ImageReader::with_format(
-                                Cursor::new(top.encode_png().unwrap()),
-                                ImageFormat::Png,
-                            )
-                            .decode()
-                            .unwrap();
-                            imageops::replace(&mut image, &top, x, y);
-                        }
-                        ImageOp::Resize(width, height, filter) => {
-                            image = image.resize(width, height, filter);
-                        }
-                        ImageOp::Rotate90 => image = image.rotate90(),
-                        ImageOp::Rotate180 => image = image.rotate180(),
-                        ImageOp::Rotate270 => image = image.rotate270(),
-                        ImageOp::Thumbnail(width, height) => image = image.thumbnail(width, height),
-                        ImageOp::Tile(top) => {
-                            let top = render(top, width, height).unwrap();
-                            let top = ImageReader::with_format(
-                                Cursor::new(top.encode_png().unwrap()),
-                                ImageFormat::Png,
-                            )
-                            .decode()
-                            .unwrap();
-                            imageops::tile(&mut image, &top);
-                        }
-                        ImageOp::Unsharpen(sigma, threshold) => {
-                            image = image.unsharpen(sigma, threshold)
-                        }
-                        ImageOp::AdaptiveThreshold(block_radius) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = adaptive_threshold(&luma8, block_radius);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::EqualizeHistogram => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = equalize_histogram(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::MatchHistogram(target) => {
-                            let target = render(target, width, height).unwrap();
-                            let target = ImageReader::with_format(
-                                Cursor::new(target.encode_png().unwrap()),
-                                ImageFormat::Png,
-                            )
-                            .decode()
-                            .unwrap();
-
-                            let luma8 = image.clone().into_luma8();
-                            let buf = match_histogram(&luma8, &target.into_luma8());
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::StretchContrast(
-                            input_lower,
-                            input_upper,
-                            output_lower,
-                            output_upper,
-                        ) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = stretch_contrast(
-                                &luma8,
-                                input_lower,
-                                input_upper,
-                                output_lower,
-                                output_upper,
-                            );
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::Threshold(t, t_type) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = threshold(&luma8, t, t_type.into());
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::DistanceTransform(norm) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = distance_transform(&luma8, norm);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::EuclideanSquaredDistanceTransform => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = euclidean_squared_distance_transform(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as f64 + adjust).clamp(0.0, 255.0) as u8;
-                                    pixel[1] = (pixel[1] as f64 + adjust).clamp(0.0, 255.0) as u8;
-                                    pixel[2] = (pixel[2] as f64 + adjust).clamp(0.0, 255.0) as u8;
-                                });
-                        }
-                        ImageOp::Canny(low_threshold, high_threshold) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = canny(&luma8, low_threshold, high_threshold);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::BilateralFilter(window_size, sigma_color, sigma_spatial) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf =
-                                bilateral_filter(&luma8, window_size, sigma_color, sigma_spatial);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::BoxFilter(x_radius, y_radius) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = box_filter(&luma8, x_radius, y_radius);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::GaussianBlur(sigma) => {
-                            image = gaussian_blur_f32(image.as_rgba8().unwrap(), sigma).into()
-                        }
-                        ImageOp::SharpenGaussian(sigma, amount) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = sharpen_gaussian(&luma8, sigma, amount);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::HorizontalFilter(kernel) => {
-                            image = horizontal_filter(image.as_rgba8().unwrap(), &kernel).into()
-                        }
-                        ImageOp::VerticalFilter(kernel) => {
-                            image = vertical_filter(image.as_rgba8().unwrap(), &kernel).into()
-                        }
-                        ImageOp::LaplacianFilter => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = laplacian_filter(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust =
-                                        luma8.get_pixel(x, y)[0] as i16 + buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as i16 + adjust) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust) as u8;
-                                });
-                        }
-                        ImageOp::MedianFilter(x_radius, y_radius) => {
-                            image =
-                                median_filter(image.as_rgba8().unwrap(), x_radius, y_radius).into()
-                        }
-                        ImageOp::SeparableFilter(h_kernel, v_kernel) => {
-                            image =
-                                separable_filter(image.as_rgba8().unwrap(), &h_kernel, &v_kernel)
-                                    .into()
-                        }
-                        ImageOp::SeparableFilterEqual(kernel) => {
-                            image =
-                                separable_filter_equal(image.as_rgba8().unwrap(), &kernel).into()
-                        }
-                        ImageOp::Sharpen3x3 => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = sharpen3x3(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::Rotate(cx, cy, angle, interp) => {
-                            image = rotate(
-                                image.as_rgba8().unwrap(),
-                                (cx, cy),
-                                angle.to_radians(),
-                                interp,
-                                image::Rgba([0; 4]),
-                            )
-                            .into()
-                        }
-                        ImageOp::RotateAboutCenter(angle, interp) => {
-                            image = rotate_about_center(
-                                image.as_rgba8().unwrap(),
-                                angle.to_radians(),
-                                interp,
-                                image::Rgba([0; 4]),
-                            )
-                            .into()
-                        }
-                        ImageOp::Translate(tx, ty) => {
-                            image = translate(image.as_rgba8().unwrap(), (tx, ty)).into()
-                        }
-                        ImageOp::Warp(transform, interp) => {
-                            image = warp(
-                                image.as_rgba8().unwrap(),
-                                &Projection::from_matrix(transform).unwrap(),
-                                interp,
-                                image::Rgba([0; 4]),
-                            )
-                            .into()
-                        }
-                        ImageOp::HorizontalPrewitt => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = horizontal_prewitt(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::HorizontalScharr => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = horizontal_scharr(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::HorizontalSobel => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = horizontal_sobel(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::VerticalPrewitt => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = vertical_prewitt(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::VerticalScharr => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = vertical_scharr(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::VerticalSobel => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = vertical_sobel(&luma8);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0];
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::PrewittGradients => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = DynamicImage::from(prewitt_gradients(&luma8)).into_luma8();
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::SobelGradients => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = DynamicImage::from(sobel_gradients(&luma8)).into_luma8();
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::IntegralImage => {
-                            image =
-                                DynamicImage::ImageRgba8(integral_image(image.as_rgba8().unwrap()))
-                        }
-                        ImageOp::IntegralSquaredImage => {
-                            image = DynamicImage::ImageRgba8(integral_squared_image(
-                                image.as_rgba8().unwrap(),
-                            ))
-                        }
-                        ImageOp::RedChannel => {
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .pixels_mut()
-                                .for_each(|pixel| {
-                                    pixel[1] = 0;
-                                    pixel[2] = 0;
-                                });
-                        }
-                        ImageOp::GreenChannel => {
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .pixels_mut()
-                                .for_each(|pixel| {
-                                    pixel[0] = 0;
-                                    pixel[2] = 0;
-                                });
-                        }
-                        ImageOp::BlueChannel => {
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .pixels_mut()
-                                .for_each(|pixel| {
-                                    pixel[0] = 0;
-                                    pixel[1] = 0;
-                                });
-                        }
-                        ImageOp::Close(norm, k) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = close(&luma8, norm, k);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::Dilate(norm, k) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = dilate(&luma8, norm, k);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::Erode(norm, k) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = erode(&luma8, norm, k);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::Open(norm, k) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = open(&luma8, norm, k);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    let adjust = buf.get_pixel(x, y)[0] as i16
-                                        - luma8.get_pixel(x, y)[0] as i16;
-                                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
-                                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
-                                });
-                        }
-                        ImageOp::GaussianNoise(mean, stddev, seed) => {
-                            image =
-                                gaussian_noise(image.as_rgba8().unwrap(), mean, stddev, seed).into()
-                        }
-                        ImageOp::SaltAndPepperNoise(rate, seed) => {
-                            image =
-                                salt_and_pepper_noise(image.as_rgba8().unwrap(), rate, seed).into()
-                        }
-                        ImageOp::SuppressNonMaximum(radius) => {
-                            let luma8 = image.clone().into_luma8();
-                            let buf = suppress_non_maximum(&luma8, radius);
-                            image
-                                .as_mut_rgba8()
-                                .unwrap()
-                                .enumerate_pixels_mut()
-                                .for_each(|(x, y, pixel)| {
-                                    if buf.get_pixel(x, y)[0] == 0 {
-                                        pixel[0] = 0;
-                                        pixel[1] = 0;
-                                        pixel[2] = 0;
-                                    }
-                                });
-                        }
-                        ImageOp::PixelSort(mode, direction) => {
-                            let mut rgb_image = image.into_rgb8();
-                            sort_with_options(&mut rgb_image, &Options { mode, direction });
-                            image = rgb_image.into();
-                            image = image.into_rgba8().into();
-                        }
+                    ImagePath::Shape(shape) => {
+                        let pixmap = render(shape.clone(), width, height).unwrap();
+                        ImageReader::with_format(
+                            Cursor::new(pixmap.encode_png().unwrap()),
+                            ImageFormat::Png,
+                        )
+                        .decode()
+                        .unwrap()
                     }
-                }
+                },
+                ShapeData::Text {
+                    font, text, size, ..
+                } => render_font(font, text, size),
+                _ => unreachable!(),
+            };
 
-                let image_width = image.width();
-                let image_height = image.height();
-                let image = Pixmap::from_vec(
-                    image.into_bytes(),
-                    IntSize::from_wh(image_width, image_height).unwrap(),
-                )
-                .unwrap();
-
-                let mask = mask.map(|data| {
-                    let mut pixmap = Pixmap::new(width, height).unwrap();
-                    for shape_data in data {
-                        render_to_pixmap(shape_data, &mut pixmap, width, height);
-                    }
-                    Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
-                });
-
-                let transform = transform
-                    .post_scale(1.0, -1.0)
-                    .post_translate(width as f32 / 2.0, height as f32 / 2.0);
-                pixmap.draw_pixmap(
-                    -(image_width as i32 / 2),
-                    -(image_height as i32 / 2),
-                    image.as_ref(),
-                    &paint,
-                    transform,
-                    mask.as_ref(),
-                );
+            for op in ops {
+                apply_image_op(&mut image, op, width, height);
             }
+
+            let image_width = image.width();
+            let image_height = image.height();
+            let image = Pixmap::from_vec(
+                image.into_bytes(),
+                IntSize::from_wh(image_width, image_height).unwrap(),
+            )
+            .unwrap();
+
+            let mask = mask.map(|data| {
+                let mut pixmap = Pixmap::new(width, height).unwrap();
+                for shape_data in data {
+                    render_to_pixmap(shape_data, &mut pixmap, width, height).unwrap();
+                }
+                Mask::from_pixmap(pixmap.as_ref(), MaskType::Luminance)
+            });
+
+            let transform = transform
+                .post_scale(1.0, -1.0)
+                .post_translate(width as f32 / 2.0, height as f32 / 2.0);
+            pixmap.draw_pixmap(
+                -(image_width as i32 / 2),
+                -(image_height as i32 / 2),
+                image.as_ref(),
+                &paint,
+                transform,
+                mask.as_ref(),
+            );
         }
+        #[cfg(not(all(feature = "std", feature = "io")))]
+        ShapeData::Image { .. } | ShapeData::Text { .. } => return Err(crate::Error::NoIO),
         ShapeData::Fill { color, .. } => {
             pixmap.fill(color);
         }
@@ -1634,6 +1035,577 @@ fn render_to_pixmap(shape_data: ShapeData, pixmap: &mut Pixmap, width: u32, heig
             pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
         }
     }
+
+    Ok(())
+}
+
+#[cfg(all(feature = "std", feature = "io"))]
+fn render_font(path: String, text: String, size: f32) -> DynamicImage {
+    let font = fs::read(path).unwrap();
+    let font = Font::from_bytes(font, FontSettings::default()).unwrap();
+
+    let mut bitmaps = Vec::new();
+    let mut width = 0;
+    let mut height = 0;
+
+    for c in text.chars() {
+        let (metrics, bitmap) = font.rasterize(c, size);
+        width += (metrics.width as u32).max(metrics.advance_width as u32);
+        height = height.max(metrics.height as u32);
+        bitmaps.push((metrics, bitmap));
+    }
+
+    let mut image = ImageBuffer::new(width, height);
+
+    let mut x_offset = 0;
+    for (metrics, bitmap) in bitmaps {
+        for (i, &value) in bitmap.iter().enumerate() {
+            let x =
+                (x_offset as i32 + metrics.xmin + i as i32 % metrics.width as i32).max(0) as u32;
+            let y = height - (metrics.ymin + i as i32 / metrics.width as i32).max(0) as u32 - 1;
+            image.put_pixel(x, y, image::Rgba([value as u8; 4]));
+        }
+
+        x_offset += metrics.advance_width as u32;
+    }
+
+    image.into()
+}
+
+#[cfg(all(feature = "std", feature = "io"))]
+fn apply_image_op(image: &mut DynamicImage, op: ImageOp, width: u32, height: u32) {
+    match op {
+        ImageOp::Brighten(value) => *image = image.brighten(value),
+        ImageOp::Contrast(c) => *image = image.adjust_contrast(c),
+        ImageOp::Grayscale => *image = image.grayscale().into_rgba8().into(),
+        ImageOp::GrayscaleAlpha => {
+            let img: DynamicImage = imageops::colorops::grayscale_alpha(image).into();
+            *image = img.into_rgba8().into();
+        }
+        ImageOp::Huerotate(value) => *image = image.huerotate(value),
+        ImageOp::Invert => image.invert(),
+        ImageOp::Blur(sigma) => *image = image.blur(sigma),
+        ImageOp::FastBlur(sigma) => *image = image.fast_blur(sigma),
+        ImageOp::Crop(x, y, width, height) => {
+            *image = image.crop_imm(x, y, width, height);
+        }
+        ImageOp::Filter3x3(kernel) => *image = image.filter3x3(&kernel),
+        ImageOp::FlipHorizontal => *image = image.fliph(),
+        ImageOp::FlipVertical => *image = image.flipv(),
+        ImageOp::HorizontalGradient(start, end) => imageops::horizontal_gradient(
+            image,
+            image::Rgba::from_slice(&start),
+            image::Rgba::from_slice(&end),
+        ),
+        ImageOp::VerticalGradient(start, end) => imageops::vertical_gradient(
+            image,
+            image::Rgba::from_slice(&start),
+            image::Rgba::from_slice(&end),
+        ),
+        ImageOp::Overlay(top, x, y) => {
+            let top = render(top, width, height).unwrap();
+            let top =
+                ImageReader::with_format(Cursor::new(top.encode_png().unwrap()), ImageFormat::Png)
+                    .decode()
+                    .unwrap();
+            imageops::overlay(image, &top, x, y);
+        }
+        ImageOp::Replace(top, x, y) => {
+            let top = render(top, width, height).unwrap();
+            let top =
+                ImageReader::with_format(Cursor::new(top.encode_png().unwrap()), ImageFormat::Png)
+                    .decode()
+                    .unwrap();
+            imageops::replace(image, &top, x, y);
+        }
+        ImageOp::Resize(width, height, filter) => {
+            *image = image.resize(width, height, filter);
+        }
+        ImageOp::Rotate90 => *image = image.rotate90(),
+        ImageOp::Rotate180 => *image = image.rotate180(),
+        ImageOp::Rotate270 => *image = image.rotate270(),
+        ImageOp::Thumbnail(width, height) => *image = image.thumbnail(width, height),
+        ImageOp::Tile(top) => {
+            let top = render(top, width, height).unwrap();
+            let top =
+                ImageReader::with_format(Cursor::new(top.encode_png().unwrap()), ImageFormat::Png)
+                    .decode()
+                    .unwrap();
+            imageops::tile(image, &top);
+        }
+        ImageOp::Unsharpen(sigma, threshold) => *image = image.unsharpen(sigma, threshold),
+        ImageOp::AdaptiveThreshold(block_radius) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = adaptive_threshold(&luma8, block_radius);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::EqualizeHistogram => {
+            let luma8 = image.clone().into_luma8();
+            let buf = equalize_histogram(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::MatchHistogram(target) => {
+            let target = render(target, width, height).unwrap();
+            let target = ImageReader::with_format(
+                Cursor::new(target.encode_png().unwrap()),
+                ImageFormat::Png,
+            )
+            .decode()
+            .unwrap();
+
+            let luma8 = image.clone().into_luma8();
+            let buf = match_histogram(&luma8, &target.into_luma8());
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::StretchContrast(input_lower, input_upper, output_lower, output_upper) => {
+            let luma8 = image.clone().into_luma8();
+            let buf =
+                stretch_contrast(&luma8, input_lower, input_upper, output_lower, output_upper);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::Threshold(t, t_type) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = threshold(&luma8, t, t_type.into());
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::DistanceTransform(norm) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = distance_transform(&luma8, norm);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::EuclideanSquaredDistanceTransform => {
+            let luma8 = image.clone().into_luma8();
+            let buf = euclidean_squared_distance_transform(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as f64 + adjust).clamp(0.0, 255.0) as u8;
+                    pixel[1] = (pixel[1] as f64 + adjust).clamp(0.0, 255.0) as u8;
+                    pixel[2] = (pixel[2] as f64 + adjust).clamp(0.0, 255.0) as u8;
+                });
+        }
+        ImageOp::Canny(low_threshold, high_threshold) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = canny(&luma8, low_threshold, high_threshold);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::BilateralFilter(window_size, sigma_color, sigma_spatial) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = bilateral_filter(&luma8, window_size, sigma_color, sigma_spatial);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::BoxFilter(x_radius, y_radius) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = box_filter(&luma8, x_radius, y_radius);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::GaussianBlur(sigma) => {
+            *image = gaussian_blur_f32(image.as_rgba8().unwrap(), sigma).into()
+        }
+        ImageOp::SharpenGaussian(sigma, amount) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = sharpen_gaussian(&luma8, sigma, amount);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::HorizontalFilter(kernel) => {
+            *image = horizontal_filter(image.as_rgba8().unwrap(), &kernel).into()
+        }
+        ImageOp::VerticalFilter(kernel) => {
+            *image = vertical_filter(image.as_rgba8().unwrap(), &kernel).into()
+        }
+        ImageOp::LaplacianFilter => {
+            let luma8 = image.clone().into_luma8();
+            let buf = laplacian_filter(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = luma8.get_pixel(x, y)[0] as i16 + buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as i16 + adjust) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust) as u8;
+                });
+        }
+        ImageOp::MedianFilter(x_radius, y_radius) => {
+            *image = median_filter(image.as_rgba8().unwrap(), x_radius, y_radius).into()
+        }
+        ImageOp::SeparableFilter(h_kernel, v_kernel) => {
+            *image = separable_filter(image.as_rgba8().unwrap(), &h_kernel, &v_kernel).into()
+        }
+        ImageOp::SeparableFilterEqual(kernel) => {
+            *image = separable_filter_equal(image.as_rgba8().unwrap(), &kernel).into()
+        }
+        ImageOp::Sharpen3x3 => {
+            let luma8 = image.clone().into_luma8();
+            let buf = sharpen3x3(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::Rotate(cx, cy, angle, interp) => {
+            *image = rotate(
+                image.as_rgba8().unwrap(),
+                (cx, cy),
+                angle.to_radians(),
+                interp,
+                image::Rgba([0; 4]),
+            )
+            .into()
+        }
+        ImageOp::RotateAboutCenter(angle, interp) => {
+            *image = rotate_about_center(
+                image.as_rgba8().unwrap(),
+                angle.to_radians(),
+                interp,
+                image::Rgba([0; 4]),
+            )
+            .into()
+        }
+        ImageOp::Translate(tx, ty) => {
+            *image = translate(image.as_rgba8().unwrap(), (tx, ty)).into()
+        }
+        ImageOp::Warp(transform, interp) => {
+            *image = warp(
+                image.as_rgba8().unwrap(),
+                &Projection::from_matrix(transform).unwrap(),
+                interp,
+                image::Rgba([0; 4]),
+            )
+            .into()
+        }
+        ImageOp::HorizontalPrewitt => {
+            let luma8 = image.clone().into_luma8();
+            let buf = horizontal_prewitt(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::HorizontalScharr => {
+            let luma8 = image.clone().into_luma8();
+            let buf = horizontal_scharr(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::HorizontalSobel => {
+            let luma8 = image.clone().into_luma8();
+            let buf = horizontal_sobel(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::VerticalPrewitt => {
+            let luma8 = image.clone().into_luma8();
+            let buf = vertical_prewitt(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::VerticalScharr => {
+            let luma8 = image.clone().into_luma8();
+            let buf = vertical_scharr(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::VerticalSobel => {
+            let luma8 = image.clone().into_luma8();
+            let buf = vertical_sobel(&luma8);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0];
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::PrewittGradients => {
+            let luma8 = image.clone().into_luma8();
+            let buf = DynamicImage::from(prewitt_gradients(&luma8)).into_luma8();
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::SobelGradients => {
+            let luma8 = image.clone().into_luma8();
+            let buf = DynamicImage::from(sobel_gradients(&luma8)).into_luma8();
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::IntegralImage => {
+            *image = DynamicImage::ImageRgba8(integral_image(image.as_rgba8().unwrap()))
+        }
+        ImageOp::IntegralSquaredImage => {
+            *image = DynamicImage::ImageRgba8(integral_squared_image(image.as_rgba8().unwrap()))
+        }
+        ImageOp::RedChannel => {
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .pixels_mut()
+                .for_each(|pixel| {
+                    pixel[1] = 0;
+                    pixel[2] = 0;
+                });
+        }
+        ImageOp::GreenChannel => {
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .pixels_mut()
+                .for_each(|pixel| {
+                    pixel[0] = 0;
+                    pixel[2] = 0;
+                });
+        }
+        ImageOp::BlueChannel => {
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .pixels_mut()
+                .for_each(|pixel| {
+                    pixel[0] = 0;
+                    pixel[1] = 0;
+                });
+        }
+        ImageOp::Close(norm, k) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = close(&luma8, norm, k);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::Dilate(norm, k) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = dilate(&luma8, norm, k);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::Erode(norm, k) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = erode(&luma8, norm, k);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::Open(norm, k) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = open(&luma8, norm, k);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    let adjust = buf.get_pixel(x, y)[0] as i16 - luma8.get_pixel(x, y)[0] as i16;
+                    pixel[0] = (pixel[0] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[1] = (pixel[1] as i16 + adjust).clamp(0, 255) as u8;
+                    pixel[2] = (pixel[2] as i16 + adjust).clamp(0, 255) as u8;
+                });
+        }
+        ImageOp::GaussianNoise(mean, stddev, seed) => {
+            *image = gaussian_noise(image.as_rgba8().unwrap(), mean, stddev, seed).into()
+        }
+        ImageOp::SaltAndPepperNoise(rate, seed) => {
+            *image = salt_and_pepper_noise(image.as_rgba8().unwrap(), rate, seed).into()
+        }
+        ImageOp::SuppressNonMaximum(radius) => {
+            let luma8 = image.clone().into_luma8();
+            let buf = suppress_non_maximum(&luma8, radius);
+            image
+                .as_mut_rgba8()
+                .unwrap()
+                .enumerate_pixels_mut()
+                .for_each(|(x, y, pixel)| {
+                    if buf.get_pixel(x, y)[0] == 0 {
+                        pixel[0] = 0;
+                        pixel[1] = 0;
+                        pixel[2] = 0;
+                    }
+                });
+        }
+        ImageOp::PixelSort(mode, direction) => {
+            let mut rgb_image = image.clone().into_rgb8();
+            sort_with_options(&mut rgb_image, &Options { mode, direction });
+            let img: DynamicImage = rgb_image.into();
+            *image = img.into_rgba8().into();
+        }
+    }
 }
 
 pub fn render(shape: Rc<RefCell<Shape>>, width: u32, height: u32) -> Result<Pixmap> {
@@ -1643,7 +1615,7 @@ pub fn render(shape: Rc<RefCell<Shape>>, width: u32, height: u32) -> Result<Pixm
 
     let mut pixmap = Pixmap::new(width, height).unwrap();
     for shape_data in data {
-        render_to_pixmap(shape_data, &mut pixmap, width, height);
+        render_to_pixmap(shape_data, &mut pixmap, width, height)?;
     }
 
     Ok(pixmap)
@@ -1801,7 +1773,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(all(feature = "std", feature = "io"))]
     fn test_image_rendering() {
         let shape = Rc::new(RefCell::new(Shape::Image {
             path: ImagePath::File("test.png".into()),

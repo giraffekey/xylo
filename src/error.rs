@@ -23,6 +23,7 @@ pub enum Error {
     OutOfBounds,
     NotFound,
     MaxDepthReached,
+    NoIO,
     PngError(png::EncodingError),
     #[cfg(feature = "std")]
     FileError(std::io::Error),
@@ -52,6 +53,7 @@ impl ToString for Error {
             Error::OutOfBounds => "Index out of bounds.".into(),
             Error::NotFound => "Value not found.".into(),
             Error::MaxDepthReached => "Max call stack depth reached.".into(),
+            Error::NoIO => "Cannot use IO functions without the io feature enabled.".into(),
             Error::PngError(e) => e.to_string(),
             #[cfg(feature = "std")]
             Error::FileError(e) => e.to_string(),

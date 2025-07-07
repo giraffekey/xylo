@@ -4,6 +4,9 @@ use std::rc::Rc;
 #[cfg(feature = "no-std")]
 use alloc::{rc::Rc, vec::Vec};
 
+#[cfg(feature = "io")]
+use imageproc::geometric_transformations::Interpolation;
+
 use crate::builtin_function;
 use crate::error::{Error, Result};
 use crate::functions::dedup_shape;
@@ -11,9 +14,11 @@ use crate::interpreter::{Data, Value};
 use crate::shape::{ImageOp, ImagePath, Shape};
 
 use core::cell::RefCell;
-use imageproc::geometric_transformations::Interpolation;
 use rand_chacha::ChaCha8Rng;
 use tiny_skia::FilterQuality;
+
+#[cfg(not(feature = "io"))]
+type Interpolation = ();
 
 builtin_function!(import_image => {
     [Value::String(path)] => {
@@ -599,6 +604,7 @@ builtin_function!(warp_image => {
     },
 });
 
+#[cfg(feature = "io")]
 fn quality_to_interpolation(quality: &FilterQuality) -> Interpolation {
     match quality {
         FilterQuality::Nearest => Interpolation::Nearest,
@@ -606,6 +612,9 @@ fn quality_to_interpolation(quality: &FilterQuality) -> Interpolation {
         FilterQuality::Bicubic => Interpolation::Bicubic,
     }
 }
+
+#[cfg(not(feature = "io"))]
+fn quality_to_interpolation(_quality: &FilterQuality) {}
 
 builtin_function!(horizontal_prewitt => {
     [Value::Shape(image)] => {
@@ -805,10 +814,15 @@ mod tests {
     #[cfg(feature = "no-std")]
     use alloc::{rc::Rc, vec};
 
+    #[cfg(feature = "io")]
+    use image::imageops::FilterType;
+
+    #[cfg(not(feature = "io"))]
+    use crate::parser::FilterType;
+
     use crate::parser::{SortDirection, SortMode};
     use crate::shape::ImagePath;
     use core::cell::RefCell;
-    use image::imageops::FilterType;
     use rand::SeedableRng;
     use tiny_skia::FilterQuality;
 

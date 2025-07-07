@@ -4,6 +4,12 @@ use std::rc::Rc;
 #[cfg(feature = "no-std")]
 use alloc::{boxed::Box, rc::Rc, string::String, vec, vec::Vec};
 
+#[cfg(feature = "io")]
+use {image::imageops::FilterType, imageproc::distance_transform::Norm};
+
+#[cfg(not(feature = "io"))]
+use crate::parser::{FilterType, Norm};
+
 use crate::error::{Error, Result};
 use crate::functions::{builtin_param_count, handle_builtin, BUILTIN_FUNCTIONS};
 use crate::out::Config;
@@ -12,8 +18,6 @@ use crate::shape::{Gradient, Shape};
 
 use core::cell::RefCell;
 use hashbrown::HashMap;
-use image::imageops::FilterType;
-use imageproc::distance_transform::Norm;
 use noise::Perlin;
 use num::Complex;
 use rand::distr::{weighted::WeightedIndex, Distribution};
@@ -57,8 +61,8 @@ pub enum Value {
     FilterType(FilterType),
     ThresholdType(ThresholdType),
     Norm(Norm),
-    SortMode(asdf_pixel_sort::Mode),
-    SortDirection(asdf_pixel_sort::Direction),
+    SortMode(SortMode),
+    SortDirection(SortDirection),
     Function(String, usize, Vec<Value>),
     List(Vec<Value>),
 }
