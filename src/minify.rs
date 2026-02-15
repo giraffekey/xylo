@@ -1,4 +1,4 @@
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::{
     format,
     string::{String, ToString},
@@ -230,7 +230,7 @@ pub fn minify(input: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interpreter::execute;
+    use crate::interpreter::{exec_start, load_env};
     use crate::out::Config;
 
     fn can_execute(output: &str) -> bool {
@@ -238,14 +238,17 @@ mod tests {
             seed: Some([0; 32]),
             ..Config::default()
         };
-        parse(output).and_then(|tree| execute(tree, config)).is_ok()
+        parse(output)
+            .and_then(|tree| load_env(tree, config))
+            .and_then(|mut env| exec_start(&mut env))
+            .is_ok()
     }
 
     #[test]
     fn test_binary_operation() {
         let output = minify(
             "
-root = square
+start = square
 
 square = ss (3 + 5) SQUARE
             ",
@@ -254,7 +257,7 @@ square = ss (3 + 5) SQUARE
         assert_eq!(
             output.as_ref().unwrap(),
             "\
-root=square
+start=square
 square=(ss (3+5) SQUARE)\
                 "
         );
@@ -265,7 +268,7 @@ square=(ss (3+5) SQUARE)\
     fn test_let_statement() {
         let output = minify(
             "
-root = square
+start = square
 
 square =
     let n1 = 3
@@ -279,7 +282,7 @@ square =
         assert_eq!(
             output.as_ref().unwrap(),
             "\
-root=square
+start=square
 square=let n1=3;n2=5;n3=1->(tx ((n1+n2)+n3) SQUARE)\
                 "
         );
@@ -290,7 +293,7 @@ square=let n1=3;n2=5;n3=1->(tx ((n1+n2)+n3) SQUARE)\
     fn test_if_statement() {
         let output = minify(
             "
-root = shape true
+start = shape true
 
 shape is_square =
     if is_square
@@ -303,7 +306,7 @@ shape is_square =
         assert_eq!(
             output.as_ref().unwrap(),
             "\
-root=(shape true)
+start=(shape true)
 shape is_square=if is_square->SQUARE;else->CIRCLE\
             "
         );
@@ -314,7 +317,7 @@ shape is_square=if is_square->SQUARE;else->CIRCLE\
     fn test_match_statement() {
         let output = minify(
             "
-root = shape 1
+start = shape 1
 
 shape n =
     match n
@@ -328,7 +331,7 @@ shape n =
         assert_eq!(
             output.as_ref().unwrap(),
             "\
-root=(shape 1)
+start=(shape 1)
 shape n=match n->1->SQUARE;2 if true->CIRCLE;3->TRIANGLE;_->EMPTY\
             "
         );
@@ -339,7 +342,7 @@ shape n=match n->1->SQUARE;2 if true->CIRCLE;3->TRIANGLE;_->EMPTY\
     fn test_for_statement() {
         let output = minify(
             "
-root = collect squares
+start = collect squares
 
 squares =
     for i in 0..3
@@ -350,7 +353,7 @@ squares =
         assert_eq!(
             output.as_ref().unwrap(),
             "\
-root=(collect squares)
+start=(collect squares)
 squares=for i in (0..3)->(tx i SQUARE)\
             "
         );
@@ -361,7 +364,7 @@ squares=for i in (0..3)->(tx i SQUARE)\
     fn test_loop_statement() {
         let output = minify(
             "
-root = collect squares
+start = collect squares
 
 squares =
     loop 3
@@ -372,7 +375,7 @@ squares =
         assert_eq!(
             output.as_ref().unwrap(),
             "\
-root=(collect squares)
+start=(collect squares)
 squares=loop 3->(tx (rand*10) SQUARE)\
             "
         );

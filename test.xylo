@@ -1,4 +1,4 @@
-root = hsl (rand * 360) 0.4 0.2 FILL : grid
+start = hsl (rand * 360) 0.4 0.2 FILL : grid
 
 grid_size = 10
 

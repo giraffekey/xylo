@@ -503,7 +503,7 @@ mod tests {
     #[cfg(feature = "std")]
     use std::rc::Rc;
 
-    #[cfg(feature = "no-std")]
+    #[cfg(feature = "alloc")]
     use alloc::{rc::Rc, vec};
 
     use crate::shape::{PathSegment, Shape};

@@ -1,13 +1,13 @@
-#![cfg_attr(feature = "no-std", no_std)]
+#![cfg_attr(feature = "alloc", no_std)]
 
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[cfg(all(feature = "std", feature = "no-std"))]
-compile_error!("Enable either `std` or `no-std`, but not both!");
+#[cfg(all(feature = "std", feature = "alloc"))]
+compile_error!("Enable either `std` or `alloc`, but not both!");
 
-#[cfg(not(any(feature = "std", feature = "no-std")))]
-compile_error!("Either `std` or `no-std` must be enabled!");
+#[cfg(not(any(feature = "std", feature = "alloc")))]
+compile_error!("Either `std` or `alloc` must be enabled!");
 
 mod colors;
 mod error;

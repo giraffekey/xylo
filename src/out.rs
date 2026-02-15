@@ -1,21 +1,28 @@
 #[cfg(feature = "std")]
-use std::{fs, path::Path};
+use std::{fs, path::Path, rc::Rc};
 
-#[cfg(feature = "no-std")]
-use alloc::{format, string::String, vec::Vec};
+#[cfg(feature = "alloc")]
+use alloc::{format, rc::Rc, string::String, vec::Vec};
 
 #[cfg(feature = "std")]
 use crate::{format::format, minify::minify};
 
 use crate::error::{Error, Result};
-use crate::interpreter::execute;
+use crate::interpreter::{exec_model, exec_start, exec_update, exec_view, load_env, Value};
 use crate::parser::parse;
 use crate::renderer::render;
+use crate::shape::Shape;
 
 use base64::prelude::*;
+use core::cell::RefCell;
 use itertools::Itertools;
-use png::{ColorType, Encoder};
-use tiny_skia::Pixmap;
+
+#[cfg(any(feature = "image-std", feature = "image-alloc"))]
+use {
+    gif::{Frame, Repeat},
+    png::ColorType,
+    tiny_skia::Pixmap,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
@@ -31,28 +38,66 @@ impl Default for Config {
             max_depth: 1500,
             #[cfg(feature = "std")]
             seed: None,
-            #[cfg(feature = "no-std")]
+            #[cfg(feature = "alloc")]
             seed: Some([0; 32]),
         }
     }
 }
 
-pub fn generate_pixmap(input: String, config: Config) -> Result<Pixmap> {
-    let input: String = input
+#[cfg(any(feature = "image-std", feature = "image-alloc"))]
+pub fn generate_pixmap<S: AsRef<str>>(input: S, config: Config) -> Result<Pixmap> {
+    let input = input
+        .as_ref()
         .lines()
         .map(|line| line.split("#").nth(0).unwrap())
         .join("\n");
     let tree = parse(&input)?;
-    let shape = execute(tree, config)?;
+    let mut env = load_env(tree.clone(), config)?;
+    let shape = exec_start(&mut env)?.unwrap_or(Rc::new(RefCell::new(Shape::empty())));
     render(shape, config.dimensions.0, config.dimensions.1)
 }
 
-pub fn generate_png_data(input: String, config: Config) -> Result<Vec<u8>> {
+#[cfg(any(feature = "image-std", feature = "image-alloc"))]
+pub fn generate_frames<S: AsRef<str>>(
+    input: S,
+    frames: usize,
+    config: Config,
+) -> Result<Vec<Pixmap>> {
+    let input = input
+        .as_ref()
+        .lines()
+        .map(|line| line.split("#").nth(0).unwrap())
+        .join("\n");
+    let tree = parse(&input)?;
+
+    let mut pixmaps = Vec::with_capacity(frames);
+
+    let mut env = load_env(tree.clone(), config)?;
+    let mut model = exec_model(&mut env)?.unwrap_or(Value::Integer(0));
+
+    if let Some(shape) = exec_start(&mut env)? {
+        pixmaps.push(render(shape, config.dimensions.0, config.dimensions.1)?);
+    }
+
+    while pixmaps.len() < frames {
+        let shape =
+            exec_view(&mut env, model.clone())?.unwrap_or(Rc::new(RefCell::new(Shape::empty())));
+        if let Some(new_model) = exec_update(&mut env, model.clone())? {
+            model = new_model;
+        }
+        pixmaps.push(render(shape, config.dimensions.0, config.dimensions.1)?);
+    }
+
+    Ok(pixmaps)
+}
+
+#[cfg(any(feature = "image-std", feature = "image-alloc"))]
+pub fn generate_png_data<S: AsRef<str>>(input: S, config: Config) -> Result<Vec<u8>> {
     let pixmap = generate_pixmap(input, config)?;
 
     let mut buf = Vec::new();
     {
-        let mut encoder = Encoder::new(&mut buf, config.dimensions.0, config.dimensions.1);
+        let mut encoder = png::Encoder::new(&mut buf, config.dimensions.0, config.dimensions.1);
         encoder.set_color(ColorType::Rgba);
         let mut writer = encoder.write_header().map_err(|e| Error::PngError(e))?;
         writer
@@ -62,28 +107,50 @@ pub fn generate_png_data(input: String, config: Config) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-pub fn generate_data_uri(input: String, config: Config) -> Result<String> {
-    let data = generate_png_data(input, config)?;
-    let uri = format!("data:image/png;base64,{}", BASE64_STANDARD.encode(data));
-    Ok(uri)
+#[cfg(any(feature = "image-std", feature = "image-alloc"))]
+pub fn generate_data_uri<S: AsRef<str>>(input: S, frames: u32, config: Config) -> Result<String> {
+    if frames > 1 {
+        todo!();
+    } else {
+        let data = generate_png_data(input, config)?;
+        let uri = format!("data:image/png;base64,{}", BASE64_STANDARD.encode(data));
+        Ok(uri)
+    }
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "image-std")]
 pub fn generate_pixmap_from_file<I: AsRef<Path>>(input_path: I, config: Config) -> Result<Pixmap> {
     let code = fs::read_to_string(input_path).map_err(|e| Error::FileError(e))?;
     generate_pixmap(code, config)
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "image-std")]
 pub fn generate_file<I: AsRef<Path>, O: AsRef<Path>>(
     input_path: I,
     output_path: O,
+    frames: usize,
     config: Config,
 ) -> Result<()> {
-    let pixmap = generate_pixmap_from_file(input_path, config)?;
-    pixmap
-        .save_png(output_path)
-        .map_err(|e| Error::PngError(e))?;
+    if frames > 1 {
+        let width = config.dimensions.0 as u16;
+        let height = config.dimensions.1 as u16;
+        let code = fs::read_to_string(input_path).map_err(|e| Error::FileError(e))?;
+        let pixmaps = generate_frames(code, frames, config)?;
+
+        let mut buf = fs::File::create(output_path).unwrap();
+        let mut encoder = gif::Encoder::new(&mut buf, width, height, &[]).unwrap();
+        encoder.set_repeat(Repeat::Infinite).unwrap();
+
+        for mut pixmap in pixmaps {
+            let frame = Frame::from_rgba(width, height, pixmap.data_mut());
+            encoder.write_frame(&frame).unwrap();
+        }
+    } else {
+        let pixmap = generate_pixmap_from_file(input_path, config)?;
+        pixmap
+            .save_png(output_path)
+            .map_err(|e| Error::PngError(e))?;
+    }
     Ok(())
 }
 
@@ -111,6 +178,7 @@ mod tests {
         let res = generate_file(
             "test.xylo",
             "test_generate_file.png",
+            1,
             Config {
                 seed: Some([0; 32]),
                 ..Config::default()
@@ -128,7 +196,7 @@ mod tests {
     fn test_generate_data_uri() {
         let uri = generate_data_uri(
             "
-root =
+start =
     l 0 FILL : collect grids
 
 grids =
@@ -145,8 +213,8 @@ cols =
 rows i =
     for j in 0..10
         t (i * 40) (j * 40) (ss 4 (h (120 + i * 10) (sat 1 (l 0.5 SQUARE))))
-            "
-            .into(),
+            ",
+            1,
             Config::default(),
         )
         .unwrap();

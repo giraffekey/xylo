@@ -1,4 +1,4 @@
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::string::ToString;
 
 use crate::builtin_function;
@@ -132,7 +132,7 @@ builtin_function!(string => {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "no-std")]
+    #[cfg(feature = "alloc")]
     use alloc::vec;
 
     use num::Complex;

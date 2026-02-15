@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::{rc::Rc, string::String, vec::Vec};
 
 #[cfg(all(feature = "std", feature = "io"))]
@@ -1625,7 +1625,7 @@ pub fn render(shape: Rc<RefCell<Shape>>, width: u32, height: u32) -> Result<Pixm
 mod tests {
     use super::*;
 
-    #[cfg(feature = "no-std")]
+    #[cfg(feature = "alloc")]
     use alloc::vec;
 
     use palette::Hsla;

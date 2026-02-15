@@ -1,4 +1,4 @@
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::{
     format,
     string::{String, ToString},
@@ -10,7 +10,8 @@ pub enum Error {
     NotDigit(String),
     InvalidList,
     InvalidRange,
-    InvalidRoot,
+    InvalidStart,
+    InvalidView,
     MissingSeed,
     UnknownFunction(String),
     InvalidArgument(String),
@@ -36,7 +37,8 @@ impl ToString for Error {
             Error::NotDigit(name) => format!("Value passed to `{}` was not a digit.", name),
             Error::InvalidList => "Type mismatch in list.".into(),
             Error::InvalidRange => "Invalid range.".into(),
-            Error::InvalidRoot => "The `root` function must return a shape.".into(),
+            Error::InvalidStart => "The `start` function must return a shape.".into(),
+            Error::InvalidView => "The `view` function must return a shape.".into(),
             Error::MissingSeed => "Seed required for rng.".into(),
             Error::UnknownFunction(name) => format!("Unknown function `{}`.", name),
             Error::InvalidArgument(name) => {

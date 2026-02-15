@@ -17,7 +17,7 @@ builtin_function!(pipe => {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "no-std")]
+    #[cfg(feature = "alloc")]
     use alloc::vec;
 
     use rand::SeedableRng;

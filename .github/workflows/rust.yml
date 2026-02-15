@@ -22,7 +22,7 @@ jobs:
       run: cargo test --release --verbose
 
     - name: Run no_std tests
-      run: cargo test --release --verbose --no-default-features --features no-std
+      run: cargo test --release --verbose --no-default-features --features image-alloc
 
     - name: Run no IO tests
-      run: cargo test --release --verbose --no-default-features --features std simd
+      run: cargo test --release --verbose --no-default-features --features image-std image-simd

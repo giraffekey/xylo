@@ -238,7 +238,7 @@ builtin_function!(noise4 data => {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "no-std")]
+    #[cfg(feature = "alloc")]
     use alloc::vec;
 
     use noise::Perlin;

@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::{boxed::Box, rc::Rc, string::String, vec, vec::Vec};
 
 #[cfg(feature = "io")]
@@ -419,7 +419,7 @@ fn next_operand(
     }
 }
 
-fn execute_block<'a>(
+fn start_block<'a>(
     stack: &mut Stack<'a>,
     rng: &mut ChaCha8Rng,
     data: &Data,
@@ -843,7 +843,15 @@ fn execute_block<'a>(
     Ok(stack.operands.pop().unwrap())
 }
 
-pub fn execute(tree: Tree, config: Config) -> Result<Rc<RefCell<Shape>>> {
+#[derive(Debug)]
+pub struct Env<'a> {
+    pub rng: ChaCha8Rng,
+    pub data: Data,
+    pub functions: HashMap<String, Function>,
+    pub block: Vec<Token<'a>>,
+}
+
+pub fn load_env(tree: Tree, config: Config) -> Result<Env> {
     let seed = match config.seed {
         Some(seed) => seed,
         None => {
@@ -851,7 +859,7 @@ pub fn execute(tree: Tree, config: Config) -> Result<Rc<RefCell<Shape>>> {
             {
                 gen_seed()
             }
-            #[cfg(feature = "no-std")]
+            #[cfg(feature = "alloc")]
             return Err(Error::MissingSeed);
         }
     };
@@ -896,17 +904,62 @@ pub fn execute(tree: Tree, config: Config) -> Result<Rc<RefCell<Shape>>> {
         }
     }
 
-    let mut stack = Stack::new(functions);
-    let shape = match reduce_call(&mut stack, &mut rng, &data, "root", Vec::new())? {
-        FunctionBlock::Start(start) => {
-            match execute_block(&mut stack, &mut rng, &data, &block, start)? {
-                Value::Shape(shape) => shape,
-                _ => return Err(Error::InvalidRoot),
+    Ok(Env {
+        rng,
+        data,
+        functions,
+        block,
+    })
+}
+
+pub fn exec_model(env: &mut Env) -> Result<Option<Value>> {
+    let mut stack = Stack::new(env.functions.clone());
+    match reduce_call(&mut stack, &mut env.rng, &env.data, "model", Vec::new()) {
+        Ok(FunctionBlock::Start(start)) => {
+            let model = start_block(&mut stack, &mut env.rng, &env.data, &env.block, start)?;
+            Ok(Some(model))
+        }
+        _ => Ok(None),
+    }
+}
+
+pub fn exec_update(env: &mut Env, model: Value) -> Result<Option<Value>> {
+    let mut stack = Stack::new(env.functions.clone());
+    let args = vec![model];
+    match reduce_call(&mut stack, &mut env.rng, &env.data, "update", args) {
+        Ok(FunctionBlock::Start(start)) => {
+            let model = start_block(&mut stack, &mut env.rng, &env.data, &env.block, start)?;
+            Ok(Some(model))
+        }
+        _ => Ok(None),
+    }
+}
+
+pub fn exec_start(env: &mut Env) -> Result<Option<Rc<RefCell<Shape>>>> {
+    let mut stack = Stack::new(env.functions.clone());
+    match reduce_call(&mut stack, &mut env.rng, &env.data, "start", Vec::new()) {
+        Ok(FunctionBlock::Start(start)) => {
+            match start_block(&mut stack, &mut env.rng, &env.data, &env.block, start)? {
+                Value::Shape(shape) => Ok(Some(shape)),
+                _ => Err(Error::InvalidStart),
             }
         }
-        _ => unreachable!(),
-    };
-    Ok(shape)
+        _ => Ok(None),
+    }
+}
+
+pub fn exec_view(env: &mut Env, model: Value) -> Result<Option<Rc<RefCell<Shape>>>> {
+    let mut stack = Stack::new(env.functions.clone());
+    let args = vec![model];
+    match reduce_call(&mut stack, &mut env.rng, &env.data, "view", args) {
+        Ok(FunctionBlock::Start(start)) => {
+            match start_block(&mut stack, &mut env.rng, &env.data, &env.block, start)? {
+                Value::Shape(shape) => Ok(Some(shape)),
+                _ => Err(Error::InvalidView),
+            }
+        }
+        _ => Ok(None),
+    }
 }
 
 #[cfg(feature = "std")]
@@ -995,10 +1048,12 @@ mod tests {
 
     #[test]
     fn test_list_expressions() {
-        let res = execute(
-            parse("root = sx (last [1, 2, 3]) SQUARE").unwrap(),
+        let mut env = load_env(
+            parse("start = sx (last [1, 2, 3]) SQUARE").unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         let expected = Shape::Basic(
             BasicShape::Square {
                 x: -1.0,
@@ -1015,43 +1070,48 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(res.unwrap(), Rc::new(RefCell::new(expected)));
+        assert_eq!(res.unwrap(), Some(Rc::new(RefCell::new(expected))));
     }
 
     #[test]
     fn test_shape_operations() {
         // Basic shape creation
-        let res = execute(parse("root = SQUARE").unwrap(), test_config());
-        assert_eq!(res.unwrap(), Rc::new(RefCell::new(Shape::square())));
+        let mut env = load_env(parse("start = SQUARE").unwrap(), test_config()).unwrap();
+        let res = exec_start(&mut env);
+        assert_eq!(res.unwrap(), Some(Rc::new(RefCell::new(Shape::square()))));
 
         // Composition
-        let res = execute(
+        let mut env = load_env(
             parse(
                 "
-root = compose SQUARE CIRCLE
+start = compose SQUARE CIRCLE
                 ",
             )
             .unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::composite(
+            Some(Rc::new(RefCell::new(Shape::composite(
                 Rc::new(RefCell::new(Shape::square())),
                 Rc::new(RefCell::new(Shape::circle())),
-            )))
+            ))))
         );
 
         // Styling
-        let res = execute(
+        let mut env = load_env(
             parse(
                 "
-root = stroke 2 (hex 0xff0000 SQUARE)
+start = stroke 2 (hex 0xff0000 SQUARE)
                 ",
             )
             .unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         let expected = Shape::Basic(
             BasicShape::Square {
                 x: -1.0,
@@ -1071,30 +1131,32 @@ root = stroke 2 (hex 0xff0000 SQUARE)
             None,
             None,
         );
-        assert_eq!(res.unwrap(), Rc::new(RefCell::new(expected)));
+        assert_eq!(res.unwrap(), Some(Rc::new(RefCell::new(expected))));
     }
 
     #[test]
     fn test_control_flow() {
         // If expression
-        let res = execute(
+        let mut env = load_env(
             parse(
                 "
-root =
+start =
     if true -> SQUARE
     else -> CIRCLE
                 ",
             )
             .unwrap(),
             test_config(),
-        );
-        assert_eq!(res.unwrap(), Rc::new(RefCell::new(Shape::square())));
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
+        assert_eq!(res.unwrap(), Some(Rc::new(RefCell::new(Shape::square()))));
 
         // Match expression
-        let res = execute(
+        let mut env = load_env(
             parse(
                 "
-root =
+start =
     match 2
         _ if false -> SQUARE
         2 if true -> CIRCLE
@@ -1103,63 +1165,71 @@ root =
             )
             .unwrap(),
             test_config(),
-        );
-        assert_eq!(res.unwrap(), Rc::new(RefCell::new(Shape::circle())));
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
+        assert_eq!(res.unwrap(), Some(Rc::new(RefCell::new(Shape::circle()))));
 
         // For loop
-        let res = execute(
+        let mut env = load_env(
             parse(
                 "
-root = collect (for i in 1..3 -> SQUARE)
+start = collect (for i in 1..3 -> SQUARE)
                 ",
             )
             .unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::collection(vec![
+            Some(Rc::new(RefCell::new(Shape::collection(vec![
                 Rc::new(RefCell::new(Shape::square())),
                 Rc::new(RefCell::new(Shape::square())),
-            ])))
+            ]))))
         );
 
         // Loop
-        let res = execute(
+        let mut env = load_env(
             parse(
                 "
-root = collect (loop 3 -> SQUARE)
+start = collect (loop 3 -> SQUARE)
                 ",
             )
             .unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::collection(vec![
+            Some(Rc::new(RefCell::new(Shape::collection(vec![
                 Rc::new(RefCell::new(Shape::square())),
                 Rc::new(RefCell::new(Shape::square())),
                 Rc::new(RefCell::new(Shape::square())),
-            ])))
+            ]))))
         );
     }
 
     #[test]
     fn test_functions() {
         // Simple function
-        let res = execute(
+        let mut env = load_env(
             parse(
                 "
-root = double_scale SQUARE
+start = double_scale SQUARE
 double_scale shape = ss 2 shape
                 ",
             )
             .unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         assert_eq!(
             res.unwrap(),
-            Rc::new(RefCell::new(Shape::Basic(
+            Some(Rc::new(RefCell::new(Shape::Basic(
                 BasicShape::Square {
                     x: -1.0,
                     y: -1.0,
@@ -1174,17 +1244,17 @@ double_scale shape = ss 2 shape
                 },
                 None,
                 None
-            )))
+            )))),
         );
     }
 
     #[test]
     fn test_complex_shapes() {
         // Path creation
-        let res = execute(
+        let mut env = load_env(
             parse(
                 r#"
-root =
+start =
     move_to 0 0
     : line_to 10 0
     : line_to 5 10
@@ -1193,20 +1263,22 @@ root =
             )
             .unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         let expected = Shape::path(vec![
             PathSegment::MoveTo(0.0, 0.0),
             PathSegment::LineTo(10.0, 0.0),
             PathSegment::LineTo(5.0, 10.0),
             PathSegment::Close,
         ]);
-        assert_eq!(*res.unwrap().borrow(), expected);
+        assert_eq!(*res.unwrap().unwrap().borrow(), expected);
 
         // Gradient
-        let res = execute(
+        let mut env = load_env(
             parse(
                 r#"
-root = g grad SQUARE
+start = g grad SQUARE
 
 grad =
     grad_stop_hex 0 RED (
@@ -1216,7 +1288,9 @@ grad =
             )
             .unwrap(),
             test_config(),
-        );
+        )
+        .unwrap();
+        let res = exec_start(&mut env);
         let expected = Shape::Basic(
             BasicShape::Square {
                 x: -1.0,
@@ -1243,31 +1317,37 @@ grad =
             None,
             None,
         );
-        assert_eq!(*res.unwrap().borrow(), expected);
+        assert_eq!(*res.unwrap().unwrap().borrow(), expected);
     }
 
     #[test]
     fn test_randomness() {
         // Verify random produces consistent results with same seed
-        let res1 = execute(parse("root = ss rand SQUARE").unwrap(), test_config());
-        let res2 = execute(parse("root = ss rand SQUARE").unwrap(), test_config());
+        let mut env = load_env(parse("start = ss rand SQUARE").unwrap(), test_config()).unwrap();
+        let res1 = exec_start(&mut env);
+        let mut env = load_env(parse("start = ss rand SQUARE").unwrap(), test_config()).unwrap();
+        let res2 = exec_start(&mut env);
         assert_eq!(res1.unwrap(), res2.unwrap());
 
         // Verify different seeds produce different results
-        let res1 = execute(
-            parse("root = ss rand SQUARE").unwrap(),
+        let mut env = load_env(
+            parse("start = ss rand SQUARE").unwrap(),
             Config {
                 seed: Some([1; 32]),
                 ..test_config()
             },
-        );
-        let res2 = execute(
-            parse("root = ss rand SQUARE").unwrap(),
+        )
+        .unwrap();
+        let res1 = exec_start(&mut env);
+        let mut env = load_env(
+            parse("start = ss rand SQUARE").unwrap(),
             Config {
                 seed: Some([2; 32]),
                 ..test_config()
             },
-        );
+        )
+        .unwrap();
+        let res2 = exec_start(&mut env);
         assert_ne!(res1.unwrap(), res2.unwrap());
     }
 }

@@ -1,4 +1,4 @@
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::{
     format,
     string::{String, ToString},
@@ -361,7 +361,7 @@ pub enum Token<'a> {
     LoopEnd,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Definition<'a> {
     pub name: &'a str,
     pub weight: f32,

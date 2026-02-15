@@ -18,6 +18,19 @@ struct Cli {
 #[cfg(feature = "std")]
 #[derive(Subcommand)]
 enum Commands {
+    #[cfg(feature = "window-std")]
+    Run {
+        source: PathBuf,
+        #[arg(long)]
+        width: Option<u32>,
+        #[arg(long)]
+        height: Option<u32>,
+        #[arg(long)]
+        max_depth: Option<usize>,
+        #[arg(short, long)]
+        seed: Option<String>,
+    },
+    #[cfg(feature = "image-std")]
     Generate {
         source: PathBuf,
         dest: Option<PathBuf>,
@@ -29,6 +42,8 @@ enum Commands {
         max_depth: Option<usize>,
         #[arg(short, long)]
         count: Option<u32>,
+        #[arg(short, long)]
+        frames: Option<usize>,
         #[arg(short, long)]
         seed: Option<String>,
     },
@@ -55,6 +70,17 @@ fn run_cli() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        #[cfg(feature = "window-std")]
+        Some(Commands::Run {
+            source: _,
+            width: _,
+            height: _,
+            max_depth: _,
+            seed: _,
+        }) => {
+            todo!();
+        }
+        #[cfg(feature = "image-std")]
         Some(Commands::Generate {
             source,
             dest,
@@ -62,22 +88,27 @@ fn run_cli() -> Result<()> {
             height,
             max_depth,
             count,
+            frames,
             seed,
         }) => {
+            let frames = frames.unwrap_or(1);
             let dest = match dest {
                 Some(dest) => dest,
-                None => format!(
-                    "{}.png",
-                    source
+                None => {
+                    let file_name = source
                         .file_name()
                         .unwrap()
                         .to_str()
                         .unwrap()
                         .split(".")
                         .next()
-                        .unwrap()
-                )
-                .into(),
+                        .unwrap();
+                    if frames > 1 {
+                        format!("{}.gif", file_name,).into()
+                    } else {
+                        format!("{}.png", file_name,).into()
+                    }
+                }
             };
 
             let width = width.unwrap_or(400);
@@ -115,7 +146,7 @@ fn run_cli() -> Result<()> {
                 };
 
                 let now = SystemTime::now();
-                generate_file(&source, &dest, config)?;
+                generate_file(&source, &dest, frames, config)?;
 
                 println!(
                     "Output to {:?} in {:?}",
@@ -150,5 +181,5 @@ fn run_cli() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 fn main() {}

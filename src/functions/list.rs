@@ -1,4 +1,4 @@
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::{
     string::{String, ToString},
     vec,
@@ -369,7 +369,7 @@ builtin_function!(unique => {
         {
             Value::String(s.chars().unique().collect())
         }
-        #[cfg(feature = "no-std")]
+        #[cfg(feature = "alloc")]
         {
             let mut seen = Vec::new();
             let mut result = String::new();

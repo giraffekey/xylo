@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-#[cfg(feature = "no-std")]
+#[cfg(feature = "alloc")]
 use alloc::{rc::Rc, string::String, vec, vec::Vec};
 
 #[cfg(feature = "io")]
